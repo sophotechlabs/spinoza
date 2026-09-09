@@ -9,6 +9,8 @@ import LoadWarning from './LoadWarning';
 import StaleBanner from './StaleBanner';
 import UsageBar from './UsageBar';
 import Loading from './Loading';
+import WorkspaceHeader from './WorkspaceHeader';
+import { useShownCluster } from '../lib/tabs';
 
 interface ClusterOverviewProps {
   active?: boolean;
@@ -231,6 +233,7 @@ function eventKey(warning: OverviewEvent): string {
 }
 
 export default function ClusterOverview({ active = true }: ClusterOverviewProps) {
+  const shownCluster = useShownCluster();
   const { data, error, reload } = useOverview(active);
   const now = useNow();
 
@@ -250,6 +253,7 @@ export default function ClusterOverview({ active = true }: ClusterOverviewProps)
     <div className="flex h-full min-h-0 flex-col text-xs">
       {notice}
       {data.error !== undefined && <LoadWarning message={data.error} />}
+      <WorkspaceHeader title="Cluster overview" scope={shownCluster} />
       <div
         role="group"
         aria-label="Cluster overview"
@@ -262,7 +266,7 @@ export default function ClusterOverview({ active = true }: ClusterOverviewProps)
           <Tile label="Nodes" value={String(data.nodes.total)} hint={nodeHint(data.nodes)} />
           <Tile label="Pods" value={podTotal(data.pods)} hint={podHint(data.pods)} />
           <Tile
-            label="Recent warnings"
+            label="Warning events"
             value={String(data.warnings.length)}
             hint={warningHint(data.warnings, now)}
           />
@@ -296,7 +300,7 @@ export default function ClusterOverview({ active = true }: ClusterOverviewProps)
         )}
 
         <h2 className="mt-4 mb-2 text-[11px] tracking-wide text-fg-muted uppercase">
-          Recent warnings
+          Warning events
         </h2>
         <Warnings warnings={data.warnings} now={now} />
       </div>

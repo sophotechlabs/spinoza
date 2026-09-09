@@ -495,3 +495,24 @@ describe('the fleet view', () => {
     expect(await screen.findByText(/network down/)).toBeTruthy();
   });
 });
+
+describe('what the fleet columns claim to hold', () => {
+  it('names the event count and the read failure for what they are', async () => {
+    act(() => {
+      showing(MK1);
+    });
+    stub({
+      '/api/overview/fleet': {
+        clusters: [{ ...line(MK1, 'p-mk1', 'v1.34.1'), warnings: 2 }],
+        nodes: nodes(3, 3),
+        pods: pods(30, 30),
+      },
+    });
+
+    render(<Fleet onPick={vi.fn()} />);
+
+    expect(await screen.findByText('Warning events')).toBeVisible();
+    expect(screen.getByText('Problem')).toBeVisible();
+    expect(screen.queryByText('Trouble')).toBeNull();
+  });
+});

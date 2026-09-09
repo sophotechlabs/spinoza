@@ -410,3 +410,14 @@ describe('what the overview says about warnings and controllers', () => {
     expect(cell.className).not.toContain('error');
   });
 });
+
+describe('what the overview calls its event count', () => {
+  it('says warning events rather than implying a severity', async () => {
+    stub(overview({ warnings: [] }));
+
+    render(<ClusterOverview />);
+
+    expect(await screen.findAllByText('Warning events')).toHaveLength(2);
+    expect(screen.queryByText('Recent warnings')).toBeNull();
+  });
+});

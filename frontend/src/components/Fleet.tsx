@@ -19,6 +19,7 @@ import LoadWarning from './LoadWarning';
 import Loading from './Loading';
 import EntityLabel from './EntityLabel';
 import { resourceIdentity } from '../lib/entityLabel';
+import WorkspaceHeader from './WorkspaceHeader';
 
 interface FleetProps {
   onPick: (cluster: string) => void;
@@ -70,8 +71,14 @@ function Clusters({ onPick }: FleetProps) {
             <th className="w-28 px-2 py-1 font-medium">Version</th>
             <th className="w-24 px-2 py-1 font-medium">Nodes</th>
             <th className="w-28 px-2 py-1 font-medium">Pods</th>
-            <th className="w-24 px-2 py-1 font-medium">Warnings</th>
-            <th className="px-2 py-1 font-medium">Trouble</th>
+            <th className="w-32 px-2 py-1 font-medium">
+              <span title="Warning events the cluster reported recently">Warning events</span>
+            </th>
+            <th className="px-2 py-1 font-medium">
+              <span title="Why spinoza could not read this cluster, when it could not">
+                Problem
+              </span>
+            </th>
           </tr>
         </thead>
         <tbody>
@@ -339,6 +346,7 @@ export default function Fleet({ onPick }: FleetProps) {
   const [pane, setPane] = useState<Pane>('clusters');
   return (
     <div className="flex h-full min-h-0 flex-col text-xs">
+      <WorkspaceHeader title="Fleet" scope="every open cluster" />
       <div className="flex shrink-0 items-center gap-2 border-b border-edge px-2 py-1.5">
         {TABS.map((one) => (
           <button
