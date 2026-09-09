@@ -9,11 +9,8 @@ import ViewSwitch from './ViewSwitch';
 import { ReconnectIcon } from './icons';
 import { useNamespaces } from '../lib/namespaces';
 import { ALL, useNamespace, useNamespaceNames, useNamespaceStore } from '../store/namespace';
-import {
-  useClusterReachable,
-  useClusterUnreachableReason,
-  useClusterWobbling,
-} from '../store/clusterHealth';
+import { useClusterHealth } from '../store/clusterHealth';
+import { causePhrase } from '../lib/health';
 import UserMenu from './UserMenu';
 import Wordmark from './Wordmark';
 import { useClusterMode } from '../store/identity';
@@ -62,19 +59,20 @@ function statusLabel(
   status: ConnectionStatus,
   clusterReachable: boolean,
   wobbling: boolean,
-  reason: string,
+  cause: string,
 ): string {
+  const phrase = causePhrase(cause);
   if (status === 'connected' && clusterReachable && wobbling) {
-    if (reason === '') {
+    if (phrase === '') {
       return 'The cluster missed a ping; still showing what it last said';
     }
-    return `The cluster missed a ping: ${reason}`;
+    return `The cluster missed a ping: ${phrase}`;
   }
   if (status === 'connected' && !clusterReachable) {
-    if (reason === '') {
+    if (phrase === '') {
       return 'The cluster is not answering; what is on screen is the last thing it said';
     }
-    return `The cluster is not answering: ${reason}`;
+    return `The cluster is not answering: ${phrase}`;
   }
   return `The cluster feed is ${status}`;
 }
@@ -90,9 +88,9 @@ export default function TopBar({
   onLeftForDesktop,
 }: TopBarProps) {
   const served = useClusterMode();
-  const clusterReachable = useClusterReachable();
-  const unreachableReason = useClusterUnreachableReason();
-  const wobbling = useClusterWobbling();
+  const health = useClusterHealth();
+  const clusterReachable = health.reachable;
+  const wobbling = health.wobbling;
   const attempt = useFeedStore((state) => state.attempt);
   const namespace = useNamespace();
   const names = useNamespaceNames();
@@ -145,8 +143,8 @@ export default function TopBar({
         <ProtectionToggle />
         <span
           role="status"
-          aria-label={statusLabel(status, clusterReachable, wobbling, unreachableReason)}
-          title={statusLabel(status, clusterReachable, wobbling, unreachableReason)}
+          aria-label={statusLabel(status, clusterReachable, wobbling, health.cause)}
+          title={statusLabel(status, clusterReachable, wobbling, health.cause)}
           className={`${ICON_CONTROL} border-edge-strong`}
         >
           <span

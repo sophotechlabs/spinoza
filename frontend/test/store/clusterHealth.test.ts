@@ -4,8 +4,8 @@ import {
   forgetHealth,
   reportHealth,
   useClusterHealthStore,
+  useClusterHealth,
   useClusterReachable,
-  useClusterUnreachableReason,
   useReachable,
 } from '../../src/store/clusterHealth';
 import { MK1, MK2, showing } from '../helpers-clusters';
@@ -30,9 +30,9 @@ describe('what is known about the cluster', () => {
       cause: '',
     });
 
-    const { result } = renderHook(() => useClusterUnreachableReason());
+    const { result } = renderHook(() => useClusterHealth());
 
-    expect(result.current).toBe('connection refused');
+    expect(result.current.reason).toBe('connection refused');
     expect(renderHook(() => useClusterReachable()).result.current).toBe(false);
   });
 
@@ -46,7 +46,7 @@ describe('what is known about the cluster', () => {
 
     reportHealth(MK1, { reachable: true, wobbling: false, reason: '', cause: '' });
 
-    expect(renderHook(() => useClusterUnreachableReason()).result.current).toBe('');
+    expect(renderHook(() => useClusterHealth()).result.current.reason).toBe('');
     expect(renderHook(() => useClusterReachable()).result.current).toBe(true);
   });
 

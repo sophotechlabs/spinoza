@@ -82,11 +82,6 @@ export function useClusterReachable(): boolean {
   return useClusterHealthStore((state) => held(state.byCluster, on, ANSWERING).reachable);
 }
 
-export function useClusterUnreachableReason(): string {
-  const on = useActiveCluster();
-  return useClusterHealthStore((state) => held(state.byCluster, on, ANSWERING).reason);
-}
-
 export function useReachable(cluster: string): boolean {
   return useClusterHealthStore((state) => held(state.byCluster, cluster, ANSWERING).reachable);
 }
@@ -105,9 +100,4 @@ export function reportHealth(cluster: string, next: HealthReport): void {
 
 export function forgetHealth(cluster: string): void {
   useClusterHealthStore.getState().forget(cluster);
-}
-
-export function useClusterWobbling(): boolean {
-  const on = useActiveCluster();
-  return useClusterHealthStore((state) => held(state.byCluster, on, ANSWERING).wobbling);
 }

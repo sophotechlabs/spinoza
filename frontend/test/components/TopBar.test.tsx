@@ -356,19 +356,19 @@ describe('a cluster that stopped answering', () => {
     expect(screen.getByText('cluster not answering')).toBeVisible();
   });
 
-  it('carries the reason the cluster gave', () => {
+  it('carries the cause in plain words, not the words the cluster used', () => {
     reportHealth('', {
       reachable: false,
       wobbling: false,
       reason: 'dial tcp 10.0.0.1:6443: connection refused',
-      cause: '',
+      cause: 'refused',
     });
 
     render(<TopBar status="connected" />);
 
     expect(
       screen.getByRole('status', {
-        name: 'The cluster is not answering: dial tcp 10.0.0.1:6443: connection refused',
+        name: 'The cluster is not answering: connection refused',
       }),
     ).toBeVisible();
   });
@@ -438,12 +438,12 @@ describe('a cluster that missed a ping', () => {
   });
 
   it('says a ping was missed rather than that the cluster is gone', () => {
-    reportHealth('', { reachable: true, wobbling: true, reason: 'i/o timeout', cause: '' });
+    reportHealth('', { reachable: true, wobbling: true, reason: 'i/o timeout', cause: 'timeout' });
 
     render(<TopBar status="connected" />);
 
     expect(screen.getByRole('status').getAttribute('title')).toContain('missed a ping');
-    expect(screen.getByRole('status').getAttribute('title')).toContain('i/o timeout');
+    expect(screen.getByRole('status').getAttribute('title')).toContain('timed out');
   });
 
   it('says so without a reason when the cluster gave none', () => {
