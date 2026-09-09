@@ -112,6 +112,10 @@ function show(report: Partial<CheckReport>) {
   return { onOpen };
 }
 
+async function openConfigure(): Promise<void> {
+  await userEvent.click(await screen.findByRole('button', { name: 'Configure' }));
+}
+
 afterEach(() => {
   vi.unstubAllGlobals();
   useSettingsStore.setState({
@@ -371,6 +375,7 @@ describe('Checks', () => {
       }),
     );
     render(<Checks onOpen={vi.fn()} />);
+    await openConfigure();
     await userEvent.click(await screen.findByRole('button', { name: /Privileged containers/ }));
     await userEvent.click(screen.getByRole('button', { name: 'Show 2 more' }));
 
@@ -439,6 +444,7 @@ describe('Checks', () => {
       }),
     );
     render(<Checks onOpen={vi.fn()} />);
+    await openConfigure();
     await userEvent.click(await screen.findByRole('button', { name: /Privileged containers/ }));
     await userEvent.click(screen.getByRole('button', { name: 'Show 2 more' }));
 
@@ -658,6 +664,7 @@ describe('audit controls', () => {
 
   it('narrows to workloads when the whole-cluster box is cleared', async () => {
     show({ groups: [makeGroup('privileged-containers', { findings: [makeFinding()] })] });
+    await openConfigure();
     await screen.findByRole('button', { name: /Privileged containers/ });
 
     await userEvent.click(screen.getByLabelText('Audit the whole cluster'));
@@ -671,6 +678,7 @@ describe('audit controls', () => {
 
   it('asks for every kind when told to, and not before', async () => {
     show({ groups: [makeGroup('privileged-containers', { findings: [makeFinding()] })] });
+    await openConfigure();
     await screen.findByRole('button', { name: /Privileged containers/ });
 
     await userEvent.click(screen.getByLabelText('Read every kind'));
@@ -684,6 +692,7 @@ describe('audit controls', () => {
 
   it('saves the rules you wrote and stops offering to', async () => {
     show({ groups: [] });
+    await openConfigure();
     await screen.findByLabelText('Your own rules');
 
     const editor = screen.getByLabelText('Your own rules');
@@ -698,6 +707,7 @@ describe('audit controls', () => {
 
   it('says so when the rules could not be saved', async () => {
     show({ groups: [] });
+    await openConfigure();
     await screen.findByLabelText('Your own rules');
     vi.spyOn(useSettingsStore.getState(), 'setCheckRules').mockRejectedValue(new Error('nope'));
 
@@ -709,6 +719,7 @@ describe('audit controls', () => {
 
   it('turns one check off and offers to put it back', async () => {
     show({ groups: [makeGroup('privileged-containers', { findings: [makeFinding()] })] });
+    await openConfigure();
     const group = await screen.findByRole('button', { name: /Privileged containers/ });
 
     expect(
@@ -729,6 +740,7 @@ describe('audit controls', () => {
   it('puts one turned-off check back without changing the others', async () => {
     useSettingsStore.setState({ checksDisabled: ['a', 'b'] });
     show({ groups: [] });
+    await openConfigure();
 
     await userEvent.click(await screen.findByText(/2 turned off/));
     await userEvent.click(screen.getByRole('button', { name: 'Turn a back on' }));
@@ -739,6 +751,7 @@ describe('audit controls', () => {
   it('puts every turned-off check back at once', async () => {
     useSettingsStore.setState({ checksDisabled: ['a', 'b'] });
     show({ groups: [] });
+    await openConfigure();
 
     await userEvent.click(await screen.findByText(/2 turned off/));
     await userEvent.click(screen.getByRole('button', { name: 'Turn all back on' }));
@@ -748,6 +761,7 @@ describe('audit controls', () => {
 
   it('skips the namespaces you name and drops the empty ones', async () => {
     show({ groups: [makeGroup('privileged-containers', { findings: [makeFinding()] })] });
+    await openConfigure();
     await screen.findByRole('button', { name: /Privileged containers/ });
 
     await userEvent.type(screen.getByLabelText('Namespaces to skip'), 'kube-system, ,flux-system');
@@ -951,6 +965,7 @@ describe('imported findings', () => {
 
   it('saves the paths you listed, stops offering to, and audits again', async () => {
     show({ groups: [] });
+    await openConfigure();
     await screen.findByLabelText('Imported findings');
     const before = auditRequests();
 
@@ -968,6 +983,7 @@ describe('imported findings', () => {
 
   it('says so when the paths could not be saved', async () => {
     show({ groups: [] });
+    await openConfigure();
     await screen.findByLabelText('Imported findings');
     vi.spyOn(useSettingsStore.getState(), 'setCheckImports').mockRejectedValue(new Error('nope'));
 
@@ -980,8 +996,56 @@ describe('imported findings', () => {
   it('keeps the editor off a served cluster, whose files are not yours to point at', async () => {
     adoptSession({ ...OWN_WINDOW, cluster: true, mode: 'oidc', user: 'alice' });
     show({ groups: [] });
+    await openConfigure();
     await screen.findByLabelText('Your own rules');
 
     expect(screen.queryByLabelText('Imported findings')).toBeNull();
+  });
+});
+
+describe('the configure drawer', () => {
+  it('leads with the findings and keeps the settings one click away', async () => {
+    show({ groups: [makeGroup('privileged-containers', { findings: [makeFinding()] })] });
+    await screen.findByRole('button', { name: /Privileged containers/ });
+
+    expect(screen.queryByLabelText('Audit the whole cluster')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Configure' })).toBeInTheDocument();
+  });
+
+  it('says what the audit is scoped to without opening anything', async () => {
+    show({ groups: [makeGroup('privileged-containers', { findings: [makeFinding()] })] });
+    await screen.findByRole('button', { name: /Privileged containers/ });
+
+    expect(screen.getByRole('toolbar', { name: 'Finding filters' })).toHaveTextContent(
+      'every namespace',
+    );
+    expect(screen.getByRole('toolbar', { name: 'Finding filters' })).toHaveTextContent(
+      'no baseline',
+    );
+  });
+
+  it('takes focus into the drawer and gives it back on Done', async () => {
+    show({ groups: [makeGroup('privileged-containers', { findings: [makeFinding()] })] });
+    await openConfigure();
+
+    expect(screen.getByRole('button', { name: 'Done' })).toHaveFocus();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Done' }));
+
+    expect(screen.queryByLabelText('Audit the whole cluster')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Configure' })).toHaveFocus();
+  });
+
+  it('closes on Escape, and leaves other keys alone', async () => {
+    show({ groups: [makeGroup('privileged-containers', { findings: [makeFinding()] })] });
+    await openConfigure();
+
+    await userEvent.keyboard('x');
+    expect(screen.getByLabelText('Audit the whole cluster')).toBeInTheDocument();
+
+    await userEvent.keyboard('{Escape}');
+
+    expect(screen.queryByLabelText('Audit the whole cluster')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Configure' })).toHaveFocus();
   });
 });

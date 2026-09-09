@@ -133,7 +133,10 @@ test('activating the second cluster moves the app onto it', async ({ page }) => 
     .toBe(SECOND_CONTEXT);
   await page.reload();
   await page.waitForLoadState('domcontentloaded');
-  await expect(page.getByRole('banner')).toContainText(SECOND_CONTEXT, { timeout: 60_000 });
+  await expect(page.getByRole('navigation', { name: 'Open clusters' })).toContainText(
+    SECOND_CONTEXT,
+    { timeout: 60_000 },
+  );
 });
 
 test('the second cluster is read, not the first one over again', async ({ page }) => {

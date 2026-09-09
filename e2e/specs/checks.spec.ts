@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import { expect, test } from '../harness/test';
 import { openView } from '../harness/app';
 import { TMP_DIR } from '../harness/paths';
+import type { Page } from '@playwright/test';
 
 async function settingsValue(page: import('@playwright/test').Page, key: string): Promise<string> {
   return page.evaluate(async (wanted) => {
@@ -105,9 +106,15 @@ test('a check can be turned off and restored without losing the audit', async ({
   });
 });
 
+async function openConfigure(page: Page): Promise<void> {
+  await page.getByRole('button', { name: 'Configure', exact: true }).click();
+  await expect(page.getByRole('dialog', { name: 'Configure the audit' })).toBeVisible();
+}
+
 test('audit scope controls change the scan request and can be restored', async ({ page }) => {
   await openView(page, 'checks');
   await expect(page.getByText('Privileged containers')).toBeVisible({ timeout: 60_000 });
+  await openConfigure(page);
   const requests: string[] = [];
   page.on('request', (request) => {
     if (request.url().includes('/api/checks?')) {
@@ -164,6 +171,7 @@ test('audit scope controls change the scan request and can be restored', async (
 
 test('the namespace breakdown drills into one namespace and back out', async ({ page }) => {
   await openView(page, 'checks');
+  await openConfigure(page);
   const summary = page
     .locator('summary')
     .filter({ hasText: /namespaces with findings|Showing e2e only/ })
@@ -198,6 +206,7 @@ test('the namespace breakdown drills into one namespace and back out', async ({ 
 
 test('a valid personal rules document is checked without replacing the audit', async ({ page }) => {
   await openView(page, 'checks');
+  await openConfigure(page);
   await page.getByText('Your own rules', { exact: true }).click();
   await page.getByLabel('Your own rules').fill('[]');
   await page.getByRole('button', { name: 'Check', exact: true }).click();
@@ -239,6 +248,7 @@ test('findings imported from a file land on the objects they name and say when t
     await storeSetting(page, key, '');
     await openView(page, 'checks');
   }
+  await openConfigure(page);
   await page.getByText('Imported findings', { exact: true }).click();
   const editor = page.getByLabel('Imported findings');
   const save = page.getByRole('button', { name: 'Save paths', exact: true });
@@ -282,6 +292,7 @@ test('a personal rule can reach the rest of the cluster and judge a Service', as
   await storeSetting(page, key, '');
   await page.reload();
   try {
+    await openConfigure(page);
     await page.getByText('Your own rules', { exact: true }).click();
     const editor = page.getByLabel('Your own rules');
     await editor.fill(rules);

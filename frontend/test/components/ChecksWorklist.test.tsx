@@ -79,6 +79,14 @@ function answers(report: Partial<CheckReport>) {
   return calls;
 }
 
+async function openConfigure(): Promise<void> {
+  await userEvent.click(await screen.findByRole('button', { name: 'Configure' }));
+}
+
+function openConfigureNow(): void {
+  fireEvent.click(screen.getByRole('button', { name: 'Configure' }));
+}
+
 afterEach(() => {
   vi.useRealTimers();
   vi.unstubAllGlobals();
@@ -308,12 +316,14 @@ describe('muting a finding', () => {
 describe('the baseline', () => {
   it('says there is nothing to compare against until one is taken', async () => {
     answers({ groups: [group()] });
+    await openConfigure();
 
     expect(await screen.findByText(/No baseline taken/)).toBeInTheDocument();
   });
 
   it('takes one when asked', async () => {
     const calls = answers({ groups: [group()] });
+    await openConfigure();
 
     await userEvent.click(await screen.findByRole('button', { name: 'Take a baseline' }));
 
@@ -326,6 +336,7 @@ describe('the baseline', () => {
 
   it('forgets one when asked', async () => {
     const calls = answers({ groups: [group()], baseline: '2026-08-29T00:00:00Z' });
+    await openConfigure();
 
     await userEvent.click(await screen.findByRole('button', { name: 'forget it' }));
 
@@ -344,6 +355,7 @@ describe('the baseline', () => {
       wasScanned: 396,
       scanned: 2284,
     });
+    await openConfigure();
 
     const bar = await screen.findByText(
       /Comparing against https:\/\/10\.10\.0\.1:6443, 2026-08-29/,
@@ -360,6 +372,7 @@ describe('the baseline', () => {
       wasScanned: 396,
       scanned: 2284,
     });
+    await openConfigure();
 
     expect(await screen.findByText('450 there, 4268 here (1.6× per workload)')).toBeInTheDocument();
   });
@@ -372,6 +385,7 @@ describe('the baseline', () => {
       wasScanned: 396,
       scanned: 2284,
     });
+    await openConfigure();
 
     expect(await screen.findByText('not in the baseline')).toBeInTheDocument();
   });
@@ -384,6 +398,7 @@ describe('the baseline', () => {
       wasScanned: 396,
       scanned: 2284,
     });
+    await openConfigure();
 
     expect(await screen.findByText('clean on both')).toBeInTheDocument();
   });
@@ -396,12 +411,14 @@ describe('the baseline', () => {
       wasScanned: 396,
       scanned: 2284,
     });
+    await openConfigure();
 
     expect(await screen.findByText('measured, not compared')).toBeInTheDocument();
   });
 
   it('says nothing about a cluster when the baseline is this one', async () => {
     answers({ groups: [group()], baseline: '2026-08-29T00:00:00Z' });
+    await openConfigure();
 
     expect(await screen.findByText('Comparing against 2026-08-29.')).toBeInTheDocument();
   });
@@ -411,6 +428,7 @@ describe('the baseline', () => {
       groups: [group({ baselined: true, new: 2, fixed: 3 })],
       baseline: '2026-08-29T00:00:00Z',
     });
+    await openConfigure();
 
     expect(await screen.findByText('2 new · 3 fixed')).toBeInTheDocument();
     expect(screen.getByText(/Comparing against 2026-08-29/)).toBeInTheDocument();
@@ -418,6 +436,7 @@ describe('the baseline', () => {
 
   it('says when a check was not in the baseline rather than calling it all new', async () => {
     answers({ groups: [group({ baselined: false })], baseline: '2026-08-29T00:00:00Z' });
+    await openConfigure();
 
     expect(await screen.findByText('not in the baseline')).toBeInTheDocument();
   });
@@ -427,6 +446,7 @@ describe('the baseline', () => {
       groups: [group({ baselined: true, new: 1, findings: [finding({ new: true })] })],
       baseline: '2026-08-29T00:00:00Z',
     });
+    await openConfigure();
 
     await userEvent.click(await screen.findByRole('button', { name: /Privileged containers/ }));
 
@@ -435,6 +455,7 @@ describe('the baseline', () => {
 
   it('asks for only what is new', async () => {
     const calls = answers({ groups: [group()], baseline: '2026-08-29T00:00:00Z' });
+    await openConfigure();
 
     await userEvent.click(await screen.findByLabelText('Only what is new'));
 
@@ -445,6 +466,7 @@ describe('the baseline', () => {
 
   it('asks for the muted ones back', async () => {
     const calls = answers({ groups: [group()] });
+    await openConfigure();
 
     await userEvent.click(await screen.findByLabelText('Show what is muted'));
 
@@ -473,6 +495,7 @@ describe('the baseline', () => {
       }),
     );
     render(<Checks onOpen={vi.fn()} />);
+    await openConfigure();
 
     await userEvent.click(await screen.findByRole('button', { name: 'Take a baseline' }));
 
@@ -501,6 +524,7 @@ describe('the baseline', () => {
       }),
     );
     render(<Checks onOpen={vi.fn()} />);
+    await openConfigure();
     await userEvent.click(await screen.findByRole('button', { name: 'Take a baseline' }));
 
     act(() => {
@@ -572,12 +596,14 @@ describe('your own rules', () => {
   }
 
   async function openRules() {
+    await openConfigure();
     await userEvent.click(await screen.findByText('Your own rules'));
     return screen.getByRole('textbox', { name: 'Your own rules' });
   }
 
   it('says every rule reads when the server finds nothing wrong', async () => {
     faultsAnswer([]);
+    await openConfigure();
 
     const box = await openRules();
     await userEvent.type(box, 'x');
@@ -588,6 +614,7 @@ describe('your own rules', () => {
 
   it('explains what an absent field means at evaluation time', async () => {
     faultsAnswer([]);
+    await openConfigure();
 
     await openRules();
 
@@ -598,6 +625,7 @@ describe('your own rules', () => {
 
   it('names the rule that does not compile', async () => {
     faultsAnswer([{ id: 'broken', reason: 'the expression did not compile: syntax error' }]);
+    await openConfigure();
 
     const box = await openRules();
     await userEvent.type(box, 'x');
@@ -610,6 +638,7 @@ describe('your own rules', () => {
 
   it('reports a fault about the list itself without a name in front of it', async () => {
     faultsAnswer([{ id: '', reason: 'this is not a list of rules' }]);
+    await openConfigure();
 
     const box = await openRules();
     await userEvent.type(box, 'nonsense');
@@ -620,6 +649,7 @@ describe('your own rules', () => {
 
   it('refuses to save a rule list the server would refuse', async () => {
     const calls = faultsAnswer([{ id: 'broken', reason: 'the expression did not compile' }]);
+    await openConfigure();
 
     const box = await openRules();
     await userEvent.type(box, 'x');
@@ -633,6 +663,7 @@ describe('your own rules', () => {
 
   it('saves a rule list that reads', async () => {
     faultsAnswer([]);
+    await openConfigure();
 
     const box = await openRules();
     await userEvent.type(box, 'x');
@@ -645,6 +676,7 @@ describe('your own rules', () => {
 
   it('says so when the rules read but could not be saved', async () => {
     faultsAnswer([]);
+    await openConfigure();
     const save = useSettingsStore.getState().setCheckRules;
     useSettingsStore.setState({
       setCheckRules: () => Promise.reject(new Error('the settings file is read only')),
@@ -662,6 +694,7 @@ describe('your own rules', () => {
     const writeText = vi.fn(() => Promise.resolve());
     vi.stubGlobal('navigator', { clipboard: { writeText } });
     faultsAnswer([]);
+    await openConfigure();
 
     const box = await openRules();
     await userEvent.type(box, 'x');
@@ -676,6 +709,7 @@ describe('your own rules', () => {
   it('says so when the rules could not be copied', async () => {
     vi.stubGlobal('navigator', { clipboard: { writeText: () => Promise.reject(new Error('no')) } });
     faultsAnswer([]);
+    await openConfigure();
 
     const box = await openRules();
     await userEvent.type(box, 'x');
@@ -704,6 +738,7 @@ describe('your own rules', () => {
       }),
     );
     render(<Checks onOpen={vi.fn()} />);
+    await openConfigure();
 
     const box = await openRules();
     await userEvent.type(box, 'x');
@@ -733,6 +768,7 @@ describe('your own rules', () => {
       }),
     );
     render(<Checks onOpen={vi.fn()} />);
+    await openConfigure();
 
     const box = await openRules();
     await userEvent.type(box, 'x');
@@ -777,6 +813,7 @@ describe('what you have muted', () => {
 
   it('reads them only once the panel is opened', async () => {
     const calls = withMutes([]);
+    await openConfigure();
     await screen.findByText(/Privileged containers/);
 
     expect(calls.some((call) => call.url === '/api/checks/mutes')).toBe(false);
@@ -789,6 +826,7 @@ describe('what you have muted', () => {
 
   it('says so when nothing is muted', async () => {
     withMutes([]);
+    await openConfigure();
 
     await userEvent.click(await screen.findByText('What you have muted'));
 
@@ -813,6 +851,7 @@ describe('what you have muted', () => {
       },
       { check: 'image-latest', reason: 'everywhere', at: '2026-08-28' },
     ]);
+    await openConfigure();
 
     await userEvent.click(await screen.findByText('What you have muted'));
 
@@ -831,6 +870,7 @@ describe('what you have muted', () => {
         at: '2026-08-30',
       },
     ]);
+    await openConfigure();
 
     await userEvent.click(await screen.findByText('What you have muted'));
     await userEvent.click(await screen.findByRole('button', { name: /^Unmute runs-as-root/ }));
@@ -891,6 +931,7 @@ describe('what you have muted', () => {
     );
     useSettingsStore.setState({ checksInterval: 15 });
     render(<Checks onOpen={vi.fn()} />);
+    openConfigureNow();
     await act(async () => {
       await vi.advanceTimersByTimeAsync(0);
     });
@@ -954,6 +995,7 @@ describe('what you have muted', () => {
       }),
     );
     render(<Checks onOpen={vi.fn()} />);
+    await openConfigure();
 
     await userEvent.click(await screen.findByText('What you have muted'));
     await userEvent.click(await screen.findByRole('button', { name: /^Unmute runs-as-root/ }));
@@ -981,6 +1023,7 @@ describe('what you have muted', () => {
       }),
     );
     render(<Checks onOpen={vi.fn()} />);
+    await openConfigure();
 
     await userEvent.click(await screen.findByText('What you have muted'));
 
@@ -1029,6 +1072,7 @@ describe('what you have muted', () => {
     );
     useSettingsStore.setState({ checksInterval: 15 });
     render(<Checks onOpen={vi.fn()} />);
+    openConfigureNow();
     await act(async () => {
       await vi.advanceTimersByTimeAsync(0);
     });
@@ -1095,6 +1139,7 @@ describe('what went away since the baseline', () => {
       ],
       baseline: '2026-08-29T00:00:00Z',
     });
+    await openConfigure();
 
     await userEvent.click(await screen.findByRole('button', { name: /Privileged containers/ }));
     await userEvent.click(screen.getByText('2 that were here at the baseline and are not now'));
@@ -1108,6 +1153,7 @@ describe('what went away since the baseline', () => {
       groups: [group({ baselined: true, fixed: 1, gone: ['Deployment apps/web'] })],
       baseline: '2026-08-29T00:00:00Z',
     });
+    await openConfigure();
 
     await userEvent.click(await screen.findByRole('button', { name: /Privileged containers/ }));
 
@@ -1118,6 +1164,7 @@ describe('what went away since the baseline', () => {
 
   it('stays out of the way when nothing went away', async () => {
     answers({ groups: [group({ baselined: true })], baseline: '2026-08-29T00:00:00Z' });
+    await openConfigure();
 
     await userEvent.click(await screen.findByRole('button', { name: /Privileged containers/ }));
 
@@ -1153,6 +1200,7 @@ describe('exporting the audit', () => {
     );
     useSettingsStore.setState({ checksMinSeverity: 'high' });
     render(<Checks onOpen={vi.fn()} />);
+    await openConfigure();
     const button = await screen.findByRole('button', { name: 'Export' });
 
     const click = vi.fn();
@@ -1189,6 +1237,7 @@ describe('exporting the audit', () => {
       }),
     );
     render(<Checks onOpen={vi.fn()} />);
+    await openConfigure();
 
     await userEvent.click(await screen.findByRole('button', { name: 'Export' }));
 
@@ -1215,6 +1264,7 @@ describe('exporting the audit', () => {
       }),
     );
     render(<Checks onOpen={vi.fn()} />);
+    await openConfigure();
     const click = vi
       .spyOn(HTMLAnchorElement.prototype, 'click')
       .mockImplementation(() => undefined);
@@ -1267,6 +1317,7 @@ describe('carrying a baseline to another cluster', () => {
 
   it('offers to save one only once there is one', async () => {
     answers({ groups: [group()] });
+    await openConfigure();
 
     await screen.findByText(/No baseline taken/);
     expect(screen.queryByRole('button', { name: 'Save it to a file' })).not.toBeInTheDocument();
@@ -1301,6 +1352,7 @@ describe('carrying a baseline to another cluster', () => {
       }),
     );
     render(<Checks onOpen={vi.fn()} />);
+    await openConfigure();
     const button = await screen.findByRole('button', { name: 'Save it to a file' });
     const click = vi.fn();
     const link = document.createElement('a');
@@ -1342,6 +1394,7 @@ describe('carrying a baseline to another cluster', () => {
       }),
     );
     render(<Checks onOpen={vi.fn()} />);
+    await openConfigure();
     const click = vi
       .spyOn(HTMLAnchorElement.prototype, 'click')
       .mockImplementation(() => undefined);
@@ -1386,6 +1439,7 @@ describe('carrying a baseline to another cluster', () => {
       }),
     );
     render(<Checks onOpen={vi.fn()} />);
+    await openConfigure();
     await screen.findByText(/No baseline taken/);
 
     const file = new File(['{"takenAt":"2026-08-28T00:00:00Z","checks":["a"]}'], 'b.json', {
@@ -1414,6 +1468,7 @@ describe('carrying a baseline to another cluster', () => {
       }),
     );
     render(<Checks onOpen={vi.fn()} />);
+    await openConfigure();
     await screen.findByText(/No baseline taken/);
     let finishRead: (body: string) => void = () => undefined;
     const reading = new Promise<string>((resolve) => {
@@ -1441,6 +1496,7 @@ describe('carrying a baseline to another cluster', () => {
 
   it('opens the picker when asked', async () => {
     answers({ groups: [group()] });
+    await openConfigure();
     await screen.findByText(/No baseline taken/);
     const click = vi.fn();
     vi.spyOn(HTMLInputElement.prototype, 'click').mockImplementation(click);
@@ -1465,6 +1521,7 @@ describe('carrying a baseline to another cluster', () => {
       }),
     );
     render(<Checks onOpen={vi.fn()} />);
+    await openConfigure();
     await screen.findByText(/No baseline taken/);
 
     fireEvent.change(screen.getByLabelText('A baseline to load'), { target: { files: [] } });
@@ -1492,6 +1549,7 @@ describe('carrying a baseline to another cluster', () => {
       }),
     );
     render(<Checks onOpen={vi.fn()} />);
+    await openConfigure();
     await screen.findByText(/No baseline taken/);
 
     const file = new File(['nonsense'], 'b.json', { type: 'application/json' });
@@ -1526,6 +1584,7 @@ describe('carrying a baseline to another cluster', () => {
       }),
     );
     render(<Checks onOpen={vi.fn()} />);
+    await openConfigure();
 
     await userEvent.click(await screen.findByRole('button', { name: 'Save it to a file' }));
 
@@ -1541,6 +1600,7 @@ describe('the namespace summary', () => {
 
   it('says how many namespaces carry findings', async () => {
     answers({ groups: [group()], namespaces });
+    await openConfigure();
 
     expect(await screen.findByText('2 namespaces with findings')).toBeInTheDocument();
   });
@@ -1550,12 +1610,14 @@ describe('the namespace summary', () => {
       groups: [group()],
       namespaces: [{ ...namespaces[0], clusters: ['p-mk1', 'p-mk2'] }],
     });
+    await openConfigure();
 
     expect(await screen.findByText('p-mk1, p-mk2')).toBeInTheDocument();
   });
 
   it('narrows to one namespace when it is picked', async () => {
     const calls = answers({ groups: [group()], namespaces });
+    await openConfigure();
 
     await userEvent.click(await screen.findByText('2 namespaces with findings'));
     await userEvent.click(screen.getByRole('button', { name: 'prod' }));
@@ -1568,6 +1630,7 @@ describe('the namespace summary', () => {
 
   it('picking the same one again shows everything', async () => {
     answers({ groups: [group()], namespaces });
+    await openConfigure();
     useSettingsStore.setState({ checksNamespace: 'prod' });
 
     await userEvent.click(await screen.findByText('Showing prod only'));
@@ -1578,6 +1641,7 @@ describe('the namespace summary', () => {
 
   it('names the namespace it is counting rather than the whole cluster', async () => {
     answers({ groups: [group()], namespaces });
+    await openConfigure();
     useSettingsStore.setState({ checksNamespace: 'prod' });
 
     expect(await screen.findByText('1 findings in prod')).toBeInTheDocument();
@@ -1585,6 +1649,7 @@ describe('the namespace summary', () => {
 
   it('stays out of the way when nothing has a namespace', async () => {
     answers({ groups: [group()], namespaces: [] });
+    await openConfigure();
 
     await screen.findByText(/Privileged containers/);
     expect(screen.queryByText(/namespaces with findings/)).not.toBeInTheDocument();

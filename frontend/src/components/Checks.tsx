@@ -37,6 +37,9 @@ import { nameOf, tabOn, useClustersStore, useTabStrip } from '../store/clusters'
 import { colorVar } from '../lib/clusterColor';
 import { useContextScope } from '../store/contexts';
 import WorkspaceHeader from './WorkspaceHeader';
+import DenseToolbar, { ToolbarCount, ToolbarEnd } from './DenseToolbar';
+import { actionClass } from '../lib/actions';
+import { ROW } from '../lib/rows';
 import { useShownCluster } from '../lib/tabs';
 import CapabilityState from './CapabilityState';
 
@@ -46,11 +49,12 @@ const NAMESPACES_SHOWN = 20;
 
 function useScopedOperation() {
   const operation = useRef(0);
+  const scope = useContextScope();
   useEffect(() => {
     return () => {
       operation.current += 1;
     };
-  }, []);
+  }, [scope]);
   return operation;
 }
 
@@ -1238,9 +1242,30 @@ function Namespaces({ counts }: { counts: NamespaceCount[] }) {
   );
 }
 
-function AuditControls() {
+function SeverityFloorPicker() {
   const floor = useSettingsStore((state) => state.checksMinSeverity);
   const setFloor = useSettingsStore((state) => state.setChecksMinSeverity);
+
+  return (
+    <label className="flex items-center gap-1.5 text-fg-soft">
+      Show
+      <select
+        aria-label="Lowest severity to show"
+        className="rounded border border-edge bg-surface px-1 py-0.5 text-fg"
+        value={floor}
+        onChange={(event) => {
+          setFloor(event.target.value as SeverityFloor);
+        }}
+      >
+        <option value="">everything</option>
+        <option value="medium">medium and above</option>
+        <option value="high">high only</option>
+      </select>
+    </label>
+  );
+}
+
+function AuditControls() {
   const wholeCluster = useSettingsStore((state) => state.checksWholeCluster);
   const setWholeCluster = useSettingsStore((state) => state.setChecksWholeCluster);
   const skipped = useSettingsStore((state) => state.checksSkipNamespaces);
@@ -1252,22 +1277,7 @@ function AuditControls() {
   const setOff = useSettingsStore((state) => state.setChecksDisabled);
 
   return (
-    <div className="flex shrink-0 items-center gap-4 border-b border-edge px-3 py-1.5 text-fg-muted">
-      <label className="flex items-center gap-1.5">
-        Show
-        <select
-          aria-label="Lowest severity to show"
-          className="rounded border border-edge bg-surface px-1 py-0.5 text-fg"
-          value={floor}
-          onChange={(event) => {
-            setFloor(event.target.value as SeverityFloor);
-          }}
-        >
-          <option value="">everything</option>
-          <option value="medium">medium and above</option>
-          <option value="high">high only</option>
-        </select>
-      </label>
+    <div className="flex shrink-0 flex-wrap items-center gap-4 border-b border-edge px-3 py-1.5 text-fg-muted">
       <label className="flex items-center gap-1.5">
         Skip
         <input
@@ -1417,23 +1427,97 @@ function Category({
   );
 }
 
+function scopeChip(namespace: string): string {
+  if (namespace === '') {
+    return 'every namespace';
+  }
+  return namespace;
+}
+
+function baselineChip(report: CheckReportView): string {
+  if (report.baseline === '') {
+    return 'no baseline';
+  }
+  return `baseline ${report.baseline.slice(0, 10)}`;
+}
+
+function Configure({
+  report,
+  onChanged,
+  onClose,
+}: {
+  report: CheckReportView | null;
+  onChanged: () => void;
+  onClose: () => void;
+}) {
+  const doneRef = useRef<HTMLButtonElement | null>(null);
+
+  useEffect(() => {
+    doneRef.current?.focus();
+  }, []);
+
+  useEffect(() => {
+    function onKey(event: KeyboardEvent) {
+      if (event.key !== 'Escape') {
+        return;
+      }
+      event.stopPropagation();
+      onClose();
+    }
+    document.addEventListener('keydown', onKey, true);
+    return () => {
+      document.removeEventListener('keydown', onKey, true);
+    };
+  }, [onClose]);
+
+  return (
+    <dialog
+      open
+      aria-label="Configure the audit"
+      className="fixed inset-y-0 right-0 z-40 m-0 flex h-full w-[34rem] max-w-[calc(100vw-2rem)] flex-col overflow-y-auto border-l border-edge-strong bg-surface p-0 text-xs text-fg"
+    >
+      <div className={ROW}>
+        <h2 className="font-semibold text-fg-strong">Configure the audit</h2>
+        <span className="ml-auto">
+          <button
+            ref={doneRef}
+            type="button"
+            onClick={onClose}
+            className={actionClass('plain', 'dense')}
+          >
+            Done
+          </button>
+        </span>
+      </div>
+      <AuditControls />
+      {report !== null && <BaselineBar report={report} onChanged={onChanged} />}
+      {report !== null && <MutesPanel audit={report} onChanged={onChanged} />}
+      {report !== null && <Namespaces counts={report.namespaces} />}
+      <YourRules />
+      <ImportedFindings onChanged={onChanged} />
+    </dialog>
+  );
+}
+
 export default function Checks({ onOpen }: ChecksProps) {
   const shownCluster = useShownCluster();
   const several = useTabStrip();
   const [fleet, setFleet] = useState(false);
+  const [configuring, setConfiguring] = useState(false);
+  const configureRef = useRef<HTMLButtonElement | null>(null);
   const showing = fleet && several;
   const { data, error, stale, reload } = useChecks(showing);
   const keep = useChecksFilter();
   const namespace = useSettingsStore((state) => state.checksNamespace);
+  const held = useRef<CheckReportView | null>(null);
+  if (data !== null) {
+    held.current = data;
+  }
+  const report = data ?? held.current;
 
-  if (data === null) {
-    return (
-      <div className="flex h-full min-h-0 flex-col text-xs">
-        <AuditControls key="audit-controls" />
-        {error !== null && <CapabilityState state="failed" what="The cluster audit" why={error} />}
-        {error === null && <CapabilityState state="loading" what="the cluster audit" />}
-      </div>
-    );
+  function closeConfigure() {
+    setConfiguring(false);
+    configureRef.current?.focus();
   }
 
   return (
@@ -1446,21 +1530,13 @@ export default function Checks({ onOpen }: ChecksProps) {
         scope={shownCluster}
         scale="high, medium and low, by how serious the rule is"
       />
-      {data.error !== undefined && (
+      {data?.error !== undefined && (
         <p role="status" className="border-b border-edge px-3 py-1 text-warn">
           {data.error}
         </p>
       )}
-      <AuditControls key="audit-controls" />
-      <BaselineBar report={data} onChanged={reload} />
-      <MutesPanel audit={data} onChanged={reload} />
-      <Namespaces counts={data.namespaces} />
-      <YourRules />
-      <ImportedFindings onChanged={reload} />
-      <div className="flex shrink-0 items-baseline gap-3 border-b border-edge px-3 py-1.5 text-fg-muted">
-        <span className="min-w-0 flex-1">
-          {scannedLabel(data.scanned, totalFindings(data), namespace)}
-        </span>
+      <DenseToolbar label="Finding filters">
+        <SeverityFloorPicker />
         {several && (
           <label className="flex shrink-0 items-center gap-1.5 text-fg-soft">
             <input
@@ -1473,23 +1549,53 @@ export default function Checks({ onOpen }: ChecksProps) {
             Every open cluster
           </label>
         )}
-        <span className="w-16 shrink-0 text-right">Severity</span>
-        <span className="w-16 shrink-0 text-right">Findings</span>
-      </div>
-      <div className="min-h-0 flex-1 overflow-y-auto">
-        {CATEGORY_ORDER.map((category) => (
-          <Category
-            key={category}
-            category={category}
-            groups={inCategory(data.groups, category)}
-            report={data}
-            keep={keep}
-            fleet={showing}
-            onOpen={onOpen}
-            onChanged={reload}
-          />
-        ))}
-      </div>
+        <ToolbarCount>{scopeChip(namespace)}</ToolbarCount>
+        {report !== null && <ToolbarCount>{baselineChip(report)}</ToolbarCount>}
+        <ToolbarEnd>
+          <button
+            ref={configureRef}
+            type="button"
+            onClick={() => {
+              setConfiguring(true);
+            }}
+            className={actionClass('plain', 'dense')}
+          >
+            Configure
+          </button>
+        </ToolbarEnd>
+      </DenseToolbar>
+      {configuring && <Configure report={report} onChanged={reload} onClose={closeConfigure} />}
+      {data === null && error !== null && (
+        <CapabilityState state="failed" what="The cluster audit" why={error} />
+      )}
+      {data === null && error === null && (
+        <CapabilityState state="loading" what="the cluster audit" />
+      )}
+      {data !== null && (
+        <>
+          <div className="flex shrink-0 items-baseline gap-3 border-b border-edge px-3 py-1.5 text-fg-muted">
+            <span className="min-w-0 flex-1">
+              {scannedLabel(data.scanned, totalFindings(data), namespace)}
+            </span>
+            <span className="w-16 shrink-0 text-right">Severity</span>
+            <span className="w-16 shrink-0 text-right">Findings</span>
+          </div>
+          <div className="min-h-0 flex-1 overflow-y-auto">
+            {CATEGORY_ORDER.map((category) => (
+              <Category
+                key={category}
+                category={category}
+                groups={inCategory(data.groups, category)}
+                report={data}
+                keep={keep}
+                fleet={showing}
+                onOpen={onOpen}
+                onChanged={reload}
+              />
+            ))}
+          </div>
+        </>
+      )}
     </div>
   );
 }

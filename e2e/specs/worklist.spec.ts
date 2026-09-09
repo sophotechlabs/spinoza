@@ -1,5 +1,6 @@
 import { expect, test } from '../harness/test';
 import { openView } from '../harness/app';
+import type { Page } from '@playwright/test';
 
 async function clearBaseline(page: import('@playwright/test').Page): Promise<void> {
   await page.evaluate(async () => {
@@ -84,10 +85,16 @@ async function firstMute(
   return mute;
 }
 
+async function openConfigure(page: Page): Promise<void> {
+  await page.getByRole('button', { name: 'Configure', exact: true }).click();
+  await expect(page.getByRole('dialog', { name: 'Configure the audit' })).toBeVisible();
+}
+
 test('taking and clearing a baseline changes what the audit compares', async ({ page }) => {
   await openView(page, 'checks');
   await clearBaseline(page);
   await page.reload();
+  await openConfigure(page);
   await expect(page.getByText(/No baseline taken/)).toBeVisible({ timeout: 90_000 });
   await page.getByRole('button', { name: 'Take a baseline', exact: true }).click();
   await expect(page.getByText(/Comparing against/)).toBeVisible({ timeout: 90_000 });
@@ -100,6 +107,7 @@ test('a saved baseline can be cleared and restored from its file', async ({ page
   await openView(page, 'checks');
   await clearBaseline(page);
   await page.reload();
+  await openConfigure(page);
   try {
     await page.getByRole('button', { name: 'Take a baseline', exact: true }).click();
     const baseline = page.getByText(/Comparing against/).first();
@@ -184,6 +192,7 @@ test('a finding can be muted with a reason and unmuted again', async ({ page }) 
     if (label === null) {
       throw new Error('the mute button has no accessible label');
     }
+    await openConfigure(page);
     await page.getByText('What you have muted', { exact: true }).click();
     const ledger = page.getByText('What you have muted', { exact: true }).locator('..');
     await expect(ledger).toContainText('e2e maintenance window');
@@ -210,6 +219,7 @@ test('a mute reason survives a reload and is removable from the mute ledger', as
     await page.getByLabel('Why this one is being muted').fill('e2e persisted reason');
     await page.getByRole('button', { name: 'Mute this one', exact: true }).click();
     await page.reload();
+    await openConfigure(page);
     await page.getByText('What you have muted', { exact: true }).click();
     const ledger = page.getByText('What you have muted', { exact: true }).locator('..');
     await expect(ledger).toContainText('e2e persisted reason', { timeout: 90_000 });
@@ -228,6 +238,7 @@ test('a mute reason survives a reload and is removable from the mute ledger', as
 
 test('the findings export is a nonempty CSV with the active audit columns', async ({ page }) => {
   await openView(page, 'checks');
+  await openConfigure(page);
   const download = page.waitForEvent('download');
   await page.getByRole('button', { name: 'Export', exact: true }).click();
   const saved = await download;
@@ -246,6 +257,7 @@ test('the findings export is a nonempty CSV with the active audit columns', asyn
 
 test('invalid personal CEL rules are diagnosed before they replace the audit', async ({ page }) => {
   await openView(page, 'checks');
+  await openConfigure(page);
   await page.getByText('Your own rules', { exact: true }).click();
   await page.getByLabel('Your own rules').fill('not valid cel {{{');
   await page.getByRole('button', { name: 'Save', exact: true }).click();
@@ -268,6 +280,7 @@ test('a valid personal rule is checked, saved, and restored in a new document', 
   const originalRules = await readRules(page);
   await storeRules(page, '');
   await page.reload();
+  await openConfigure(page);
   try {
     await page.getByText('Your own rules', { exact: true }).click();
     const editor = page.getByLabel('Your own rules');
@@ -284,6 +297,7 @@ test('a valid personal rule is checked, saved, and restored in a new document', 
     await page.getByRole('button', { name: 'Save', exact: true }).click();
     await saved;
     await page.reload();
+    await openConfigure(page);
     await page.getByText('Your own rules', { exact: true }).click();
     await expect(page.getByLabel('Your own rules')).toHaveValue(rules);
     await expect(page.getByText('E2E saved rule', { exact: true })).toBeVisible({

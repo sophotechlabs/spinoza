@@ -210,7 +210,10 @@ test('choosing a fleet cluster activates that cluster', async ({ page }) => {
     .getByRole('button', { name: new RegExp(SECOND_CONTEXT) })
     .first()
     .click();
-  await expect(page.getByRole('banner')).toContainText(SECOND_CONTEXT, { timeout: 90_000 });
+  await expect(page.getByRole('navigation', { name: 'Open clusters' })).toContainText(
+    SECOND_CONTEXT,
+    { timeout: 90_000 },
+  );
 });
 
 test('fleet tabs expose which inventory is currently active', async ({ page }) => {
