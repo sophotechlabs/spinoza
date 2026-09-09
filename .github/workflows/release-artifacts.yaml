@@ -41,9 +41,42 @@ jobs:
             echo "version=$version"
           } >> "$GITHUB_OUTPUT"
 
-  dist:
+  validate-e2e:
     if: needs.version.outputs.pending == 'true'
     needs: version
+    permissions:
+      contents: read
+    uses: ./.github/workflows/e2e.yaml
+    with:
+      tier: nightly
+      ref: ${{ needs.version.outputs.sha }}
+
+  validate-mutation:
+    if: needs.version.outputs.pending == 'true'
+    needs: version
+    permissions:
+      contents: read
+    uses: ./.github/workflows/go-mutation.yaml
+    with:
+      ref: ${{ needs.version.outputs.sha }}
+
+  validate-fuzz:
+    if: needs.version.outputs.pending == 'true'
+    needs: version
+    permissions:
+      contents: read
+    uses: ./.github/workflows/go-fuzz.yaml
+    with:
+      duration: 10m
+      ref: ${{ needs.version.outputs.sha }}
+
+  dist:
+    if: needs.version.outputs.pending == 'true'
+    needs:
+      - version
+      - validate-e2e
+      - validate-mutation
+      - validate-fuzz
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -96,7 +129,11 @@ jobs:
 
   image:
     if: needs.version.outputs.pending == 'true'
-    needs: version
+    needs:
+      - version
+      - validate-e2e
+      - validate-mutation
+      - validate-fuzz
     runs-on: ubuntu-latest
     permissions:
       contents: read
