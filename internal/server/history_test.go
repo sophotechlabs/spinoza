@@ -55,6 +55,10 @@ type heldHistory struct {
 	auditErr    error
 	pruned      []store.Retention
 	prunedAudit []store.Retention
+	prunedRuns  []store.Retention
+	runs        []store.Run
+	runsOn      []string
+	runsErr     error
 }
 
 func (h *heldHistory) For(cluster string) store.Recorder {
@@ -136,6 +140,30 @@ func (h *heldHistory) PruneAudit(_ context.Context, keep store.Retention, _ time
 	defer h.mu.Unlock()
 	h.prunedAudit = append(h.prunedAudit, keep)
 	return h.auditErr
+}
+
+func (h *heldHistory) PruneRuns(_ context.Context, keep store.Retention, _ time.Time) error {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.prunedRuns = append(h.prunedRuns, keep)
+	return h.runsErr
+}
+
+func (h *heldHistory) RecordRun(_ context.Context, cluster string, run store.Run) error {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.runsOn = append(h.runsOn, cluster)
+	h.runs = append(h.runs, run)
+	return h.runsErr
+}
+
+func (h *heldHistory) Runs(_ context.Context, _ string, _ int) ([]store.Run, error) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if h.runsErr != nil {
+		return nil, h.runsErr
+	}
+	return append([]store.Run{}, h.runs...), nil
 }
 
 func (h *heldHistory) noted() []store.Change {

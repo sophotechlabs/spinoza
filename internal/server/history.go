@@ -56,14 +56,30 @@ var errBadSource = errors.New("source must be all, action or change")
 
 var errBadAfter = errors.New("after must be a row id that is not negative")
 
-type History interface {
+type Recording interface {
 	For(cluster string) store.Recorder
 	Timeline(cluster string) store.Noter
+	RecordRun(ctx context.Context, cluster string, run store.Run) error
+}
+
+type Reading interface {
 	Recent(ctx context.Context, query store.Query) (store.Page, error)
 	Changed(ctx context.Context, query store.Query) (store.Changes, error)
+	Runs(ctx context.Context, cluster string, limit int) ([]store.Run, error)
+}
+
+type Trimming interface {
 	Prune(ctx context.Context, keep store.Retention, now time.Time) error
 	PruneAudit(ctx context.Context, keep store.Retention, now time.Time) error
+	PruneRuns(ctx context.Context, keep store.Retention, now time.Time) error
 	Forget(ctx context.Context, cluster string) error
+}
+
+type History interface {
+	Recording
+	Reading
+	Trimming
+
 	Reason() string
 }
 
@@ -148,6 +164,7 @@ func (s *Server) record(r *http.Request, made change) {
 		Message:   auditText(messageOf(made.err)),
 	})
 	if err != nil {
+		measureAuditFailure()
 		slog.Warn("what spinoza just did was not recorded", "verb", made.verb, "name", made.ref.Name, "error", err)
 		return
 	}
@@ -185,10 +202,43 @@ func (s *Server) auditRecorded(ctx context.Context, past History) {
 func (s *Server) pruneAudit(ctx context.Context, past History) {
 	s.auditPruneMu.Lock()
 	defer s.auditPruneMu.Unlock()
-	err := past.PruneAudit(ctx, store.Retention{Days: auditDays, Rows: auditRows}, s.instant())
+	keep := s.auditKeep()
+	err := past.PruneAudit(ctx, keep, s.instant())
 	if err != nil {
 		slog.Warn("the audit could not be trimmed", "error", err)
 	}
+	runErr := past.PruneRuns(ctx, keep, s.instant())
+	if runErr != nil {
+		slog.Warn("the audit runs could not be trimmed", "error", runErr)
+	}
+	s.trimTranscripts(keep)
+}
+
+func (s *Server) auditKeep() store.Retention {
+	s.auditMu.Lock()
+	defer s.auditMu.Unlock()
+	if s.auditRetain.Days > 0 || s.auditRetain.Rows > 0 {
+		return s.auditRetain
+	}
+	return store.Retention{Days: auditDays, Rows: auditRows}
+}
+
+func (s *Server) UseAuditRetention(keep store.Retention) {
+	s.auditMu.Lock()
+	s.auditRetain = keep
+	s.auditMu.Unlock()
+}
+
+func (s *Server) UseAuditEvery(every time.Duration) {
+	s.auditMu.Lock()
+	s.auditEvery = every
+	s.auditMu.Unlock()
+}
+
+func (s *Server) auditInterval() int {
+	s.auditMu.Lock()
+	defer s.auditMu.Unlock()
+	return int(s.auditEvery / time.Second)
 }
 
 func actorOf(r *http.Request) string {

@@ -13,6 +13,8 @@ import (
 	"github.com/sophotechlabs/spinoza/internal/api"
 	"github.com/sophotechlabs/spinoza/internal/auth"
 	"github.com/sophotechlabs/spinoza/internal/settings"
+	"github.com/sophotechlabs/spinoza/internal/store"
+	"github.com/sophotechlabs/spinoza/internal/transcript"
 	"github.com/sophotechlabs/spinoza/internal/version"
 )
 
@@ -91,6 +93,11 @@ type Server struct {
 	auditMu         sync.Mutex
 	auditPruneMu    sync.Mutex
 	auditWritten    int
+	auditRetain     store.Retention
+	auditEvery      time.Duration
+	transcripts     *transcript.Store
+	shuttingDown    bool
+	wasReady        bool
 	auditPruneEvery int
 	profiler        bool
 	health          map[string]api.ClusterHealth

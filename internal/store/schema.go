@@ -70,6 +70,23 @@ WHERE (? = '' OR current.cluster = ?)
 ORDER BY current.at DESC, current.id DESC
 LIMIT ?`
 
+const insertRun = `
+INSERT INTO audit_runs (cluster, at, findings, fresh, cleared, scanned)
+VALUES (?, ?, ?, ?, ?, ?)`
+
+const selectRuns = `
+SELECT id, at, findings, fresh, cleared, scanned
+FROM audit_runs
+WHERE (? = '' OR cluster = ?)
+ORDER BY at DESC, id DESC
+LIMIT ?`
+
+const deleteRunsBefore = `DELETE FROM audit_runs WHERE at < ?`
+
+const oldestRunKept = `SELECT id FROM audit_runs ORDER BY id DESC LIMIT 1 OFFSET ?`
+
+const deleteRunsBelow = `DELETE FROM audit_runs WHERE id <= ?`
+
 const deleteAuditBefore = `DELETE FROM audit WHERE at < ?`
 
 const oldestAuditKept = `SELECT id FROM audit ORDER BY id DESC LIMIT 1 OFFSET ?`
@@ -160,6 +177,17 @@ ALTER TABLE clusters ADD COLUMN timeline TEXT NOT NULL DEFAULT '';
 ALTER TABLE changes ADD COLUMN was TEXT NOT NULL DEFAULT '[]';
 `, `
 ALTER TABLE audit ADD COLUMN actor TEXT NOT NULL DEFAULT 'unknown';
+`, `
+CREATE TABLE audit_runs (
+	id INTEGER PRIMARY KEY AUTOINCREMENT,
+	cluster TEXT NOT NULL,
+	at INTEGER NOT NULL,
+	findings INTEGER NOT NULL,
+	fresh INTEGER NOT NULL,
+	cleared INTEGER NOT NULL,
+	scanned INTEGER NOT NULL
+);
+CREATE INDEX audit_runs_by_time ON audit_runs (cluster, at DESC, id DESC);
 `}
 
 func migrate(ctx context.Context, db *sql.DB) error {
