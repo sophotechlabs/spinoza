@@ -598,7 +598,7 @@ function Resources({
     return <p className="p-3 text-fg-muted">This release rendered no resources.</p>;
   }
   return (
-    <table className="w-full border-collapse text-left">
+    <table className="w-full border-collapse text-left font-mono">
       <thead className="text-fg-muted">
         <tr className="border-b border-edge">
           <th className="px-3 py-1 font-medium">Kind</th>
@@ -715,7 +715,7 @@ function History({
           reasons={[{ id: rollbackReasonId, label: 'Roll back', reason: rollbackReason }]}
         />
       </div>
-      <table className="w-full border-collapse text-left">
+      <table className="w-full border-collapse text-left font-mono">
         <thead className="text-fg-muted">
           <tr className="border-b border-edge">
             <th className="px-3 py-1 text-right font-medium">Rev</th>

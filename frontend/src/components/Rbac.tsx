@@ -76,7 +76,7 @@ function Row({ subject }: { subject: RBACSubject }) {
         >
           {open ? '▾' : '▸'}
         </button>
-        <span className="w-80 shrink-0 truncate text-fg-strong" title={subject.label}>
+        <span className="w-80 shrink-0 truncate font-mono text-fg-strong" title={subject.label}>
           {subject.label}
         </span>
         <span className="w-24 shrink-0 truncate text-fg-muted">{subject.kind}</span>

@@ -677,7 +677,7 @@ export default function App() {
   }
 
   return (
-    <div className="flex h-screen flex-col bg-surface font-mono text-sm text-fg">
+    <div className="flex h-screen flex-col bg-surface font-sans text-sm text-fg">
       <a
         href={`#${MAIN_ID}`}
         className="sr-only focus:not-sr-only focus:absolute focus:z-50 focus:m-2 focus:rounded focus:border focus:border-edge-strong focus:bg-surface-raised focus:px-3 focus:py-2 focus:text-fg"

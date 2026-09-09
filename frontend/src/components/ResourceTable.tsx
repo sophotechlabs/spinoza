@@ -771,7 +771,7 @@ export default function ResourceTable({
       <div ref={setScroll} className="min-h-0 flex-1 overflow-auto">
         <table
           aria-rowcount={tableRows.length}
-          className="table-fixed border-collapse text-left text-xs"
+          className="table-fixed border-collapse text-left font-mono text-xs"
           style={{ width: `${tableWidth}px` }}
         >
           <thead className="sticky top-0 z-10 bg-surface-raised text-fg-muted">

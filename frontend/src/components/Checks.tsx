@@ -227,7 +227,7 @@ function Finding({
         {finding.cluster !== undefined && finding.cluster !== '' && (
           <OnCluster cluster={finding.cluster} />
         )}
-        <span className="min-w-0 flex-1 truncate text-fg-muted" title={finding.detail}>
+        <span className="min-w-0 flex-1 truncate font-mono text-fg-muted" title={finding.detail}>
           {finding.detail}
         </span>
         {finding.fresh && <span className="shrink-0 text-[10px] text-warn">new</span>}

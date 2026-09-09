@@ -57,8 +57,8 @@ function Tally({
 function Where({ object, kind }: { object: ObjectRef; kind: string }) {
   return (
     <>
-      <span className="text-fg-strong">{object.name}</span>
-      <span className="block truncate text-[11px] text-fg-muted">
+      <span className="font-mono text-fg-strong">{object.name}</span>
+      <span className="block truncate font-mono text-[11px] text-fg-muted">
         {kind}
         {object.namespace !== '' && ` · ${object.namespace}`}
       </span>

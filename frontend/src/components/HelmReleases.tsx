@@ -144,7 +144,7 @@ export default function HelmReleases({ active = true, selected, onSelect }: Helm
       )}
       {visible.length > 0 && (
         <div className="min-h-0 flex-1 overflow-auto">
-          <table className="w-full border-collapse text-left whitespace-nowrap">
+          <table className="w-full border-collapse text-left font-mono whitespace-nowrap">
             <thead className="sticky top-0 z-10 bg-surface-raised text-fg-muted">
               <tr className="border-b border-edge">
                 <th className="px-2 py-1 font-medium">Name</th>

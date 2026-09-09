@@ -412,7 +412,7 @@ export default function History({ onOpen }: HistoryProps) {
       )}
       {rows.length > 0 && (
         <div className="min-h-0 flex-1 overflow-auto">
-          <table className="w-full table-fixed border-collapse text-left whitespace-nowrap">
+          <table className="w-full table-fixed border-collapse text-left font-mono whitespace-nowrap">
             <thead className="sticky top-0 z-10 bg-surface-raised text-fg-muted">
               <tr className="border-b border-edge">
                 {HEADERS.filter((header) => header.fleet !== true || showing).map((header) => (

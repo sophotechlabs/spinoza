@@ -64,7 +64,7 @@ function Clusters({ onPick }: FleetProps) {
       {data.error !== undefined && data.error !== '' && (
         <CapabilityState state="partial" why={data.error} />
       )}
-      <table className="w-full table-fixed border-collapse text-left whitespace-nowrap">
+      <table className="w-full table-fixed border-collapse text-left font-mono whitespace-nowrap">
         <thead className="sticky top-0 z-10 bg-surface-raised text-fg-muted">
           <tr className="border-b border-edge">
             <th className="w-56 px-2 py-1 font-medium">Cluster</th>

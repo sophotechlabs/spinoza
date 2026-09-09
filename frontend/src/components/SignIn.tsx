@@ -18,7 +18,7 @@ function reason(session: Session): string {
 
 export default function SignIn({ session }: SignInProps) {
   return (
-    <div className="flex h-screen flex-col items-center justify-center gap-6 bg-surface font-mono text-sm text-fg">
+    <div className="flex h-screen flex-col items-center justify-center gap-6 bg-surface font-sans text-sm text-fg">
       <Wordmark className="text-2xl text-fg-strong" />
       <div className="w-96 max-w-[calc(100vw-2rem)] rounded border border-edge-strong bg-surface-raised p-5">
         <p className="font-semibold text-fg-strong">Sign in</p>

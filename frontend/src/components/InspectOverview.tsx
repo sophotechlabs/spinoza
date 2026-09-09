@@ -26,7 +26,7 @@ function Pairs({ pairs }: { pairs: [string, string][] }) {
       {pairs.map(([label, value]) => (
         <div key={label} className="contents">
           <dt className="truncate text-fg-muted">{label}</dt>
-          <dd className="group flex items-baseline gap-1 break-all text-fg">
+          <dd className="group flex items-baseline gap-1 font-mono break-all text-fg">
             <span className="min-w-0 break-all">{value}</span>
             {value !== '' && <CopyButton what={label} text={value} quiet />}
           </dd>

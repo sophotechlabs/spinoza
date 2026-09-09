@@ -66,7 +66,7 @@ export default function InspectEvents({ namespace, uid, active = true }: Inspect
             <span className="text-fg-muted">{event.source}</span>
             <span className="ml-auto shrink-0 text-fg-muted">{event.lastSeen}</span>
           </div>
-          <p className="mt-0.5 break-words text-fg-soft">{event.message}</p>
+          <p className="mt-0.5 font-mono break-words text-fg-soft">{event.message}</p>
           {event.count > 1 && (
             <p className="mt-0.5 text-[11px] text-fg-muted">seen {event.count} times</p>
           )}

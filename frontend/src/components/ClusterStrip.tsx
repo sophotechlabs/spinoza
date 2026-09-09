@@ -172,7 +172,7 @@ export default function ClusterStrip({ onShown }: ClusterStripProps) {
                 title={tab.id}
                 disabled={busy}
                 onClick={() => void show(tab)}
-                className="truncate disabled:text-fg-subtle"
+                className="truncate font-mono disabled:text-fg-subtle"
               >
                 {nameOf(tab)}
               </button>

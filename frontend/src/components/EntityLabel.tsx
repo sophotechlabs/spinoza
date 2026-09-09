@@ -18,7 +18,7 @@ export default function EntityLabel({
 }: EntityLabelProps) {
   const secondary = entityDetails({ name, kind, group, version, namespace, cluster }, detail);
   return (
-    <span className={`flex min-w-0 items-baseline gap-1.5 ${className}`}>
+    <span className={`flex min-w-0 items-baseline gap-1.5 font-mono ${className}`}>
       <span className="min-w-0 truncate text-fg-strong">{name}</span>
       {secondary !== '' && (
         <span className="shrink-0 text-[10px] text-fg-muted">· {secondary}</span>
