@@ -612,3 +612,17 @@ describe('the terminal section', () => {
     expect(screen.getByLabelText('Screen reader mode')).toBeChecked();
   });
 });
+
+describe('choosing what picking a context does', () => {
+  it('offers the three answers and keeps the one picked', async () => {
+    const user = userEvent.setup();
+    render(<SettingsDialog open section="Cluster" onClose={vi.fn()} />);
+
+    const choice = screen.getByLabelText('What picking a context does');
+    expect(choice).toHaveValue('ask');
+
+    await user.selectOptions(choice, 'replace');
+
+    expect(useSettingsStore.getState().openContext).toBe('replace');
+  });
+});

@@ -12,6 +12,10 @@ export const EVERY_NAMESPACE: NamespaceStart = 'all';
 
 export const ONLY_DEFAULT: NamespaceStart = 'default';
 
+export const OPEN_CONTEXTS = ['ask', 'replace', 'new'] as const;
+
+export type OpenContext = (typeof OPEN_CONTEXTS)[number];
+
 export const CHECK_INTERVALS = [15, 30, 60, 300] as const;
 
 export type CheckInterval = (typeof CHECK_INTERVALS)[number];
@@ -27,6 +31,7 @@ export interface Settings {
   screenReader: boolean;
   namespaceStart: NamespaceStart;
   namespaceStarts: Partial<Record<string, NamespaceStart>>;
+  openContext: OpenContext;
   checksInterval: CheckInterval;
   checksDisabled: string[];
   checksSkipNamespaces: string[];
@@ -43,6 +48,7 @@ const DEFAULTS: Settings = {
   screenReader: false,
   namespaceStart: 'all',
   namespaceStarts: {},
+  openContext: 'ask',
   checksInterval: 60,
   checksDisabled: [],
   checksSkipNamespaces: [],
@@ -95,6 +101,11 @@ export function parseSettings(raw: string | null): Settings {
   for (const start of NAMESPACE_STARTS) {
     if (stored.namespaceStart === start) {
       settings.namespaceStart = start;
+    }
+  }
+  for (const choice of OPEN_CONTEXTS) {
+    if (stored.openContext === choice) {
+      settings.openContext = choice;
     }
   }
   for (const interval of CHECK_INTERVALS) {

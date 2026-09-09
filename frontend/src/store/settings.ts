@@ -3,6 +3,7 @@ import type {
   CheckInterval,
   LogView,
   NamespaceStart,
+  OpenContext,
   SeverityFloor,
   Settings,
 } from '../lib/settings';
@@ -27,6 +28,7 @@ interface SettingsState extends Settings {
   setLogView: (logView: LogView) => void;
   setScreenReader: (screenReader: boolean) => void;
   setNamespaceStart: (cluster: string, namespaceStart: NamespaceStart) => void;
+  setOpenContext: (openContext: OpenContext) => void;
   setChecksInterval: (checksInterval: CheckInterval) => void;
   setChecksDisabled: (checksDisabled: string[]) => void;
   setChecksSkipNamespaces: (checksSkipNamespaces: string[]) => void;
@@ -51,6 +53,7 @@ function saved(state: SettingsState): Settings {
     screenReader: state.screenReader,
     namespaceStart: state.namespaceStart,
     namespaceStarts: state.namespaceStarts,
+    openContext: state.openContext,
     checksInterval: state.checksInterval,
     checksDisabled: state.checksDisabled,
     checksSkipNamespaces: state.checksSkipNamespaces,
@@ -68,6 +71,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   screenReader: stored.screenReader,
   namespaceStart: stored.namespaceStart,
   namespaceStarts: stored.namespaceStarts,
+  openContext: stored.openContext,
   checksInterval: stored.checksInterval,
   checksDisabled: stored.checksDisabled,
   checksSkipNamespaces: stored.checksSkipNamespaces,
@@ -98,6 +102,10 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
     const namespaceStarts = { ...get().namespaceStarts, [cluster]: namespaceStart };
     writeSettings({ ...saved(get()), namespaceStarts });
     set({ namespaceStarts });
+  },
+  setOpenContext: (openContext) => {
+    writeSettings({ ...saved(get()), openContext });
+    set({ openContext });
   },
   setChecksInterval: (checksInterval) => {
     writeSettings({ ...saved(get()), checksInterval });

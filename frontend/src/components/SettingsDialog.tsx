@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { SYSTEM } from '../lib/theme';
 import { validateTheme } from '../lib/customThemes';
-import { CHECK_INTERVALS, LOG_VIEWS, NAMESPACE_STARTS } from '../lib/settings';
-import type { CheckInterval, LogView, NamespaceStart } from '../lib/settings';
+import { CHECK_INTERVALS, LOG_VIEWS, NAMESPACE_STARTS, OPEN_CONTEXTS } from '../lib/settings';
+import type { CheckInterval, LogView, NamespaceStart, OpenContext } from '../lib/settings';
 import { useResolvedTheme, useThemePreference, useThemeStore, useThemes } from '../store/theme';
 import {
   useChecksInterval,
@@ -48,6 +48,16 @@ function versionLabel(version: string): string {
     return '-';
   }
   return version;
+}
+
+function openContextLabel(choice: OpenContext): string {
+  if (choice === 'replace') {
+    return 'Replaces this tab';
+  }
+  if (choice === 'new') {
+    return 'Opens a new tab';
+  }
+  return 'Asks each time';
 }
 
 function intervalLabel(seconds: CheckInterval): string {
@@ -131,6 +141,8 @@ export default function SettingsDialog({
   const setStart = useSettingsStore((state) => state.setNamespaceStart);
   const checksInterval = useChecksInterval();
   const setChecksInterval = useSettingsStore((state) => state.setChecksInterval);
+  const openContext = useSettingsStore((state) => state.openContext);
+  const setOpenContext = useSettingsStore((state) => state.setOpenContext);
   const nodeShell = useNodeShell();
   const updateCheck = useUpdateCheck();
   const setUpdateCheck = useSettingsStore((state) => state.setUpdateCheck);
@@ -473,6 +485,25 @@ export default function SettingsDialog({
                   {NAMESPACE_STARTS.map((option) => (
                     <option key={option} value={option}>
                       {startLabel(option)}
+                    </option>
+                  ))}
+                </select>
+              </Row>
+              <Row
+                label="Picking a context"
+                hint="What happens when you pick a context while one cluster is open."
+              >
+                <select
+                  aria-label="What picking a context does"
+                  value={openContext}
+                  onChange={(event) => {
+                    setOpenContext(event.target.value as OpenContext);
+                  }}
+                  className="rounded border border-edge-strong bg-surface-raised px-2 py-0.5 text-fg"
+                >
+                  {OPEN_CONTEXTS.map((option) => (
+                    <option key={option} value={option}>
+                      {openContextLabel(option)}
                     </option>
                   ))}
                 </select>

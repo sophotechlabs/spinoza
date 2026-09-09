@@ -3,9 +3,10 @@ import { act, fireEvent, render, screen, waitFor, within } from '@testing-librar
 import userEvent from '@testing-library/user-event';
 import ContextPicker from '../../src/components/ContextPicker';
 import { useToastsStore } from '../../src/store/toasts';
+import { adoptClusters } from '../../src/store/clusters';
+import { useSettingsStore } from '../../src/store/settings';
 import { useContextsStore } from '../../src/store/contexts';
 import { expireSession } from '../../src/store/session';
-import { adoptClusters } from '../../src/store/clusters';
 
 async function openMenu(user: ReturnType<typeof userEvent.setup>): Promise<HTMLElement> {
   const summary = await screen.findByLabelText('Kubernetes context');
@@ -845,7 +846,7 @@ describe('opening a context that takes its time', () => {
         expect.objectContaining({ message: 'Opening p-mk1, up to 30s' }),
       ]);
     });
-    expect(useToastsStore.getState().toasts[0].action?.label).toBe('Cancel');
+    expect(useToastsStore.getState().toasts[0].actions?.[0].label).toBe('Cancel');
   });
 
   it('stops the request when the wait is cancelled, and says so once', async () => {
@@ -871,13 +872,252 @@ describe('opening a context that takes its time', () => {
     });
 
     act(() => {
-      useToastsStore.getState().toasts[0].action?.run();
+      useToastsStore.getState().toasts[0].actions?.[0].run();
     });
 
     await waitFor(() => {
       expect(useToastsStore.getState().toasts).toEqual([
         expect.objectContaining({ tone: 'ok', message: 'Stopped opening p-mk1' }),
       ]);
+    });
+  });
+});
+
+describe('picking a context while one cluster is open', () => {
+  beforeEach(() => {
+    act(() => {
+      useSettingsStore.getState().setOpenContext('ask');
+    });
+  });
+
+  function oneTabOpen(): void {
+    act(() => {
+      adoptClusters({
+        clusters: [
+          {
+            id: 'https://p-mk2:6443',
+            context: 'p-mk2',
+            active: true,
+            color: 2,
+            reopen: true,
+            protection: 'open',
+            reachable: true,
+          },
+        ],
+        remembered: [],
+      });
+    });
+  }
+
+  it('asks whether to replace the tab or open a new one', async () => {
+    const user = userEvent.setup();
+    stubContexts(listOf(['p-mk1', 'p-mk2'], 'p-mk2'));
+    render(<ContextPicker onSwitched={vi.fn()} />);
+    oneTabOpen();
+
+    await pick(user, 'p-mk1');
+
+    const dialog = screen.getByRole('dialog', { name: 'Open p-mk1' });
+    expect(within(dialog).getByRole('button', { name: 'Replace this tab' })).toBeVisible();
+    expect(within(dialog).getByRole('button', { name: 'Open a new tab' })).toBeVisible();
+  });
+
+  it('opens a new tab and leaves the open one alone', async () => {
+    const user = userEvent.setup();
+    const calls = stubContexts(listOf(['p-mk1', 'p-mk2'], 'p-mk1'), {
+      clusters: [],
+      remembered: [],
+    });
+    render(<ContextPicker onSwitched={vi.fn()} />);
+    oneTabOpen();
+    await pick(user, 'p-mk1');
+
+    await user.click(screen.getByRole('button', { name: 'Open a new tab' }));
+
+    await waitFor(() => {
+      expect(calls.some((one) => one.url.includes('/api/clusters?kubeconfig='))).toBe(true);
+    });
+    expect(calls.some((one) => one.url.startsWith('/api/clusters?cluster='))).toBe(false);
+  });
+
+  it('remembers the answer when asked to, so it stops asking', async () => {
+    const user = userEvent.setup();
+    stubContexts(listOf(['p-mk1', 'p-mk2'], 'p-mk1'));
+    render(<ContextPicker onSwitched={vi.fn()} />);
+    oneTabOpen();
+    await pick(user, 'p-mk1');
+
+    await user.click(screen.getByLabelText('Do not ask again'));
+    await user.click(screen.getByRole('button', { name: 'Open a new tab' }));
+
+    await waitFor(() => {
+      expect(useSettingsStore.getState().openContext).toBe('new');
+    });
+  });
+
+  it('opens a new tab without asking when the modifier key is held', async () => {
+    const user = userEvent.setup();
+    stubContexts(listOf(['p-mk1', 'p-mk2'], 'p-mk1'));
+    render(<ContextPicker onSwitched={vi.fn()} />);
+    oneTabOpen();
+
+    await openMenu(user);
+    await user.keyboard('{Meta>}');
+    await user.click(screen.getAllByRole('button', { name: 'p-mk1' })[0]);
+    await user.keyboard('{/Meta}');
+
+    expect(screen.queryByRole('dialog', { name: 'Open p-mk1' })).toBeNull();
+  });
+
+  it('closes the tab it replaced', async () => {
+    const user = userEvent.setup();
+    const calls: string[] = [];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string) => {
+        calls.push(url);
+        if (url.startsWith('/api/clusters')) {
+          return Promise.resolve({
+            ok: true,
+            json: () =>
+              Promise.resolve({
+                clusters: [
+                  {
+                    id: 'https://p-mk1:6443',
+                    context: 'p-mk1',
+                    active: true,
+                    color: 3,
+                    reopen: true,
+                    protection: 'open',
+                    reachable: true,
+                  },
+                ],
+                remembered: [],
+              }),
+          });
+        }
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve(listOf(['p-mk1', 'p-mk2'], 'p-mk1')),
+        });
+      }),
+    );
+    render(<ContextPicker onSwitched={vi.fn()} />);
+    oneTabOpen();
+    await pick(user, 'p-mk1');
+
+    await user.click(screen.getByRole('button', { name: 'Replace this tab' }));
+
+    await waitFor(() => {
+      expect(calls.some((url) => url === '/api/clusters?cluster=https%3A%2F%2Fp-mk2%3A6443')).toBe(
+        true,
+      );
+    });
+  });
+});
+
+describe('a context pick with the answer already settled', () => {
+  function oneOpen(): void {
+    act(() => {
+      adoptClusters({
+        clusters: [
+          {
+            id: 'https://p-mk2:6443',
+            context: 'p-mk2',
+            active: true,
+            color: 2,
+            reopen: true,
+            protection: 'open',
+            reachable: true,
+          },
+        ],
+        remembered: [],
+      });
+    });
+  }
+
+  it('opens without asking once the reader has chosen new tabs', async () => {
+    const user = userEvent.setup();
+    stubContexts(listOf(['p-mk1', 'p-mk2'], 'p-mk1'), { clusters: [], remembered: [] });
+    act(() => {
+      useSettingsStore.getState().setOpenContext('new');
+    });
+    render(<ContextPicker onSwitched={vi.fn()} />);
+    oneOpen();
+
+    await pick(user, 'p-mk1');
+
+    expect(screen.queryByRole('dialog', { name: 'Open p-mk1' })).toBeNull();
+  });
+
+  it('backs out of the question without opening anything', async () => {
+    const user = userEvent.setup();
+    act(() => {
+      useSettingsStore.getState().setOpenContext('ask');
+    });
+    const calls = stubContexts(listOf(['p-mk1', 'p-mk2'], 'p-mk1'));
+    render(<ContextPicker onSwitched={vi.fn()} />);
+    oneOpen();
+    await pick(user, 'p-mk1');
+
+    await user.click(screen.getByRole('button', { name: 'Cancel' }));
+
+    expect(screen.queryByRole('dialog', { name: 'Open p-mk1' })).toBeNull();
+    expect(calls.some((one) => one.method === 'POST')).toBe(false);
+  });
+
+  it('says so when the tab it replaced could not be closed', async () => {
+    const user = userEvent.setup();
+    act(() => {
+      useSettingsStore.getState().setOpenContext('replace');
+    });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string, init?: { method?: string }) => {
+        if (init?.method === 'DELETE') {
+          return Promise.resolve({
+            ok: false,
+            status: 500,
+            json: () => Promise.resolve({ message: 'the cluster is busy' }),
+          });
+        }
+        if (url.startsWith('/api/clusters')) {
+          return Promise.resolve({
+            ok: true,
+            json: () =>
+              Promise.resolve({
+                clusters: [
+                  {
+                    id: 'https://p-mk1:6443',
+                    context: 'p-mk1',
+                    active: true,
+                    color: 3,
+                    reopen: true,
+                    protection: 'open',
+                    reachable: true,
+                  },
+                ],
+                remembered: [],
+              }),
+          });
+        }
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve(listOf(['p-mk1', 'p-mk2'], 'p-mk1')),
+        });
+      }),
+    );
+    render(<ContextPicker onSwitched={vi.fn()} />);
+    oneOpen();
+
+    await pick(user, 'p-mk1');
+
+    await waitFor(() => {
+      expect(
+        useToastsStore
+          .getState()
+          .toasts.some((one) => one.message.startsWith('Closing the tab it replaced')),
+      ).toBe(true);
     });
   });
 });

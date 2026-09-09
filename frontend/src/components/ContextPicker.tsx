@@ -1,7 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import type { ContextList } from '../lib/types';
+import type { ClusterList, ContextList } from '../lib/types';
 import { contextGroups, fetchContexts, sameContext } from '../lib/contexts';
-import { openCluster, wasCancelled } from '../lib/clusters';
+import { closeCluster, openCluster, wasCancelled } from '../lib/clusters';
+import { forgetTab } from '../lib/tabs';
+import { useTabs } from '../store/clusters';
+import { useSettingsStore } from '../store/settings';
+import type { OpenContext } from '../lib/settings';
 import type { ContextEntry } from '../lib/contexts';
 import { askToast, dismissToast, notifyError, notifyOk } from '../store/toasts';
 import { useContextList, useContextsStore } from '../store/contexts';
@@ -30,6 +34,13 @@ function errorMessage(err: unknown, fallback: string): string {
     return err.message;
   }
   return fallback;
+}
+
+function replacing(mode: Exclude<OpenContext, 'ask'>, held: string, opened: ClusterList): boolean {
+  if (mode !== 'replace') {
+    return false;
+  }
+  return opened.clusters.some((one) => one.active && one.id !== held && held !== '');
 }
 
 function retryDelay(attempt: number): number {
@@ -62,6 +73,11 @@ function currentLabel(list: ContextList, named: string): string {
 
 export default function ContextPicker({ onSwitched }: ContextPickerProps) {
   const list = useContextList();
+  const tabs = useTabs();
+  const openContext = useSettingsStore((state) => state.openContext);
+  const rememberChoice = useSettingsStore((state) => state.setOpenContext);
+  const [asking, setAsking] = useState<ContextEntry | null>(null);
+  const [remember, setRemember] = useState(false);
   const named = useActiveTab()?.label ?? '';
   const setList = useContextsStore((state) => state.setList);
   const [busy, setBusy] = useState(false);
@@ -145,8 +161,38 @@ export default function ContextPicker({ onSwitched }: ContextPickerProps) {
     setManaging(true);
   }
 
-  async function handleChoose(entry: ContextEntry) {
+  function pick(entry: ContextEntry, newTab: boolean) {
     closeMenu();
+    if (newTab || tabs.length !== 1) {
+      void handleChoose(entry, 'new');
+      return;
+    }
+    if (openContext === 'ask') {
+      setAsking(entry);
+      return;
+    }
+    void handleChoose(entry, openContext);
+  }
+
+  function answer(entry: ContextEntry, mode: Exclude<OpenContext, 'ask'>) {
+    setAsking(null);
+    if (remember) {
+      rememberChoice(mode);
+      setRemember(false);
+    }
+    void handleChoose(entry, mode);
+  }
+
+  async function replaced(previous: string) {
+    try {
+      await closeCluster(previous);
+      forgetTab(previous);
+    } catch (err: unknown) {
+      notifyError(`Closing the tab it replaced: ${errorMessage(err, 'the request failed')}`);
+    }
+  }
+
+  async function handleChoose(entry: ContextEntry, mode: Exclude<OpenContext, 'ask'>) {
     if (busyRef.current) {
       return;
     }
@@ -155,14 +201,20 @@ export default function ContextPicker({ onSwitched }: ContextPickerProps) {
     const generation = listRequest.current + 1;
     listRequest.current = generation;
     const giveUp = new AbortController();
-    const waiting = askToast(`Opening ${entry.name}, up to ${OPEN_BUDGET}`, {
-      label: 'Cancel',
-      run: () => {
-        giveUp.abort();
+    const waiting = askToast(`Opening ${entry.name}, up to ${OPEN_BUDGET}`, [
+      {
+        label: 'Cancel',
+        run: () => {
+          giveUp.abort();
+        },
       },
-    });
+    ]);
+    const held = tabs[0]?.id ?? '';
     try {
-      await openCluster(entry.kubeconfig, entry.name, giveUp.signal);
+      const opened = await openCluster(entry.kubeconfig, entry.name, giveUp.signal);
+      if (replacing(mode, held, opened)) {
+        await replaced(held);
+      }
       const found = await fetchContexts();
       if (listRequest.current !== generation) {
         return;
@@ -218,6 +270,69 @@ export default function ContextPicker({ onSwitched }: ContextPickerProps) {
       <button type="button" onClick={handleManage} className={`${MENU_ROW} border-t border-edge`}>
         Manage kubeconfigs
       </button>
+    );
+  }
+
+  function choice() {
+    if (asking === null) {
+      return null;
+    }
+    const entry = asking;
+    return (
+      <dialog
+        open
+        aria-label={`Open ${entry.name}`}
+        className="fixed inset-0 z-40 m-auto w-[28rem] rounded border border-edge-strong bg-surface p-0 text-fg"
+      >
+        <div className="border-b border-edge px-3 py-2 text-xs font-semibold tracking-wide text-fg-strong uppercase">
+          Open {entry.name}
+        </div>
+        <div className="p-3 text-xs">
+          <p className="text-fg-soft">
+            One cluster is open. Replace it, or keep it and open this one beside it?
+          </p>
+          <label className="mt-3 flex items-center gap-2 text-fg-soft">
+            <input
+              type="checkbox"
+              checked={remember}
+              onChange={(event) => {
+                setRemember(event.target.checked);
+              }}
+            />
+            Do not ask again
+          </label>
+          <div className="mt-3 flex items-center justify-end gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                setAsking(null);
+                setRemember(false);
+              }}
+              className="rounded border border-edge-strong px-2 py-1 text-fg-soft hover:bg-surface-active"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                answer(entry, 'replace');
+              }}
+              className="rounded border border-edge-strong px-2 py-1 text-fg hover:bg-surface-active"
+            >
+              Replace this tab
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                answer(entry, 'new');
+              }}
+              className="rounded border border-edge-strong px-2 py-1 text-fg hover:bg-surface-active"
+            >
+              Open a new tab
+            </button>
+          </div>
+        </div>
+      </dialog>
     );
   }
 
@@ -295,7 +410,9 @@ export default function ContextPicker({ onSwitched }: ContextPickerProps) {
                   type="button"
                   aria-current={current(sameContext(entry, list.current))}
                   title={entry.cluster}
-                  onClick={() => void handleChoose(entry)}
+                  onClick={(event) => {
+                    pick(entry, event.metaKey || event.ctrlKey);
+                  }}
                   className={rowClass(sameContext(entry, list.current))}
                 >
                   {entry.name}
@@ -307,6 +424,7 @@ export default function ContextPicker({ onSwitched }: ContextPickerProps) {
         </div>
       </details>
       {busy && <span className="text-fg-muted">opening</span>}
+      {choice()}
       {dialog()}
     </span>
   );

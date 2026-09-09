@@ -25,6 +25,7 @@ const base: Settings = {
   screenReader: false,
   namespaceStart: 'all',
   namespaceStarts: {},
+  openContext: 'ask',
   checksInterval: 60,
   checksDisabled: [],
   checksSkipNamespaces: [],
@@ -272,5 +273,23 @@ describe('custom columns', () => {
       '/v1/pods': [{ name: 'App', path: '.a' }],
       'apps/v1/deployments': [],
     });
+  });
+});
+
+describe('how a picked context opens', () => {
+  it('asks until the reader says otherwise', () => {
+    expect(readSettings().openContext).toBe('ask');
+  });
+
+  it('remembers a choice that was made', () => {
+    writeSettings({ ...base, openContext: 'replace' });
+
+    expect(readSettings().openContext).toBe('replace');
+  });
+
+  it('ignores a choice nobody offers', () => {
+    window.localStorage.setItem(SETTINGS_KEY, JSON.stringify({ openContext: 'teleport' }));
+
+    expect(readSettings().openContext).toBe('ask');
   });
 });
