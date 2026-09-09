@@ -2,6 +2,7 @@ import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node
 import { join } from 'node:path';
 import { ADDR, BINARY, COVER_DIR, KUBECONFIG, REPO_DIR, TMP_DIR, TOKEN_FILE } from './paths';
 import { background, mustRun, run, waitFor } from './run';
+import { arrangeWorkspace } from './workspace';
 
 const EXIT_ATTEMPTS = 60;
 const EXIT_GAP = 500;
@@ -116,11 +117,13 @@ export async function launch(options: Launch): Promise<Instance> {
       return false;
     }
   });
+  const value = readFileSync(options.tokenFile, 'utf8').trim();
+  await arrangeWorkspace(baseURL, value);
   return {
     pid,
     addr: options.addr,
     baseURL,
-    token: readFileSync(options.tokenFile, 'utf8').trim(),
+    token: value,
   };
 }
 

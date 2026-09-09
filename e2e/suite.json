@@ -39,16 +39,14 @@
     "frontend/src/App.tsx",
     "frontend/src/Root.tsx",
     "frontend/src/components/Announce.tsx",
+    "frontend/src/components/CapabilityState.tsx",
     "frontend/src/components/ErrorBoundary.tsx",
-    "frontend/src/components/LoadFailure.tsx",
-    "frontend/src/components/LoadWarning.tsx",
-    "frontend/src/components/Loading.tsx",
     "frontend/src/components/MovedToDesktop.tsx",
-    "frontend/src/components/StaleBanner.tsx",
     "frontend/src/components/Toasts.tsx",
+    "frontend/src/components/WorkspaceHeader.tsx",
     "frontend/src/components/icons.tsx",
-    "frontend/src/lib/connection.ts",
     "frontend/src/lib/clipboard.ts",
+    "frontend/src/lib/connection.ts",
     "frontend/src/lib/contexts.ts",
     "frontend/src/lib/controls.ts",
     "frontend/src/lib/feed.ts",
@@ -129,7 +127,7 @@
     "update.go",
     "wails.json"
   ],
-  "fullRunBudget": 94,
+  "fullRunBudget": 92,
   "groups": [
     {
       "id": "foundation-security",
@@ -632,7 +630,6 @@
       "paths": [
         "frontend/src/components/ClusterBanner.tsx",
         "frontend/src/components/ConnectionBanner.tsx",
-        "frontend/src/components/StaleBanner.tsx",
         "frontend/src/lib/feed.ts",
         "frontend/src/lib/health.ts",
         "frontend/src/store/clusterHealth.ts",

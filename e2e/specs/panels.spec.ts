@@ -1,5 +1,7 @@
-import { expect, test } from '../harness/test';
+import { expect, state, test } from '../harness/test';
 import { openHome, openResource, selectRow } from '../harness/app';
+import { arrangeWorkspace } from '../harness/workspace';
+import { BASE_URL } from '../harness/paths';
 import type { Page, Response } from '@playwright/test';
 
 const DEFAULT_PLACEMENT = JSON.stringify({
@@ -34,12 +36,23 @@ function settingsWrite(key: string, value?: string): (response: Response) => boo
   };
 }
 
+async function showDock(page: Page, side: string): Promise<void> {
+  const panels = page.getByRole('tablist', { name: `${side} panels` });
+  const open = await panels.count();
+  if (open > 0) {
+    return;
+  }
+  await page.getByRole('button', { name: `Show the ${side} dock` }).click();
+  await expect(panels).toBeVisible({ timeout: 60_000 });
+}
+
 async function openPod(page: Page): Promise<void> {
   await openResource(page, 'pods', 'Pod');
   await selectRow(page, 'healthy-');
   await expect(page.getByRole('tablist', { name: 'right panels' })).toBeVisible({
     timeout: 60_000,
   });
+  await showDock(page, 'bottom');
 }
 
 async function resetDocks(page: Page): Promise<void> {
@@ -70,6 +83,7 @@ test.afterAll(async ({ browser }) => {
   const page = await context.newPage();
   await openAndResetDocks(page);
   await context.close();
+  await arrangeWorkspace(BASE_URL, state().token);
 });
 
 test('each dock names itself and the panels it holds', async ({ page }) => {
@@ -272,4 +286,20 @@ test('the dock tabs move under the arrow keys', async ({ page }) => {
   await overview.click();
   await overview.press('ArrowRight');
   await expect(page.getByRole('tab', { name: 'YAML', exact: true })).toBeFocused();
+});
+
+test('a workspace at its defaults opens on the canvas, not on empty docks', async ({ page }) => {
+  await expect(page.getByRole('group', { name: 'Collapsed right dock' })).toBeVisible({
+    timeout: 60_000,
+  });
+  await expect(page.getByRole('group', { name: 'Collapsed bottom dock' })).toBeVisible();
+  await expect(page.getByRole('tablist', { name: 'right panels' })).toBeHidden();
+});
+
+test('the inspector opens itself for the first row that is selected', async ({ page }) => {
+  await openResource(page, 'pods', 'Pod');
+  await selectRow(page, 'healthy-');
+  await expect(page.getByRole('tablist', { name: 'right panels' })).toBeVisible({
+    timeout: 60_000,
+  });
 });
