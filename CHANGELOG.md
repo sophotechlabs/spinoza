@@ -1,5 +1,86 @@
 # Changelog
 
+## [1.30.0](https://github.com/sophotechlabs/spinoza/compare/v1.29.0...v1.30.0) (2026-09-09)
+
+
+### Features
+
+* **checks:** lead with the findings and put the settings behind one control ([8f242a9](https://github.com/sophotechlabs/spinoza/commit/8f242a92e3fab954e33b7f021f7b8547222db3ab))
+* **clusters:** ask about protecting a new cluster in a toast, not a modal ([49709f9](https://github.com/sophotechlabs/spinoza/commit/49709f9e1d4a7759aada38e9769f037ffa45d4d5))
+* **clusters:** give opening a cluster a visible budget and a way out ([a31bd7b](https://github.com/sophotechlabs/spinoza/commit/a31bd7bf66c04b682216d00bdeb1e38beae206a0))
+* **clusters:** let a picked context replace the tab instead of always opening one ([99542fd](https://github.com/sophotechlabs/spinoza/commit/99542fd288576075926593f9f7e1aabcfe62a25b))
+* **clusters:** put every cluster control in one place, the strip ([d34685a](https://github.com/sophotechlabs/spinoza/commit/d34685a839dfef53dbec8d29f939a36fda6aeabd))
+* **clusters:** refactor cluster picker ([ff110fe](https://github.com/sophotechlabs/spinoza/commit/ff110fe947a1c5c499badadd927bb75e2f4f0ca7))
+* **clusters:** say on screen when a cluster stops answering ([43910b9](https://github.com/sophotechlabs/spinoza/commit/43910b9d4ea6a911052e189a406cd5e0368a7501))
+* **clusters:** show the open cluster on the header picker ([7982b9c](https://github.com/sophotechlabs/spinoza/commit/7982b9cb7d6e1a5ae3ee1e5434c23578f0a311a5))
+* **feed:** notice a backend that went quiet or belongs to an earlier run ([35b682e](https://github.com/sophotechlabs/spinoza/commit/35b682e4a25e46fa279e1f563e0594743f4b1699))
+* **graphs:** head every graph with what it drew ([dbc3a8c](https://github.com/sophotechlabs/spinoza/commit/dbc3a8c2faa0c8733860f193ff1ac1c4d5d969e9))
+* **health:** name why a cluster stopped answering ([001150b](https://github.com/sophotechlabs/spinoza/commit/001150b55de3a430e47134b107ac0e4e57dcd1a6))
+* **layout:** hold the canvas at 1280 and keep every dialog inside the window ([a2d2def](https://github.com/sophotechlabs/spinoza/commit/a2d2def3bfd4db0fe5811ec7c4fe750f14513a63))
+* **panels:** give a fresh workspace the canvas, not two empty docks ([8b865b9](https://github.com/sophotechlabs/spinoza/commit/8b865b9497434bfeded5aaf03f418c3f8d0de5db))
+* **sidebar:** split the workflows from the kinds, and let a kind be found ([0efe2fa](https://github.com/sophotechlabs/spinoza/commit/0efe2fabbb323df16aa5b7a30deee0e29aa36082))
+* **table:** drive the rows from the keyboard, and say which keys ([71ec56e](https://github.com/sophotechlabs/spinoza/commit/71ec56e963f5efe861ea42702a609181f081a635))
+* **theme:** read the chrome in the system sans and the cluster in mono ([ce9dbbf](https://github.com/sophotechlabs/spinoza/commit/ce9dbbf77ed5b232e66497743a4b5d2fb5496c3d))
+* **ui:** give every action the same shape, size and colour language ([5f1afe5](https://github.com/sophotechlabs/spinoza/commit/5f1afe5af8da469b77ee21272e1d3d3d2fb0f55d))
+* **ui:** give every missing, partial or stale answer one shape ([ff3bfc2](https://github.com/sophotechlabs/spinoza/commit/ff3bfc2ec72887524e1cf5b0efc343af1ef58304))
+* **ui:** give every view the same row for narrowing what it shows ([79d8872](https://github.com/sophotechlabs/spinoza/commit/79d88728d98789b588f7b864017d87f83c041396))
+* **ui:** head every view with what it is, what it covers and how it counts ([cd9b7af](https://github.com/sophotechlabs/spinoza/commit/cd9b7afbc0b1f8a308694a7d8900d0283aeb0e29))
+
+
+### Bug Fixes
+
+* **cluster:** report an unreachable context as unreachable, not as a bad request ([baec819](https://github.com/sophotechlabs/spinoza/commit/baec8191f5a80ceaf6aaa6a0a6fe79c77b275b68))
+* **clusters:** keep the plus beside the tabs and its menu on screen ([851b905](https://github.com/sophotechlabs/spinoza/commit/851b9050a20bc7108e59b646b3840af95c478fd1))
+* **clusters:** let the plus open its menu clear of the tab strip ([4a644c3](https://github.com/sophotechlabs/spinoza/commit/4a644c366c71aadd3fa03dd7609694f31380803c))
+* **clusters:** name the tab swatch after the menu it opens ([2567807](https://github.com/sophotechlabs/spinoza/commit/2567807341d751399d6c2e18953ce32d8ab6c830))
+* **clusters:** open the tab menu clear of the strip that scrolls ([e303e0a](https://github.com/sophotechlabs/spinoza/commit/e303e0a8a768b6e15239c84bb2c922b572ce0835))
+* **clusters:** say so in the strip when no cluster is open ([59b689c](https://github.com/sophotechlabs/spinoza/commit/59b689c5d9c167eca369f8c110eab319cb765c29))
+* **clusters:** shape the open-cluster control like a tab ([d2c1c32](https://github.com/sophotechlabs/spinoza/commit/d2c1c324f15ea982aa7eba2be53d5fc720cc6f3c))
+* **deps:** take the vitest and js-yaml advisory fixes ([42e7b80](https://github.com/sophotechlabs/spinoza/commit/42e7b80156e2ef186647002c5b2536fff8f9b49c))
+* **docs:** indent the e2e selection list so editorconfig accepts it ([b9d47d9](https://github.com/sophotechlabs/spinoza/commit/b9d47d9dc979d0d49768f5ee5c9c1b6edc7ce113))
+* **feed:** break the import cycle between the feed and its store ([de5386e](https://github.com/sophotechlabs/spinoza/commit/de5386e36e224858f13747fc3c5a607539a15c11))
+* **feed:** explain one silence once, in one place ([0d1667d](https://github.com/sophotechlabs/spinoza/commit/0d1667d273817ae68768dd04ce15b23e9b32ce12))
+* **feed:** read again when the reader comes back to the tab ([19635a0](https://github.com/sophotechlabs/spinoza/commit/19635a0f7a4926edee5255ab0d6314ac4fac331a))
+* **health:** stop a URL's timeout parameter reading as a timeout ([38f182e](https://github.com/sophotechlabs/spinoza/commit/38f182effbf9f5701bbd1c711c22b1fd89db679d))
+* **mutation:** keep the total check and its tests from failing inside Actions ([5989ff5](https://github.com/sophotechlabs/spinoza/commit/5989ff51850940304b8ac6d1fa0641caa3b6fd25))
+* **panels:** keep an open dock open when the window narrows ([1e22be4](https://github.com/sophotechlabs/spinoza/commit/1e22be40a8b23ed60c7a0a84ba136c6d51020321))
+* **panels:** open the inspector for an object opened from a panel ([9988319](https://github.com/sophotechlabs/spinoza/commit/9988319aed6da061c25041e836123264b64e0590))
+* **settings:** let the keyboard reach the settings panel when it scrolls ([7267663](https://github.com/sophotechlabs/spinoza/commit/7267663e80b5843daed71e2f141602969be3db91))
+* **sidebar:** stop the kind tree stretching the page below the window ([d1a1b9a](https://github.com/sophotechlabs/spinoza/commit/d1a1b9a93cb25ea39ca326c3287da37d97545c86))
+* **topbar:** put the plain cause on the status dot, not the raw error ([472de20](https://github.com/sophotechlabs/spinoza/commit/472de20e4c17d3e404dc602611293d84054e3914))
+* **ui:** keep the quiet words readable instead of decorative ([5a36a28](https://github.com/sophotechlabs/spinoza/commit/5a36a28ade40a1931871945953c20d4dd3204e8f))
+* **ui:** name each count for the scale it is counted in ([bd6dcd3](https://github.com/sophotechlabs/spinoza/commit/bd6dcd3db5cd2c9753f74626e9f932495adf11ca))
+* **ui:** say what each figure means instead of repeating or overstating it ([25dbb09](https://github.com/sophotechlabs/spinoza/commit/25dbb09fa152657a89887e4afdabec181c510631))
+
+
+### Miscellaneous
+
+* **api:** drop a stray comment ([251be81](https://github.com/sophotechlabs/spinoza/commit/251be81024d5051cd422792be5ef800d1f9f889a))
+
+
+### CI
+
+* **e2e:** improve e2e coverage ([25ec634](https://github.com/sophotechlabs/spinoza/commit/25ec634b23f1f66f544a3bf249d5643ca14f56c7))
+* **kind:** retry a cluster that fails to come up instead of failing the job ([2554eb4](https://github.com/sophotechlabs/spinoza/commit/2554eb4c717c5fccac25f753c59997db807e3abc))
+
+
+### Tests
+
+* cover the auth limits and shell environment lines no test reached ([6027186](https://github.com/sophotechlabs/spinoza/commit/6027186c6a6458b70879286f0acfb2d1f3771b44))
+* **e2e:** arrange the workspace on the server the app reads it from ([1e0ae4a](https://github.com/sophotechlabs/spinoza/commit/1e0ae4a33a87464b3f3e9cf99df5dd8d04da91e5))
+* **e2e:** follow the picker's open question and the switch that is no longer shown ([f109984](https://github.com/sophotechlabs/spinoza/commit/f1099848fcff23b4405e72432b1542c2f70c10d9))
+* **e2e:** reach the skip-namespaces field where it now lives ([29d5485](https://github.com/sophotechlabs/spinoza/commit/29d5485e6c286f85dba0e2f2c1c1f30a91d51cf8))
+* **e2e:** scope the recovery check to the notifications region ([8c0d016](https://github.com/sophotechlabs/spinoza/commit/8c0d0160380c17374453775927332a4250eca719))
+* **e2e:** watch a cluster stop answering and come back ([863959e](https://github.com/sophotechlabs/spinoza/commit/863959e6e28b8b43c0f097030306a7561bfdfbf3))
+* **helm:** cover the history boundaries, the panicking handler and a saturated rate ([b573064](https://github.com/sophotechlabs/spinoza/commit/b573064e9a7731f7c7d758f9009aa318d12788ac))
+* keep the backend suite out of the real user config directory ([11625aa](https://github.com/sophotechlabs/spinoza/commit/11625aa6c549346bcc66afd6c6569f78274f728d))
+
+
+### Build
+
+* **just:** lint with the pinned golangci-lint, not whatever is on PATH ([69f1c29](https://github.com/sophotechlabs/spinoza/commit/69f1c296c94e3d6752f9ffde1aa90309ea0eca3d))
+* **mutation:** report survivors and unreached lines instead of failing on a count ([2e53d88](https://github.com/sophotechlabs/spinoza/commit/2e53d8886d223bcd795f86f65ebf6f51ed7e5885))
+
 ## [1.29.0](https://github.com/sophotechlabs/spinoza/compare/v1.28.0...v1.29.0) (2026-09-07)
 
 
