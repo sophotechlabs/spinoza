@@ -13,6 +13,8 @@ import { sessionExpired } from '../store/session';
 import { CONTROL, TAB_CONTROL } from '../lib/controls';
 import { useDismissMenu } from '../lib/useDismissMenu';
 import KubeconfigDialog from './KubeconfigDialog';
+import ClusterSwatch from './ClusterSwatch';
+import { useActiveTab } from '../store/clusters';
 
 type PickerLook = 'control' | 'tab';
 
@@ -32,14 +34,24 @@ function triggerClass(look: PickerLook): string {
   if (look === 'tab') {
     return `${TAB_CONTROL} cursor-pointer list-none [&::-webkit-details-marker]:hidden`;
   }
-  return `${CONTROL} cursor-pointer list-none border-edge-strong bg-surface text-fg-soft hover:bg-surface-active [&::-webkit-details-marker]:hidden`;
+  return `${CONTROL} max-w-64 cursor-pointer list-none border-edge-strong bg-surface-raised font-semibold text-fg-strong hover:bg-surface-active [&::-webkit-details-marker]:hidden`;
 }
 
 function triggerLabel(look: PickerLook): string {
   if (look === 'tab') {
     return 'Open another cluster';
   }
-  return 'Open a cluster';
+  return 'Kubernetes context';
+}
+
+function currentLabel(list: ContextList, named: string): string {
+  if (named !== '') {
+    return named;
+  }
+  if (list.current.name === '') {
+    return 'no cluster';
+  }
+  return list.current.name;
 }
 
 const MENU_ROW = 'px-3 py-1.5 text-left whitespace-nowrap hover:bg-surface-active';
@@ -90,6 +102,7 @@ export default function ContextPicker({ onSwitched, look = 'control' }: ContextP
   const rememberChoice = useSettingsStore((state) => state.setOpenContext);
   const [asking, setAsking] = useState<ContextEntry | null>(null);
   const [remember, setRemember] = useState(false);
+  const named = useActiveTab()?.label ?? '';
   const setList = useContextsStore((state) => state.setList);
   const [busy, setBusy] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -299,9 +312,7 @@ export default function ContextPicker({ onSwitched, look = 'control' }: ContextP
           Open {entry.name}
         </div>
         <div className="p-3 text-xs">
-          <p className="text-fg-soft">
-            One cluster is open. Replace it, or keep it and open this one beside it?
-          </p>
+          <p className="text-fg-soft">One cluster is open.</p>
           <label className="mt-3 flex items-center gap-2 text-fg-soft">
             <input
               type="checkbox"
@@ -379,9 +390,34 @@ export default function ContextPicker({ onSwitched, look = 'control' }: ContextP
     );
   }
 
+  function triggerBody() {
+    if (look === 'tab') {
+      return <span aria-hidden="true">+</span>;
+    }
+    return (
+      <>
+        <ClusterSwatch />
+        <span className="truncate">{currentLabel(list, named)}</span>
+        <span aria-hidden="true" className="ml-auto pl-2 text-fg-muted">
+          ▾
+        </span>
+      </>
+    );
+  }
+
+  function triggerTitle() {
+    if (look === 'tab') {
+      return 'Open another cluster';
+    }
+    return currentLabel(list, named);
+  }
+
   if (groups.length === 0) {
     return (
       <span className={shellClass(look)}>
+        {look !== 'tab' && (
+          <span className="font-semibold text-fg-strong">{currentLabel(list, named)}</span>
+        )}
         {manageButton()}
         {dialog()}
       </span>
@@ -393,10 +429,10 @@ export default function ContextPicker({ onSwitched, look = 'control' }: ContextP
       <details ref={menuRef} className="relative">
         <summary
           aria-label={triggerLabel(look)}
-          title="Open another cluster"
+          title={triggerTitle()}
           className={triggerClass(look)}
         >
-          <span aria-hidden="true">+</span>
+          {triggerBody()}
         </summary>
         <div className="absolute left-0 z-30 mt-1 flex max-h-[70vh] w-max max-w-[36rem] min-w-full flex-col overflow-y-auto rounded border border-edge-strong bg-surface-raised shadow">
           {groups.map((group) => (
