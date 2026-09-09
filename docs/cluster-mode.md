@@ -16,11 +16,14 @@ Turn it on with `--cluster-mode` and `--public-url`. The published Helm chart at
 | listens on | loopback only | whatever `--addr` says, `0.0.0.0:8080` by default |
 | who gets in | the token printed at startup | whoever your identity provider says |
 | what it acts as | your kubeconfig | a restricted pod service account by default; optionally the signed-in user through scoped impersonation |
-| when it stops | when the last view closes | when the pod does |
+| when it stops | when the last view closes | when the pod does, after it drains |
 | kubeconfigs, context switching, several clusters at once | yes | no; there is one cluster, the one it runs in |
 | port-forwarding | yes | no; the forward would land on the server, not on you |
 | a shell on the machine spinoza runs on | desktop app only | off |
 | update check and self-install | yes | off |
+| logs | text | json |
+| its own metrics | on `/metrics`, admins only | the same, plus an optional scrape port |
+| terminal transcripts | off | off unless `recordSessions` |
 | desktop window | yes | off |
 
 Everything else is the same product: the same tables, the same GitOps and Helm
@@ -371,11 +374,89 @@ tools act as spinoza itself and the startup log says so.
 
 ## Storage
 
-Settings, audit baselines, mutes and the timeline live under `/var/lib/spinoza`.
-An admin chooses workload or wide timeline recording from the History view. The
-choice and recorded changes resume after a pod replacement when
-`persistence.enabled` is on. Otherwise the state volume is an `emptyDir` and
-they go with the pod.
+Settings, audit baselines, mutes, the timeline, what each scheduled audit run
+found and any recorded terminal sessions live under `/var/lib/spinoza`. An admin
+chooses workload or wide timeline recording from the History view. The choice
+and recorded changes resume after a pod replacement when `persistence.enabled`
+is on, and `persistence.existingClaim` uses a volume you made yourself.
+Otherwise the state volume is an `emptyDir` and they go with the pod.
+
+`audit.retention` decides how long recorded changes, audit runs and session
+transcripts are kept. Empty keeps them.
+
+## The audit trail, and where it goes
+
+Every change spinoza makes is recorded with who asked for it, what it touched
+and whether the cluster allowed it — apply, delete, the eight actions, undo,
+Helm, Flux, Argo, exec and node shells. Sign-ins, sign-outs, expired sessions
+and refused roles go on the same trail.
+
+Each entry also goes out as one structured log line marked `event=audit`, so
+under `logFormat: json` it reaches Loki or Splunk with no integration to write.
+The trail has its own logger, so raising `logLevel` to `warn` quiets spinoza's
+own chatter without switching the audit off.
+`GET /api/history/export` hands the same rows out as csv or json, taking the
+filters the History view already sends. Admins only.
+
+`--record-sessions`, or `recordSessions` in the chart, additionally keeps a
+transcript of each exec and node shell beside its audit entry — both what was
+typed and what came back. They are read from the History view by admins only,
+each stops at a megabyte and says so, and they are swept by `audit.retention`.
+It is off unless you turn it on: a transcript is a record of whatever somebody
+typed, secrets included.
+
+## Running the checks on a timer
+
+`audit.interval` re-runs the cluster checks against the cluster spinoza serves
+and keeps what each run found, so the Checks view can show posture over time
+rather than only right now. It has to be at least a minute; the checks read the
+whole cluster.
+
+`audit.webhookURL` posts a json summary, but only when a run differs from the
+one before it: counts by severity, what appeared, what cleared, and which checks
+moved. It tries once more if the first post is refused, then says in the log
+that the notice did not land. Nothing about the webhook blocks the audit.
+
+## Watching it
+
+Spinoza reports on itself in the format a scrape reads. `/metrics` on the port
+that serves the app answers admins only, the way `--pprof` does. For a scrape,
+which carries no session, set `metrics.separatePort` and it also listens on
+`metrics.port` with nothing but that one route; keep that port inside the
+cluster. `metrics.serviceMonitor.enabled` renders a ServiceMonitor against it.
+
+What it reports: requests by route and status and how long they took, websocket
+and terminal sessions, how many informers are running and how long they took to
+sync, apiserver calls by outcome, audit writes that failed, how long a run of
+the checks took, sign-ins by role, and refused sign-ins by reason. Each metric
+caps how many label combinations it will keep and folds the rest into one
+`other` series, so a strange cluster cannot make the page unbounded.
+
+`logFormat: json` is the chart default, because something else has to parse it.
+Every request is given a short name, returned as `X-Spinoza-Request`, carried in
+the body of any error, and logged with the line for that request — so somebody
+can quote what they saw and you can find it.
+
+Settings, About, Support bundle writes a json file with the version, how spinoza
+was started with every secret removed, what readiness is waiting for, which
+clusters are open, and its own metrics page. It carries no cluster object, no
+log line, no transcript, and the shape of each setting rather than its value.
+
+## Restarting
+
+`/readyz` reports three things separately: whether the resource catalog has been
+read, whether the informer caches have filled, and whether the state store is
+open. It answers 503 with what it is still waiting for until all three hold, and
+the chart gates both the startup probe and readiness on it, so a new pod does
+not take traffic while its tables would be empty. `/healthz` stays what it was:
+a liveness ping that says the process is answering.
+
+On the way down spinoza drains before the listener closes. It reports itself
+not-ready first, so the endpoints controller takes the pod out of rotation while
+it can still answer; refuses new feeds, execs and shells with a plain reason;
+closes the open feeds with a code the browser reconnects on; and lets open
+terminals and log streams finish inside `terminationGracePeriodSeconds`. What a
+person sees is a reconnect, not an error.
 
 ## Running several replicas
 
@@ -385,6 +466,23 @@ to one state database, and live subscriptions and terminal sessions belong to
 the process that accepted them. `replicaCount: 1` is the supported shape, and
 the chart refuses to render anything else rather than install something that
 half works.
+
+Three things would have to change before a second replica is honest, and they
+are worth naming because they are the whole of it:
+
+- **The state store has one writer.** Settings, mutes, baselines, the timeline
+  and the audit trail live in one sqlite file on one volume. Two pods cannot
+  share it.
+- **Back-channel revocations live in memory** (`internal/auth/revoke.go`). A
+  logout the provider announces to one pod does not reach the other.
+- **Live sessions belong to a process.** A feed, a terminal and a port-forward
+  registry are held by whichever pod accepted them.
+
+That leaves two honest options, and this is not a decision the chart makes for
+you. Either move the state to something two pods can share, which means a second
+supported storage backend and a way to propagate revocations through it; or stay
+at one replica and make a restart cheap, which is what the readiness and drain
+above are for. Until the first is built, the second is what spinoza supports.
 
 ## Troubleshooting
 

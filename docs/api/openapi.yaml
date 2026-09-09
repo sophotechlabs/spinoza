@@ -1,0 +1,1778 @@
+openapi: 3.1.0
+info:
+  title: Spinoza
+  summary: The http api the spinoza frontend and the mcp server speak
+  description: |
+    Hand-kept. A test in internal/server checks that every route in routes.go
+    appears here and that nothing here is a route spinoza does not serve, so
+    this file cannot drift away from what the binary answers.
+
+    Every route needs the run token, as the X-Spinoza-Token header, a token
+    query parameter, or the cookie the page keeps. When spinoza serves a
+    cluster the session cookie takes its place and the role named on each
+    route is enforced.
+  version: 1
+  license:
+    name: FSL-1.1-ALv2
+    url: https://spinoza.tech
+servers:
+  - url: /
+    description: The address spinoza is listening on
+paths:
+  /api/access:
+    get:
+      summary: What this account may do to one object
+      tags:
+        - any-signed-in-reader
+      responses:
+        "200":
+          description: What the route answers
+        "400":
+          description: The request was not understood
+        "401":
+          description: This run's token was not given
+        "503":
+          description: Spinoza has no cluster, or the cluster would not answer
+    post:
+      summary: The same, for several objects at once
+      tags:
+        - any-signed-in-reader
+      responses:
+        "200":
+          description: What the route answers
+        "400":
+          description: The request was not understood
+        "401":
+          description: This run's token was not given
+        "503":
+          description: Spinoza has no cluster, or the cluster would not answer
+  /api/action:
+    post:
+      summary: Scale, restart, undo, cordon, uncordon, drain, suspend, resume or trigger
+      tags:
+        - any-signed-in-reader
+      responses:
+        "200":
+          description: What the route answers
+        "400":
+          description: The request was not understood
+        "401":
+          description: This run's token was not given
+        "503":
+          description: Spinoza has no cluster, or the cluster would not answer
+  /api/argocd:
+    get:
+      summary: Argo CD applications and their sync state
+      tags:
+        - reads-the-whole-cluster
+      responses:
+        "200":
+          description: What the route answers
+        "400":
+          description: The request was not understood
+        "401":
+          description: This run's token was not given
+        "403":
+          description: This account may not do that, and the answer says why
+        "503":
+          description: Spinoza has no cluster, or the cluster would not answer
+  /api/argocd/action:
+    post:
+      summary: Sync or refresh an argo application
+      tags:
+        - role:editor
+      responses:
+        "200":
+          description: What the route answers
+        "400":
+          description: The request was not understood
+        "401":
+          description: This run's token was not given
+        "403":
+          description: This account may not do that, and the answer says why
+        "503":
+          description: Spinoza has no cluster, or the cluster would not answer
+  /api/auth/me:
+    get:
+      summary: Who spinoza thinks you are, and what you may do
+      tags:
+        - any-signed-in-reader
+      responses:
+        "200":
+          description: What the route answers
+        "400":
+          description: The request was not understood
+        "401":
+          description: This run's token was not given
+        "503":
+          description: Spinoza has no cluster, or the cluster would not answer
+  /api/capabilities:
+    get:
+      summary: "What this deployment supports: helm, traffic, a local shell"
+      tags:
+        - any-signed-in-reader
+      responses:
+        "200":
+          description: What the route answers
+        "400":
+          description: The request was not understood
+        "401":
+          description: This run's token was not given
+        "503":
+          description: Spinoza has no cluster, or the cluster would not answer
+  /api/checks:
+    get:
+      summary: The cluster audit
+      tags:
+        - reads-the-whole-cluster
+      responses:
+        "200":
+          description: What the route answers
+        "400":
+          description: The request was not understood
+        "401":
+          description: This run's token was not given
+        "403":
+          description: This account may not do that, and the answer says why
+        "503":
+          description: Spinoza has no cluster, or the cluster would not answer
+  /api/checks/baseline:
+    post:
+      summary: Take a baseline of what the checks find now
+      tags:
+        - role:editor
+        - reads-the-whole-cluster
+      responses:
+        "200":
+          description: What the route answers
+        "400":
+          description: The request was not understood
+        "401":
+          description: This run's token was not given
+        "403":
+          description: This account may not do that, and the answer says why
+        "503":
+          description: Spinoza has no cluster, or the cluster would not answer
+    delete:
+      summary: Forget the baseline
+      tags:
+        - role:editor
+        - reads-the-whole-cluster
+      responses:
+        "200":
+          description: What the route answers
+        "400":
+          description: The request was not understood
+        "401":
+          description: This run's token was not given
+        "403":
+          description: This account may not do that, and the answer says why
+        "503":
+          description: Spinoza has no cluster, or the cluster would not answer
+  /api/checks/baseline/file:
+    get:
+      summary: Hand the baseline out as a file
+      tags:
+        - reads-the-whole-cluster
+      responses:
+        "200":
+          description: What the route answers
+        "400":
+          description: The request was not understood
+        "401":
+          description: This run's token was not given
+        "403":
+          description: This account may not do that, and the answer says why
+        "503":
+          description: Spinoza has no cluster, or the cluster would not answer
+    put:
+      summary: Take a baseline back from a file
+      tags:
+        - role:editor
+        - reads-the-whole-cluster
+      responses:
+        "200":
+          description: What the route answers
+        "400":
+          description: The request was not understood
+        "401":
+          description: This run's token was not given
+        "403":
+          description: This account may not do that, and the answer says why
+        "503":
+          description: Spinoza has no cluster, or the cluster would not answer
+  /api/checks/export:
+    get:
+      summary: The audit as csv, json or sarif
+      tags:
+        - reads-the-whole-cluster
+      responses:
+        "200":
+          description: What the route answers
+        "400":
+          description: The request was not understood
+        "401":
+          description: This run's token was not given
+        "403":
+          description: This account may not do that, and the answer says why
+        "503":
+          description: Spinoza has no cluster, or the cluster would not answer
+  /api/checks/findings:
+    get:
+      summary: A page of findings for one check
+      tags:
+        - reads-the-whole-cluster
+      responses:
+        "200":
+          description: What the route answers
+        "400":
+          description: The request was not understood
+        "401":
+          description: This run's token was not given
+        "403":
+          description: This account may not do that, and the answer says why
+        "503":
+          description: Spinoza has no cluster, or the cluster would not answer
+  /api/checks/findings/fleet:
+    get:
+      summary: The same page across every open cluster
+      tags:
+        - reads-the-whole-cluster
+      responses:
+        "200":
+          description: What the route answers
+        "400":
+          description: The request was not understood
+        "401":
+          description: This run's token was not given
+        "403":
+          description: This account may not do that, and the answer says why
+        "503":
+          description: Spinoza has no cluster, or the cluster would not answer
+  /api/checks/fleet:
+    get:
+      summary: The audit across every open cluster
+      tags:
+        - reads-the-whole-cluster
+      responses:
+        "200":
+          description: What the route answers
+        "400":
+          description: The request was not understood
+        "401":
+          description: This run's token was not given
+        "403":
+          description: This account may not do that, and the answer says why
+        "503":
+          description: Spinoza has no cluster, or the cluster would not answer
+  /api/checks/frameworks:
+    get:
+      summary: Posture per control, per framework
+      tags:
+        - reads-the-whole-cluster
+      responses:
+        "200":
+          description: What the route answers
+        "400":
+          description: The request was not understood
+        "401":
+          description: This run's token was not given
+        "403":
+          description: This account may not do that, and the answer says why
+        "503":
+          description: Spinoza has no cluster, or the cluster would not answer
+  /api/checks/mutes:
+    get:
+      summary: Which findings have been decided about
+      tags:
+        - reads-the-whole-cluster
+      responses:
+        "200":
+          description: What the route answers
+        "400":
+          description: The request was not understood
+        "401":
+          description: This run's token was not given
+        "403":
+          description: This account may not do that, and the answer says why
+        "503":
+          description: Spinoza has no cluster, or the cluster would not answer
+    post:
+      summary: Mute a finding, with a reason
+      tags:
+        - role:editor
+        - reads-the-whole-cluster
+      responses:
+        "200":
+          description: What the route answers
+        "400":
+          description: The request was not understood
+        "401":
+          description: This run's token was not given
+        "403":
+          description: This account may not do that, and the answer says why
+        "503":
+          description: Spinoza has no cluster, or the cluster would not answer
+    delete:
+      summary: Unmute a finding
+      tags:
+        - role:editor
+        - reads-the-whole-cluster
+      responses:
+        "200":
+          description: What the route answers
+        "400":
+          description: The request was not understood
+        "401":
+          description: This run's token was not given
+        "403":
+          description: This account may not do that, and the answer says why
+        "503":
+          description: Spinoza has no cluster, or the cluster would not answer
+  /api/checks/rules/faults:
+    post:
+      summary: Say what is wrong with a rule before it is saved
+      tags:
+        - any-signed-in-reader
+      responses:
+        "200":
+          description: What the route answers
+        "400":
+          description: The request was not understood
+        "401":
+          description: This run's token was not given
+        "503":
+          description: Spinoza has no cluster, or the cluster would not answer
+  /api/checks/runs:
+    get:
+      summary: What each scheduled audit run found
+      tags:
+        - reads-the-whole-cluster
+      responses:
+        "200":
+          description: What the route answers
+        "400":
+          description: The request was not understood
+        "401":
+          description: This run's token was not given
+        "403":
+          description: This account may not do that, and the answer says why
+        "503":
+          description: Spinoza has no cluster, or the cluster would not answer
+  /api/clusters:
+    get:
+      summary: The clusters that are open
+      tags:
+        - any-signed-in-reader
+      responses:
+        "200":
+          description: What the route answers
+        "400":
+          description: The request was not understood
+        "401":
+          description: This run's token was not given
+        "503":
+          description: Spinoza has no cluster, or the cluster would not answer
+    post:
+      summary: Open a cluster
+      tags:
+        - only-on-your-own-machine
+      responses:
+        "200":
+          description: What the route answers
+        "400":
+          description: The request was not understood
+        "401":
+          description: This run's token was not given
+        "503":
+          description: Spinoza has no cluster, or the cluster would not answer
+    delete:
+      summary: Close a cluster
+      tags:
+        - only-on-your-own-machine
+      responses:
+        "200":
+          description: What the route answers
+        "400":
+          description: The request was not understood
+        "401":
+          description: This run's token was not given
+        "503":
+          description: Spinoza has no cluster, or the cluster would not answer
+  /api/clusters/active:
+    post:
+      summary: Pick which open cluster is active
+      tags:
+        - only-on-your-own-machine
+      responses:
+        "200":
+          description: What the route answers
+        "400":
+          description: The request was not understood
+        "401":
+          description: This run's token was not given
+        "503":
+          description: Spinoza has no cluster, or the cluster would not answer
+  /api/clusters/color:
+    post:
+      summary: Colour a cluster's tab
+      tags:
+        - only-on-your-own-machine
+      responses:
+        "200":
+          description: What the route answers
+        "400":
+          description: The request was not understood
+        "401":
+          description: This run's token was not given
+        "503":
+          description: Spinoza has no cluster, or the cluster would not answer
+  /api/clusters/name:
+    post:
+      summary: Name a cluster's tab
+      tags:
+        - only-on-your-own-machine
+      responses:
+        "200":
+          description: What the route answers
+        "400":
+          description: The request was not understood
+        "401":
+          description: This run's token was not given
+        "503":
+          description: Spinoza has no cluster, or the cluster would not answer
+  /api/clusters/reopen:
+    post:
+      summary: Whether a cluster comes back next time
+      tags:
+        - only-on-your-own-machine
+      responses:
+        "200":
+          description: What the route answers
+        "400":
+          description: The request was not understood
+        "401":
+          description: This run's token was not given
+        "503":
+          description: Spinoza has no cluster, or the cluster would not answer
+  /api/clusters/timeline:
+    post:
+      summary: Whether spinoza records what this cluster does
+      tags:
+        - role:admin
+        - reads-the-whole-cluster
+      responses:
+        "200":
+          description: What the route answers
+        "400":
+          description: The request was not understood
+        "401":
+          description: This run's token was not given
+        "403":
+          description: This account may not do that, and the answer says why
+        "503":
+          description: Spinoza has no cluster, or the cluster would not answer
+  /api/compare:
+    get:
+      summary: One object against the same object in another context
+      tags:
+        - reads-the-whole-cluster
+      responses:
+        "200":
+          description: What the route answers
+        "400":
+          description: The request was not understood
+        "401":
+          description: This run's token was not given
+        "403":
+          description: This account may not do that, and the answer says why
+        "503":
+          description: Spinoza has no cluster, or the cluster would not answer
+  /api/compare/kind:
+    get:
+      summary: A whole kind against another context, with a verdict per object
+      tags:
+        - reads-the-whole-cluster
+      responses:
+        "200":
+          description: What the route answers
+        "400":
+          description: The request was not understood
+        "401":
+          description: This run's token was not given
+        "403":
+          description: This account may not do that, and the answer says why
+        "503":
+          description: Spinoza has no cluster, or the cluster would not answer
+  /api/contexts:
+    get:
+      summary: The kubeconfig contexts spinoza can see
+      tags:
+        - any-signed-in-reader
+      responses:
+        "200":
+          description: What the route answers
+        "400":
+          description: The request was not understood
+        "401":
+          description: This run's token was not given
+        "503":
+          description: Spinoza has no cluster, or the cluster would not answer
+  /api/debug:
+    post:
+      summary: Create a debug container beside a pod
+      tags:
+        - role:admin
+      responses:
+        "200":
+          description: What the route answers
+        "400":
+          description: The request was not understood
+        "401":
+          description: This run's token was not given
+        "403":
+          description: This account may not do that, and the answer says why
+        "503":
+          description: Spinoza has no cluster, or the cluster would not answer
+  /api/debug/support:
+    get:
+      summary: Whether a debug container can be created here
+      tags:
+        - any-signed-in-reader
+      responses:
+        "200":
+          description: What the route answers
+        "400":
+          description: The request was not understood
+        "401":
+          description: This run's token was not given
+        "503":
+          description: Spinoza has no cluster, or the cluster would not answer
+  /api/events:
+    get:
+      summary: The events for one object
+      tags:
+        - any-signed-in-reader
+      responses:
+        "200":
+          description: What the route answers
+        "400":
+          description: The request was not understood
+        "401":
+          description: This run's token was not given
+        "503":
+          description: Spinoza has no cluster, or the cluster would not answer
+  /api/exec:
+    get:
+      summary: A terminal in a container, over a websocket
+      tags:
+        - role:admin
+      responses:
+        "200":
+          description: What the route answers
+        "400":
+          description: The request was not understood
+        "401":
+          description: This run's token was not given
+        "403":
+          description: This account may not do that, and the answer says why
+        "503":
+          description: Spinoza has no cluster, or the cluster would not answer
+  /api/exec/support:
+    get:
+      summary: Whether a container has a shell, or needs a debug container
+      tags:
+        - any-signed-in-reader
+      responses:
+        "200":
+          description: What the route answers
+        "400":
+          description: The request was not understood
+        "401":
+          description: This run's token was not given
+        "503":
+          description: Spinoza has no cluster, or the cluster would not answer
+  /api/flux:
+    get:
+      summary: The flux objects in this cluster
+      tags:
+        - reads-the-whole-cluster
+      responses:
+        "200":
+          description: What the route answers
+        "400":
+          description: The request was not understood
+        "401":
+          description: This run's token was not given
+        "403":
+          description: This account may not do that, and the answer says why
+        "503":
+          description: Spinoza has no cluster, or the cluster would not answer
+  /api/flux/action:
+    post:
+      summary: Reconcile, suspend or resume a flux object
+      tags:
+        - role:editor
+      responses:
+        "200":
+          description: What the route answers
+        "400":
+          description: The request was not understood
+        "401":
+          description: This run's token was not given
+        "403":
+          description: This account may not do that, and the answer says why
+        "503":
+          description: Spinoza has no cluster, or the cluster would not answer
+  /api/flux/overview:
+    get:
+      summary: Cluster sync, controller health and counts, for flux
+      tags:
+        - reads-the-whole-cluster
+      responses:
+        "200":
+          description: What the route answers
+        "400":
+          description: The request was not understood
+        "401":
+          description: This run's token was not given
+        "403":
+          description: This account may not do that, and the answer says why
+        "503":
+          description: Spinoza has no cluster, or the cluster would not answer
+  /api/gitops/app:
+    get:
+      summary: One gitops application
+      tags:
+        - reads-the-whole-cluster
+      responses:
+        "200":
+          description: What the route answers
+        "400":
+          description: The request was not understood
+        "401":
+          description: This run's token was not given
+        "403":
+          description: This account may not do that, and the answer says why
+        "503":
+          description: Spinoza has no cluster, or the cluster would not answer
+  /api/gitops/app/graph:
+    get:
+      summary: The graph around one gitops application
+      tags:
+        - reads-the-whole-cluster
+      responses:
+        "200":
+          description: What the route answers
+        "400":
+          description: The request was not understood
+        "401":
+          description: This run's token was not given
+        "403":
+          description: This account may not do that, and the answer says why
+        "503":
+          description: Spinoza has no cluster, or the cluster would not answer
+  /api/gitops/fleet:
+    get:
+      summary: Flux and Argo across every open cluster
+      tags:
+        - reads-the-whole-cluster
+      responses:
+        "200":
+          description: What the route answers
+        "400":
+          description: The request was not understood
+        "401":
+          description: This run's token was not given
+        "403":
+          description: This account may not do that, and the answer says why
+        "503":
+          description: Spinoza has no cluster, or the cluster would not answer
+  /api/gitops/graph:
+    get:
+      summary: The flux dependency graph
+      tags:
+        - reads-the-whole-cluster
+      responses:
+        "200":
+          description: What the route answers
+        "400":
+          description: The request was not understood
+        "401":
+          description: This run's token was not given
+        "403":
+          description: This account may not do that, and the answer says why
+        "503":
+          description: Spinoza has no cluster, or the cluster would not answer
+  /api/helm:
+    get:
+      summary: The releases in this cluster
+      tags:
+        - any-signed-in-reader
+      responses:
+        "200":
+          description: What the route answers
+        "400":
+          description: The request was not understood
+        "401":
+          description: This run's token was not given
+        "503":
+          description: Spinoza has no cluster, or the cluster would not answer
+  /api/helm/access:
+    get:
+      summary: Whether this account may read helm release storage
+      tags:
+        - any-signed-in-reader
+      responses:
+        "200":
+          description: What the route answers
+        "400":
+          description: The request was not understood
+        "401":
+          description: This run's token was not given
+        "503":
+          description: Spinoza has no cluster, or the cluster would not answer
+  /api/helm/action:
+    post:
+      summary: Roll back or uninstall a release
+      tags:
+        - role:editor
+      responses:
+        "200":
+          description: What the route answers
+        "400":
+          description: The request was not understood
+        "401":
+          description: This run's token was not given
+        "403":
+          description: This account may not do that, and the answer says why
+        "503":
+          description: Spinoza has no cluster, or the cluster would not answer
+  /api/helm/charts:
+    get:
+      summary: The charts your repositories offer
+      tags:
+        - any-signed-in-reader
+      responses:
+        "200":
+          description: What the route answers
+        "400":
+          description: The request was not understood
+        "401":
+          description: This run's token was not given
+        "503":
+          description: Spinoza has no cluster, or the cluster would not answer
+  /api/helm/fleet:
+    get:
+      summary: Releases across every open cluster
+      tags:
+        - reads-the-whole-cluster
+      responses:
+        "200":
+          description: What the route answers
+        "400":
+          description: The request was not understood
+        "401":
+          description: This run's token was not given
+        "403":
+          description: This account may not do that, and the answer says why
+        "503":
+          description: Spinoza has no cluster, or the cluster would not answer
+  /api/helm/history:
+    get:
+      summary: The revisions of one release
+      tags:
+        - any-signed-in-reader
+      responses:
+        "200":
+          description: What the route answers
+        "400":
+          description: The request was not understood
+        "401":
+          description: This run's token was not given
+        "503":
+          description: Spinoza has no cluster, or the cluster would not answer
+  /api/helm/install:
+    post:
+      summary: Install a chart
+      tags:
+        - role:editor
+      responses:
+        "200":
+          description: What the route answers
+        "400":
+          description: The request was not understood
+        "401":
+          description: This run's token was not given
+        "403":
+          description: This account may not do that, and the answer says why
+        "503":
+          description: Spinoza has no cluster, or the cluster would not answer
+  /api/helm/release:
+    get:
+      summary: One release, with its values, notes and rendered manifest
+      tags:
+        - any-signed-in-reader
+      responses:
+        "200":
+          description: What the route answers
+        "400":
+          description: The request was not understood
+        "401":
+          description: This run's token was not given
+        "503":
+          description: Spinoza has no cluster, or the cluster would not answer
+  /api/helm/upgrade:
+    post:
+      summary: Upgrade a release, behind a rendered diff
+      tags:
+        - role:editor
+      responses:
+        "200":
+          description: What the route answers
+        "400":
+          description: The request was not understood
+        "401":
+          description: This run's token was not given
+        "403":
+          description: This account may not do that, and the answer says why
+        "503":
+          description: Spinoza has no cluster, or the cluster would not answer
+  /api/helm/values:
+    get:
+      summary: The default values of a chart
+      tags:
+        - any-signed-in-reader
+      responses:
+        "200":
+          description: What the route answers
+        "400":
+          description: The request was not understood
+        "401":
+          description: This run's token was not given
+        "503":
+          description: Spinoza has no cluster, or the cluster would not answer
+  /api/helm/versions:
+    get:
+      summary: The chart versions your repositories offer
+      tags:
+        - any-signed-in-reader
+      responses:
+        "200":
+          description: What the route answers
+        "400":
+          description: The request was not understood
+        "401":
+          description: This run's token was not given
+        "503":
+          description: Spinoza has no cluster, or the cluster would not answer
+  /api/history:
+    get:
+      summary: What spinoza did, and what the cluster did
+      tags:
+        - reads-the-whole-cluster
+      responses:
+        "200":
+          description: What the route answers
+        "400":
+          description: The request was not understood
+        "401":
+          description: This run's token was not given
+        "403":
+          description: This account may not do that, and the answer says why
+        "503":
+          description: Spinoza has no cluster, or the cluster would not answer
+    delete:
+      summary: Clear the local record
+      tags:
+        - role:admin
+        - reads-the-whole-cluster
+      responses:
+        "200":
+          description: What the route answers
+        "400":
+          description: The request was not understood
+        "401":
+          description: This run's token was not given
+        "403":
+          description: This account may not do that, and the answer says why
+        "503":
+          description: Spinoza has no cluster, or the cluster would not answer
+  /api/history/export:
+    get:
+      summary: The audit trail as csv or json
+      tags:
+        - role:admin
+        - reads-the-whole-cluster
+      responses:
+        "200":
+          description: What the route answers
+        "400":
+          description: The request was not understood
+        "401":
+          description: This run's token was not given
+        "403":
+          description: This account may not do that, and the answer says why
+        "503":
+          description: Spinoza has no cluster, or the cluster would not answer
+  /api/images/fleet:
+    get:
+      summary: Which images are running across every open cluster
+      tags:
+        - reads-the-whole-cluster
+      responses:
+        "200":
+          description: What the route answers
+        "400":
+          description: The request was not understood
+        "401":
+          description: This run's token was not given
+        "403":
+          description: This account may not do that, and the answer says why
+        "503":
+          description: Spinoza has no cluster, or the cluster would not answer
+  /api/issues:
+    get:
+      summary: What is broken in this cluster now
+      tags:
+        - reads-the-whole-cluster
+      responses:
+        "200":
+          description: What the route answers
+        "400":
+          description: The request was not understood
+        "401":
+          description: This run's token was not given
+        "403":
+          description: This account may not do that, and the answer says why
+        "503":
+          description: Spinoza has no cluster, or the cluster would not answer
+  /api/issues/fleet:
+    get:
+      summary: What is broken across every open cluster
+      tags:
+        - reads-the-whole-cluster
+      responses:
+        "200":
+          description: What the route answers
+        "400":
+          description: The request was not understood
+        "401":
+          description: This run's token was not given
+        "403":
+          description: This account may not do that, and the answer says why
+        "503":
+          description: Spinoza has no cluster, or the cluster would not answer
+  /api/kubeconfigs:
+    post:
+      summary: Add a kubeconfig by path
+      tags:
+        - only-on-your-own-machine
+      responses:
+        "200":
+          description: What the route answers
+        "400":
+          description: The request was not understood
+        "401":
+          description: This run's token was not given
+        "503":
+          description: Spinoza has no cluster, or the cluster would not answer
+    delete:
+      summary: Stop referencing a kubeconfig
+      tags:
+        - only-on-your-own-machine
+      responses:
+        "200":
+          description: What the route answers
+        "400":
+          description: The request was not understood
+        "401":
+          description: This run's token was not given
+        "503":
+          description: Spinoza has no cluster, or the cluster would not answer
+  /api/kubeconfigs/picker:
+    get:
+      summary: Whether this machine can open a file dialog
+      tags:
+        - only-on-your-own-machine
+      responses:
+        "200":
+          description: What the route answers
+        "400":
+          description: The request was not understood
+        "401":
+          description: This run's token was not given
+        "503":
+          description: Spinoza has no cluster, or the cluster would not answer
+    post:
+      summary: Open a file dialog and take what it returns
+      tags:
+        - only-on-your-own-machine
+      responses:
+        "200":
+          description: What the route answers
+        "400":
+          description: The request was not understood
+        "401":
+          description: This run's token was not given
+        "503":
+          description: Spinoza has no cluster, or the cluster would not answer
+  /api/memory:
+    get:
+      summary: What spinoza is holding while it watches
+      tags:
+        - any-signed-in-reader
+      responses:
+        "200":
+          description: What the route answers
+        "400":
+          description: The request was not understood
+        "401":
+          description: This run's token was not given
+        "503":
+          description: Spinoza has no cluster, or the cluster would not answer
+  /api/metrics:
+    get:
+      summary: Cpu and memory now, from metrics-server
+      tags:
+        - reads-the-whole-cluster
+      responses:
+        "200":
+          description: What the route answers
+        "400":
+          description: The request was not understood
+        "401":
+          description: This run's token was not given
+        "403":
+          description: This account may not do that, and the answer says why
+        "503":
+          description: Spinoza has no cluster, or the cluster would not answer
+  /api/metrics/history:
+    get:
+      summary: Cpu and memory over time, from prometheus
+      tags:
+        - any-signed-in-reader
+      responses:
+        "200":
+          description: What the route answers
+        "400":
+          description: The request was not understood
+        "401":
+          description: This run's token was not given
+        "503":
+          description: Spinoza has no cluster, or the cluster would not answer
+  /api/namespaces:
+    get:
+      summary: The namespaces this account may read
+      tags:
+        - any-signed-in-reader
+      responses:
+        "200":
+          description: What the route answers
+        "400":
+          description: The request was not understood
+        "401":
+          description: This run's token was not given
+        "503":
+          description: Spinoza has no cluster, or the cluster would not answer
+  /api/nodeshell:
+    get:
+      summary: A root shell in a node's own namespaces, over a websocket
+      tags:
+        - role:admin
+      responses:
+        "200":
+          description: What the route answers
+        "400":
+          description: The request was not understood
+        "401":
+          description: This run's token was not given
+        "403":
+          description: This account may not do that, and the answer says why
+        "503":
+          description: Spinoza has no cluster, or the cluster would not answer
+  /api/nodeshell/support:
+    get:
+      summary: Whether a root shell on a node is allowed here
+      tags:
+        - any-signed-in-reader
+      responses:
+        "200":
+          description: What the route answers
+        "400":
+          description: The request was not understood
+        "401":
+          description: This run's token was not given
+        "503":
+          description: Spinoza has no cluster, or the cluster would not answer
+  /api/object:
+    get:
+      summary: One object, with its metadata, conditions and live yaml
+      tags:
+        - any-signed-in-reader
+      responses:
+        "200":
+          description: What the route answers
+        "400":
+          description: The request was not understood
+        "401":
+          description: This run's token was not given
+        "503":
+          description: Spinoza has no cluster, or the cluster would not answer
+    put:
+      summary: Apply an object, server-side
+      tags:
+        - role:editor
+      responses:
+        "200":
+          description: What the route answers
+        "400":
+          description: The request was not understood
+        "401":
+          description: This run's token was not given
+        "403":
+          description: This account may not do that, and the answer says why
+        "503":
+          description: Spinoza has no cluster, or the cluster would not answer
+    delete:
+      summary: Delete an object
+      tags:
+        - role:editor
+      responses:
+        "200":
+          description: What the route answers
+        "400":
+          description: The request was not understood
+        "401":
+          description: This run's token was not given
+        "403":
+          description: This account may not do that, and the answer says why
+        "503":
+          description: Spinoza has no cluster, or the cluster would not answer
+  /api/overview:
+    get:
+      summary: Server version, node readiness, capacity and recent warnings
+      tags:
+        - reads-the-whole-cluster
+      responses:
+        "200":
+          description: What the route answers
+        "400":
+          description: The request was not understood
+        "401":
+          description: This run's token was not given
+        "403":
+          description: This account may not do that, and the answer says why
+        "503":
+          description: Spinoza has no cluster, or the cluster would not answer
+  /api/overview/fleet:
+    get:
+      summary: The overview across every open cluster
+      tags:
+        - reads-the-whole-cluster
+      responses:
+        "200":
+          description: What the route answers
+        "400":
+          description: The request was not understood
+        "401":
+          description: This run's token was not given
+        "403":
+          description: This account may not do that, and the answer says why
+        "503":
+          description: Spinoza has no cluster, or the cluster would not answer
+  /api/portforward:
+    get:
+      summary: The forwards that are open
+      tags:
+        - any-signed-in-reader
+      responses:
+        "200":
+          description: What the route answers
+        "400":
+          description: The request was not understood
+        "401":
+          description: This run's token was not given
+        "503":
+          description: Spinoza has no cluster, or the cluster would not answer
+    post:
+      summary: Forward a pod or service port to this machine
+      tags:
+        - only-on-your-own-machine
+      responses:
+        "200":
+          description: What the route answers
+        "400":
+          description: The request was not understood
+        "401":
+          description: This run's token was not given
+        "503":
+          description: Spinoza has no cluster, or the cluster would not answer
+    delete:
+      summary: Stop a forward
+      tags:
+        - only-on-your-own-machine
+      responses:
+        "200":
+          description: What the route answers
+        "400":
+          description: The request was not understood
+        "401":
+          description: This run's token was not given
+        "503":
+          description: Spinoza has no cluster, or the cluster would not answer
+  /api/protection:
+    post:
+      summary: Protect a cluster, so anything destructive asks for its name
+      tags:
+        - role:admin
+      responses:
+        "200":
+          description: What the route answers
+        "400":
+          description: The request was not understood
+        "401":
+          description: This run's token was not given
+        "403":
+          description: This account may not do that, and the answer says why
+        "503":
+          description: Spinoza has no cluster, or the cluster would not answer
+  /api/rbac:
+    get:
+      summary: Who may do what, across the cluster
+      tags:
+        - role:admin
+      responses:
+        "200":
+          description: What the route answers
+        "400":
+          description: The request was not understood
+        "401":
+          description: This run's token was not given
+        "403":
+          description: This account may not do that, and the answer says why
+        "503":
+          description: Spinoza has no cluster, or the cluster would not answer
+  /api/rbac/who:
+    get:
+      summary: Who may do one particular thing
+      tags:
+        - role:admin
+      responses:
+        "200":
+          description: What the route answers
+        "400":
+          description: The request was not understood
+        "401":
+          description: This run's token was not given
+        "403":
+          description: This account may not do that, and the answer says why
+        "503":
+          description: Spinoza has no cluster, or the cluster would not answer
+  /api/resources:
+    get:
+      summary: The resource catalog discovery built
+      tags:
+        - any-signed-in-reader
+      responses:
+        "200":
+          description: What the route answers
+        "400":
+          description: The request was not understood
+        "401":
+          description: This run's token was not given
+        "503":
+          description: Spinoza has no cluster, or the cluster would not answer
+    post:
+      summary: Read discovery again
+      tags:
+        - role:admin
+      responses:
+        "200":
+          description: What the route answers
+        "400":
+          description: The request was not understood
+        "401":
+          description: This run's token was not given
+        "403":
+          description: This account may not do that, and the answer says why
+        "503":
+          description: Spinoza has no cluster, or the cluster would not answer
+  /api/resources/counts:
+    get:
+      summary: How many objects of each kind the cluster holds
+      tags:
+        - reads-the-whole-cluster
+      responses:
+        "200":
+          description: What the route answers
+        "400":
+          description: The request was not understood
+        "401":
+          description: This run's token was not given
+        "403":
+          description: This account may not do that, and the answer says why
+        "503":
+          description: Spinoza has no cluster, or the cluster would not answer
+  /api/resources/fleet:
+    get:
+      summary: The same counts across every open cluster
+      tags:
+        - reads-the-whole-cluster
+      responses:
+        "200":
+          description: What the route answers
+        "400":
+          description: The request was not understood
+        "401":
+          description: This run's token was not given
+        "403":
+          description: This account may not do that, and the answer says why
+        "503":
+          description: Spinoza has no cluster, or the cluster would not answer
+  /api/rollout:
+    get:
+      summary: The revisions a workload rolled out
+      tags:
+        - any-signed-in-reader
+      responses:
+        "200":
+          description: What the route answers
+        "400":
+          description: The request was not understood
+        "401":
+          description: This run's token was not given
+        "503":
+          description: Spinoza has no cluster, or the cluster would not answer
+  /api/rollout/diff:
+    get:
+      summary: What differs between two revisions of a workload
+      tags:
+        - any-signed-in-reader
+      responses:
+        "200":
+          description: What the route answers
+        "400":
+          description: The request was not understood
+        "401":
+          description: This run's token was not given
+        "503":
+          description: Spinoza has no cluster, or the cluster would not answer
+  /api/schema:
+    get:
+      summary: The openapi schema the cluster holds for a kind
+      tags:
+        - any-signed-in-reader
+      responses:
+        "200":
+          description: What the route answers
+        "400":
+          description: The request was not understood
+        "401":
+          description: This run's token was not given
+        "503":
+          description: Spinoza has no cluster, or the cluster would not answer
+  /api/search:
+    get:
+      summary: Search this cluster
+      tags:
+        - any-signed-in-reader
+      responses:
+        "200":
+          description: What the route answers
+        "400":
+          description: The request was not understood
+        "401":
+          description: This run's token was not given
+        "503":
+          description: Spinoza has no cluster, or the cluster would not answer
+  /api/search/fleet:
+    get:
+      summary: Search every open cluster
+      tags:
+        - reads-the-whole-cluster
+      responses:
+        "200":
+          description: What the route answers
+        "400":
+          description: The request was not understood
+        "401":
+          description: This run's token was not given
+        "403":
+          description: This account may not do that, and the answer says why
+        "503":
+          description: Spinoza has no cluster, or the cluster would not answer
+  /api/settings:
+    get:
+      summary: The settings this account has stored
+      tags:
+        - any-signed-in-reader
+      responses:
+        "200":
+          description: What the route answers
+        "400":
+          description: The request was not understood
+        "401":
+          description: This run's token was not given
+        "503":
+          description: Spinoza has no cluster, or the cluster would not answer
+    put:
+      summary: Store settings for this account
+      tags:
+        - any-signed-in-reader
+      responses:
+        "200":
+          description: What the route answers
+        "400":
+          description: The request was not understood
+        "401":
+          description: This run's token was not given
+        "503":
+          description: Spinoza has no cluster, or the cluster would not answer
+  /api/shell:
+    get:
+      summary: A shell on the machine spinoza runs on, over a websocket
+      tags:
+        - only-on-your-own-machine
+      responses:
+        "200":
+          description: What the route answers
+        "400":
+          description: The request was not understood
+        "401":
+          description: This run's token was not given
+        "503":
+          description: Spinoza has no cluster, or the cluster would not answer
+  /api/support:
+    get:
+      summary: What spinoza knows about itself, with secrets removed
+      tags:
+        - role:admin
+      responses:
+        "200":
+          description: What the route answers
+        "400":
+          description: The request was not understood
+        "401":
+          description: This run's token was not given
+        "403":
+          description: This account may not do that, and the answer says why
+        "503":
+          description: Spinoza has no cluster, or the cluster would not answer
+  /api/topology:
+    get:
+      summary: What owns, routes to and configures an object
+      tags:
+        - reads-the-whole-cluster
+      responses:
+        "200":
+          description: What the route answers
+        "400":
+          description: The request was not understood
+        "401":
+          description: This run's token was not given
+        "403":
+          description: This account may not do that, and the answer says why
+        "503":
+          description: Spinoza has no cluster, or the cluster would not answer
+  /api/traffic:
+    get:
+      summary: A workload graph from cilium hubble flow metrics
+      tags:
+        - reads-the-whole-cluster
+      responses:
+        "200":
+          description: What the route answers
+        "400":
+          description: The request was not understood
+        "401":
+          description: This run's token was not given
+        "403":
+          description: This account may not do that, and the answer says why
+        "503":
+          description: Spinoza has no cluster, or the cluster would not answer
+  /api/transcripts:
+    get:
+      summary: The terminal sessions that were recorded
+      tags:
+        - role:admin
+      responses:
+        "200":
+          description: What the route answers
+        "400":
+          description: The request was not understood
+        "401":
+          description: This run's token was not given
+        "403":
+          description: This account may not do that, and the answer says why
+        "503":
+          description: Spinoza has no cluster, or the cluster would not answer
+  /api/transcripts/text:
+    get:
+      summary: One recorded terminal session, as text
+      tags:
+        - role:admin
+      responses:
+        "200":
+          description: What the route answers
+        "400":
+          description: The request was not understood
+        "401":
+          description: This run's token was not given
+        "403":
+          description: This account may not do that, and the answer says why
+        "503":
+          description: Spinoza has no cluster, or the cluster would not answer
+  /api/update:
+    get:
+      summary: Whether a newer release has been published
+      tags:
+        - only-on-your-own-machine
+      responses:
+        "200":
+          description: What the route answers
+        "400":
+          description: The request was not understood
+        "401":
+          description: This run's token was not given
+        "503":
+          description: Spinoza has no cluster, or the cluster would not answer
+    post:
+      summary: Replace this binary with a newer release
+      tags:
+        - only-on-your-own-machine
+      responses:
+        "200":
+          description: What the route answers
+        "400":
+          description: The request was not understood
+        "401":
+          description: This run's token was not given
+        "503":
+          description: Spinoza has no cluster, or the cluster would not answer
+  /api/version:
+    get:
+      summary: The build that is running
+      tags:
+        - any-signed-in-reader
+      responses:
+        "200":
+          description: What the route answers
+        "400":
+          description: The request was not understood
+        "401":
+          description: This run's token was not given
+        "503":
+          description: Spinoza has no cluster, or the cluster would not answer
+  /api/view:
+    get:
+      summary: Whether this run is a browser tab or a desktop window
+      tags:
+        - any-signed-in-reader
+      responses:
+        "200":
+          description: What the route answers
+        "400":
+          description: The request was not understood
+        "401":
+          description: This run's token was not given
+        "503":
+          description: Spinoza has no cluster, or the cluster would not answer
+  /api/view/browser:
+    post:
+      summary: Move this session to a browser tab
+      tags:
+        - only-on-your-own-machine
+      responses:
+        "200":
+          description: What the route answers
+        "400":
+          description: The request was not understood
+        "401":
+          description: This run's token was not given
+        "503":
+          description: Spinoza has no cluster, or the cluster would not answer
+  /api/view/desktop:
+    post:
+      summary: Move this session to the desktop window
+      tags:
+        - only-on-your-own-machine
+      responses:
+        "200":
+          description: What the route answers
+        "400":
+          description: The request was not understood
+        "401":
+          description: This run's token was not given
+        "503":
+          description: Spinoza has no cluster, or the cluster would not answer
+  /api/views:
+    get:
+      summary: The saved views this account can reach
+      tags:
+        - any-signed-in-reader
+      responses:
+        "200":
+          description: What the route answers
+        "400":
+          description: The request was not understood
+        "401":
+          description: This run's token was not given
+        "503":
+          description: Spinoza has no cluster, or the cluster would not answer
+    put:
+      summary: Save a view under a name
+      tags:
+        - any-signed-in-reader
+      responses:
+        "200":
+          description: What the route answers
+        "400":
+          description: The request was not understood
+        "401":
+          description: This run's token was not given
+        "503":
+          description: Spinoza has no cluster, or the cluster would not answer
+    delete:
+      summary: Forget a saved view
+      tags:
+        - any-signed-in-reader
+      responses:
+        "200":
+          description: What the route answers
+        "400":
+          description: The request was not understood
+        "401":
+          description: This run's token was not given
+        "503":
+          description: Spinoza has no cluster, or the cluster would not answer
+  /api/waste:
+    get:
+      summary: What is reserved and never used, by namespace and by workload
+      tags:
+        - reads-the-whole-cluster
+      responses:
+        "200":
+          description: What the route answers
+        "400":
+          description: The request was not understood
+        "401":
+          description: This run's token was not given
+        "403":
+          description: This account may not do that, and the answer says why
+        "503":
+          description: Spinoza has no cluster, or the cluster would not answer
+  /healthz:
+    get:
+      summary: Say the process is answering
+      tags:
+        - any-signed-in-reader
+      responses:
+        "200":
+          description: What the route answers
+        "400":
+          description: The request was not understood
+        "401":
+          description: This run's token was not given
+        "503":
+          description: Spinoza has no cluster, or the cluster would not answer
+  /metrics:
+    get:
+      summary: Spinoza's own metrics, in prometheus text exposition
+      tags:
+        - role:admin
+      responses:
+        "200":
+          description: What the route answers
+        "400":
+          description: The request was not understood
+        "401":
+          description: This run's token was not given
+        "403":
+          description: This account may not do that, and the answer says why
+        "503":
+          description: Spinoza has no cluster, or the cluster would not answer
+  /readyz:
+    get:
+      summary: Say whether spinoza is ready, and what it is waiting for
+      tags:
+        - any-signed-in-reader
+      responses:
+        "200":
+          description: What the route answers
+        "400":
+          description: The request was not understood
+        "401":
+          description: This run's token was not given
+        "503":
+          description: Spinoza has no cluster, or the cluster would not answer
+  /ws:
+    get:
+      summary: "The live feed: one snapshot then deltas, keyed by uid"
+      tags:
+        - any-signed-in-reader
+      responses:
+        "200":
+          description: What the route answers
+        "400":
+          description: The request was not understood
+        "401":
+          description: This run's token was not given
+        "503":
+          description: Spinoza has no cluster, or the cluster would not answer
+  /auth/backchannel-logout:
+    post:
+      summary: End a session because the provider says it is over
+      tags:
+        - any-signed-in-reader
+      responses:
+        "200":
+          description: What the route answers
+        "400":
+          description: The request was not understood
+        "401":
+          description: This run's token was not given
+        "503":
+          description: Spinoza has no cluster, or the cluster would not answer
+  /auth/callback:
+    get:
+      summary: Where the identity provider sends the browser back
+      tags:
+        - any-signed-in-reader
+      responses:
+        "200":
+          description: What the route answers
+        "400":
+          description: The request was not understood
+        "401":
+          description: This run's token was not given
+        "503":
+          description: Spinoza has no cluster, or the cluster would not answer
+  /auth/login:
+    get:
+      summary: Start a sign-in at the identity provider
+      tags:
+        - any-signed-in-reader
+      responses:
+        "200":
+          description: What the route answers
+        "400":
+          description: The request was not understood
+        "401":
+          description: This run's token was not given
+        "503":
+          description: Spinoza has no cluster, or the cluster would not answer
+  /auth/logout:
+    post:
+      summary: End this session, and the provider's if it offers a way
+      tags:
+        - any-signed-in-reader
+      responses:
+        "200":
+          description: What the route answers
+        "400":
+          description: The request was not understood
+        "401":
+          description: This run's token was not given
+        "503":
+          description: Spinoza has no cluster, or the cluster would not answer

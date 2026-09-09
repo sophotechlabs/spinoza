@@ -78,6 +78,13 @@ coming release removes and certificates about to expire.
 
 ![Spinoza cluster checks: findings across the cluster, each rule labelled with its framework, severity and the number of objects that tripped it](docs/images/checks.png)
 
+Read them by check, or by control: CIS Kubernetes Benchmark alongside PSS and
+NSA/CISA, with what fails each control, and — for the controls no rule answers,
+or that nothing reading a live cluster could — that nothing answers them, and
+why. Take them away as CSV, as JSON, or as SARIF that whatever already reads
+SARIF will take unchanged, with a fingerprint per finding so a second run
+deduplicates against the first.
+
 Findings rank by how far the problem reaches, not by rule severity alone. Mute a rule with one of your
 own, take a baseline and compare a cluster against it, or write a check as a CEL expression. A rule
 sees the cluster the audit read through `cluster.list(group, resource)` and `cluster.get(...)`,
@@ -144,9 +151,24 @@ Any pod or service on localhost, no kubectl. Forwards survive navigation, listed
 
 ![Spinoza pods table with the inspect drawer open on Grafana's ports: 3000 forwarded to a local port with open and stop controls, and a toast confirming the forward](docs/images/port-forward.png)
 
+## Rollout revisions
+
+What a Deployment, StatefulSet or DaemonSet rolled out, which revision is
+running now, what differs between any two of them once the server's own fields
+are stripped, and a way back to one. Undo asks the apiserver first, is greyed
+out with the reason when the cluster would refuse it, and asks for the name
+typed out on a protected cluster.
+
+## Reserved against used
+
+What every namespace and workload asks the scheduler for against what it
+actually uses, ranked by what could be given back. Usage comes from Prometheus
+over a window where there is one, from metrics-server otherwise, and where
+nothing measured it the view says so rather than showing a zero.
+
 ## Write actions
 
-Scale, rollout restart, cordon, uncordon, drain. Drain shows its eviction plan before it runs: what it evicts, what it leaves, what it blocks and why. Protected clusters require the object name typed out.
+Scale, rollout restart, undo, cordon, uncordon, drain. Drain shows its eviction plan before it runs: what it evicts, what it leaves, what it blocks and why. Protected clusters require the object name typed out.
 
 ![Spinoza drain plan for a node: how many pods it would evict, leave in place and block, the reason for each, and the drain button disabled behind a checkbox](docs/images/drain-plan.png)
 
@@ -157,6 +179,7 @@ Scale, rollout restart, cordon, uncordon, drain. Drain shows its eviction plan b
 - **Logs** per container. Pausing follow stops the scroll, not the stream.
 - **Metrics**: metrics-server in the tables, CPU and memory history from Prometheus through the apiserver proxy. `--prometheus namespace/service:port` overrides discovery. With no Prometheus to ask, spinoza samples metrics-server itself while the window is open and says so on the chart.
 - **Update check**: asks spinoza.tech once per run whether a newer release exists, and offers the install command if so. Automatic replacement is disabled because the remote installer script has no independent authenticity proof. `SPINOZA_UNSAFE_SELF_UPDATE=true` restores the legacy download-and-execute path for compatibility and lets mutable remote code run with your user's privileges.
+- **Saved views**: a filter, its columns, its namespace and its kind kept under a name and reached from the command palette. In cluster mode they are each person's own, and an admin can publish one for everybody.
 - **Kubeconfigs** added by path, referenced in place, never copied or merged. Contexts grouped per file, listed in `kubeconfigs.json`. `--kubeconfig PATH` replaces the default lookup for one run.
 - **MCP server**: `spinoza-mcp`, a separate binary giving an agent 21 tools and 3 resources over one cluster.
 - **Node shell**: a root shell in the node's own namespaces, off until you turn it on. It asks the apiserver whether you may create the pod first, and the pod carries a two-hour deadline.
@@ -189,6 +212,16 @@ that need Kubernetes RBAC per person can enable impersonation for explicit
 usernames and groups. Shared feeds then check the signed-in person's exact
 resource access before returning cached data and recheck it while the feed is
 open. Proxy-header auth and back-channel logout are both there.
+
+It reports on itself the way anything else in the cluster does: `/metrics` in
+Prometheus exposition, json logs, a request name on every answer that also
+appears in the log line for that request, and `/readyz` that says which of the
+catalog, the caches and the state store it is still waiting for — so a new pod
+does not take traffic while its tables would be empty, and a restart costs a
+reconnect rather than an error. Every change it makes goes out as a structured
+log line as well as into the trail, and can be exported. Terminal sessions can
+be recorded when a deployment asks for that. The checks can run on a timer and
+post a summary when posture moves.
 
 Full guide, including what changes when it runs this way: [docs/cluster-mode.md](docs/cluster-mode.md).
 
