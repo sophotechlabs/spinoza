@@ -8,6 +8,19 @@ import (
 	"github.com/sophotechlabs/spinoza/internal/api"
 )
 
+func configHome(t *testing.T) string {
+	t.Helper()
+	root := t.TempDir()
+	t.Setenv("HOME", root)
+	t.Setenv("XDG_CONFIG_HOME", root)
+	t.Setenv("AppData", root)
+	dir, err := os.UserConfigDir()
+	if err != nil {
+		t.Fatalf("config directory: %v", err)
+	}
+	return dir
+}
+
 func TestProtectionFallsBackToMemoryWithoutAConfigDirectory(t *testing.T) {
 	t.Setenv("HOME", "")
 	t.Setenv("XDG_CONFIG_HOME", "")
@@ -38,9 +51,7 @@ func TestKubeconfigListFallsBackToMemoryWithoutAConfigDirectory(t *testing.T) {
 }
 
 func TestProtectionStartsEmptyWhenItsSavedFileIsMalformed(t *testing.T) {
-	root := t.TempDir()
-	t.Setenv("XDG_CONFIG_HOME", root)
-	path := filepath.Join(root, "spinoza", "protected.json")
+	path := filepath.Join(configHome(t), "spinoza", "protected.json")
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		t.Fatalf("mkdir: %v", err)
 	}
@@ -56,9 +67,7 @@ func TestProtectionStartsEmptyWhenItsSavedFileIsMalformed(t *testing.T) {
 }
 
 func TestKubeconfigListStartsEmptyWhenItsSavedFileIsMalformed(t *testing.T) {
-	root := t.TempDir()
-	t.Setenv("XDG_CONFIG_HOME", root)
-	path := filepath.Join(root, "spinoza", "kubeconfigs.json")
+	path := filepath.Join(configHome(t), "spinoza", "kubeconfigs.json")
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		t.Fatalf("mkdir: %v", err)
 	}
@@ -70,5 +79,30 @@ func TestKubeconfigListStartsEmptyWhenItsSavedFileIsMalformed(t *testing.T) {
 
 	if len(store.Paths()) != 0 {
 		t.Fatalf("paths = %v, want no paths from malformed state", store.Paths())
+	}
+}
+
+func TestTheWiredStoresReadWhatTheConfigDirectoryHolds(t *testing.T) {
+	dir := filepath.Join(configHome(t), "spinoza")
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	kubeconfigs := filepath.Join(dir, "kubeconfigs.json")
+	if err := os.WriteFile(kubeconfigs, []byte(`{"kubeconfigs":["/tmp/one.yaml"]}`), 0o600); err != nil {
+		t.Fatalf("write kubeconfig list: %v", err)
+	}
+	protection := filepath.Join(dir, "protected.json")
+	if err := os.WriteFile(protection, []byte(`{"clusters":{"https://cluster.example:6443":true}}`), 0o600); err != nil {
+		t.Fatalf("write protection: %v", err)
+	}
+
+	paths := openStore(t.Context()).Paths()
+	verdict := openProtection(t.Context()).Verdict("https://cluster.example:6443")
+
+	if len(paths) != 1 || paths[0] != "/tmp/one.yaml" {
+		t.Fatalf("paths = %v, want the one kubeconfig the file names", paths)
+	}
+	if verdict != api.ProtectionProtected {
+		t.Fatalf("verdict = %v, want %v", verdict, api.ProtectionProtected)
 	}
 }

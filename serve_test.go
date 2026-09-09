@@ -50,7 +50,17 @@ func preserveServerLogger(t *testing.T) {
 	})
 }
 
+func useOwnConfigHome(t *testing.T) string {
+	t.Helper()
+	root := t.TempDir()
+	t.Setenv("HOME", root)
+	t.Setenv("XDG_CONFIG_HOME", root)
+	t.Setenv("AppData", root)
+	return root
+}
+
 func TestRunReportsAnInvalidLogLevel(t *testing.T) {
+	useOwnConfigHome(t)
 	useServerArgs(t, "-log-level", "verbose")
 
 	err := run()
@@ -62,6 +72,7 @@ func TestRunReportsAnInvalidLogLevel(t *testing.T) {
 
 func TestRunRefusesANonLoopbackLocalAddress(t *testing.T) {
 	preserveServerLogger(t)
+	useOwnConfigHome(t)
 	useServerArgs(t, "-addr", "0.0.0.0:34115")
 
 	err := run()
@@ -73,8 +84,7 @@ func TestRunRefusesANonLoopbackLocalAddress(t *testing.T) {
 
 func TestRunReportsAnExplicitContextThatCannotOpen(t *testing.T) {
 	preserveServerLogger(t)
-	config := filepath.Join(t.TempDir(), "missing-kubeconfig")
-	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	config := filepath.Join(useOwnConfigHome(t), "missing-kubeconfig")
 	useServerArgs(t, "-kubeconfig", config, "-context", "missing")
 
 	err := run()
@@ -86,10 +96,9 @@ func TestRunReportsAnExplicitContextThatCannotOpen(t *testing.T) {
 
 func TestRunRemovesItsTokenAfterServerStartupFails(t *testing.T) {
 	preserveServerLogger(t)
-	configDir := t.TempDir()
+	configDir := useOwnConfigHome(t)
 	config := filepath.Join(configDir, "missing-kubeconfig")
 	token := filepath.Join(configDir, "access-token")
-	t.Setenv("XDG_CONFIG_HOME", configDir)
 	useServerArgs(
 		t,
 		"-addr", "127.0.0.1:not-a-port",
