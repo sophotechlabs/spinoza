@@ -59,6 +59,13 @@ describe('the strip of open clusters', () => {
     vi.unstubAllGlobals();
   });
 
+  it('says when nothing is open at all', () => {
+    render(<ClusterStrip onShown={vi.fn()} />);
+
+    expect(screen.getByText('no cluster')).toBeInTheDocument();
+    expect(screen.getByLabelText('Open a cluster')).toBeInTheDocument();
+  });
+
   it('shows the one open cluster and the way to open another', () => {
     act(() => {
       adoptClusters({ clusters: listOf(MK1).clusters.slice(0, 1), remembered: [] });

@@ -200,6 +200,7 @@ export default function ClusterStrip({ onShown }: ClusterStripProps) {
           ))}
         </span>
       ))}
+      {tabs.length === 0 && <span className="pb-1.5 text-fg-muted">no cluster</span>}
       <span className="flex shrink-0 items-center pb-1">
         <ContextPicker onSwitched={onShown} />
       </span>
