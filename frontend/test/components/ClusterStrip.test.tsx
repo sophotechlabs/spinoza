@@ -13,7 +13,7 @@ import { MK1, MK2, listOf } from '../helpers-clusters';
 
 vi.mock('../../src/components/ContextPicker', () => ({
   default: () => (
-    <button type="button" aria-label="Open a cluster">
+    <button type="button" aria-label="Open another cluster">
       +
     </button>
   ),
@@ -63,7 +63,7 @@ describe('the strip of open clusters', () => {
     render(<ClusterStrip onShown={vi.fn()} />);
 
     expect(screen.getByText('no cluster')).toBeInTheDocument();
-    expect(screen.getByLabelText('Open a cluster')).toBeInTheDocument();
+    expect(screen.getByLabelText('Open another cluster')).toBeInTheDocument();
   });
 
   it('shows the one open cluster and the way to open another', () => {
@@ -74,7 +74,7 @@ describe('the strip of open clusters', () => {
     render(<ClusterStrip onShown={vi.fn()} />);
 
     expect(screen.getByRole('navigation', { name: 'Open clusters' })).toBeInTheDocument();
-    expect(screen.getByLabelText('Open a cluster')).toBeInTheDocument();
+    expect(screen.getByLabelText('Open another cluster')).toBeInTheDocument();
   });
 
   it('names every open cluster once a second one is open', () => {

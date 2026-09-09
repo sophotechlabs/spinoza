@@ -690,6 +690,7 @@ export default function App() {
           status={feed.status}
           scoped={pickerScope(route.view, scope)}
           onReconnect={feed.reconnect}
+          onContextChanged={showActiveTab}
           onOpenPalette={() => {
             setPaletteOpen(true);
           }}

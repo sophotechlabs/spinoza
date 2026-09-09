@@ -5,6 +5,8 @@ import TopBar from '../../src/components/TopBar';
 import { useClusterHealthStore } from '../../src/store/clusterHealth';
 import { useClustersStore } from '../../src/store/clusters';
 import { useFeedStore } from '../../src/store/feed';
+import { adoptSession, useIdentityStore } from '../../src/store/identity';
+import { OWN_WINDOW } from '../../src/lib/identity';
 import { namespaceNow, useNamespaceStore } from '../../src/store/namespace';
 import type { ObjectRef } from '../../src/lib/types';
 import { notifyOk, useToastsStore } from '../../src/store/toasts';
@@ -19,7 +21,16 @@ const podRef: ObjectRef = {
   name: 'web-0',
 };
 
+vi.mock('../../src/components/ContextPicker', () => ({
+  default: ({ onSwitched }: { onSwitched: () => void }) => (
+    <button type="button" onClick={onSwitched}>
+      switch context
+    </button>
+  ),
+}));
+
 afterEach(() => {
+  useIdentityStore.setState({ session: OWN_WINDOW, known: false });
   useClustersStore.getState().reset();
   useNamespaceStore.getState().reset();
   vi.unstubAllGlobals();
@@ -80,12 +91,42 @@ describe('TopBar', () => {
   });
 });
 
-describe('TopBar cluster controls', () => {
-  it('leaves choosing a cluster to the strip', () => {
+describe('TopBar context switch', () => {
+  it('offers the cluster picker in the header', () => {
     render(<TopBar status="connected" />);
 
-    expect(screen.queryByLabelText('Open a cluster')).toBeNull();
-    expect(screen.queryByLabelText('Kubernetes context')).toBeNull();
+    expect(screen.getByRole('button', { name: 'switch context' })).toBeInTheDocument();
+  });
+
+  it('leaves the served build without one', () => {
+    adoptSession({ ...OWN_WINDOW, cluster: true });
+    render(<TopBar status="connected" />);
+
+    expect(screen.queryByRole('button', { name: 'switch context' })).toBeNull();
+  });
+
+  it('reports the switch to the owner', async () => {
+    const user = userEvent.setup();
+    const onContextChanged = vi.fn();
+    const onReconnect = vi.fn();
+    render(
+      <TopBar status="connected" onReconnect={onReconnect} onContextChanged={onContextChanged} />,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'switch context' }));
+
+    expect(onContextChanged).toHaveBeenCalledOnce();
+    expect(onReconnect).not.toHaveBeenCalled();
+  });
+
+  it('falls back to a reconnect when no owner is listening', async () => {
+    const user = userEvent.setup();
+    const onReconnect = vi.fn();
+    render(<TopBar status="connected" onReconnect={onReconnect} />);
+
+    await user.click(screen.getByRole('button', { name: 'switch context' }));
+
+    expect(onReconnect).toHaveBeenCalledOnce();
   });
 });
 

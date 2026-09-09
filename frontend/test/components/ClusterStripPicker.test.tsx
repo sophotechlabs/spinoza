@@ -42,7 +42,7 @@ describe('the strip carries the way to open a cluster', () => {
 
     render(<ClusterStrip onShown={vi.fn()} />);
 
-    expect(await screen.findByLabelText('Open a cluster')).toBeInTheDocument();
+    expect(await screen.findByLabelText('Open another cluster')).toBeInTheDocument();
   });
 
   it('lists the contexts when the plus is used', async () => {
@@ -56,7 +56,7 @@ describe('the strip carries the way to open a cluster', () => {
     });
     render(<ClusterStrip onShown={vi.fn()} />);
 
-    const plus = await screen.findByLabelText('Open a cluster');
+    const plus = await screen.findByLabelText('Open another cluster');
     await user.click(plus);
 
     const menu = plus.parentElement;

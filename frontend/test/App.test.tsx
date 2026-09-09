@@ -400,11 +400,17 @@ vi.mock('../src/components/TerminalPanel', () => ({
 }));
 
 vi.mock('../src/components/ContextPicker', () => ({
-  default: ({ onSwitched }: { onSwitched: () => void }) => (
-    <button type="button" data-testid="context-changed" onClick={onSwitched}>
-      switch context
-    </button>
-  ),
+  default: ({ onSwitched, look }: { onSwitched: () => void; look?: string }) => {
+    let id = 'context-changed';
+    if (look === 'tab') {
+      id = 'context-changed-tab';
+    }
+    return (
+      <button type="button" data-testid={id} onClick={onSwitched}>
+        switch context
+      </button>
+    );
+  },
 }));
 
 vi.mock('../src/components/ViewSwitch', () => ({

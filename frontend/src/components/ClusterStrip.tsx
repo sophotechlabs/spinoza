@@ -222,7 +222,7 @@ export default function ClusterStrip({ onShown }: ClusterStripProps) {
         </span>
       )}
       <span className="flex shrink-0 items-end">
-        <ContextPicker onSwitched={onShown} />
+        <ContextPicker onSwitched={onShown} look="tab" />
       </span>
       {asking !== null && (
         <dialog

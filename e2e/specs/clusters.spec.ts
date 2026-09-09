@@ -13,11 +13,11 @@ interface Opened {
 }
 
 function contextPicker(page: Page): Locator {
-  return page.locator('summary[aria-label="Open a cluster"]');
+  return page.locator('summary[aria-label="Open another cluster"]');
 }
 
 function contextMenu(page: Page): Locator {
-  return page.locator('details:has(> summary[aria-label="Open a cluster"])');
+  return page.locator('details:has(> summary[aria-label="Open another cluster"])');
 }
 
 async function opened(page: Page): Promise<Opened[]> {

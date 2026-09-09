@@ -14,8 +14,32 @@ import { CONTROL, TAB_CONTROL } from '../lib/controls';
 import { useDismissMenu } from '../lib/useDismissMenu';
 import KubeconfigDialog from './KubeconfigDialog';
 
+type PickerLook = 'control' | 'tab';
+
 interface ContextPickerProps {
   onSwitched: () => void;
+  look?: PickerLook;
+}
+
+function shellClass(look: PickerLook): string {
+  if (look === 'tab') {
+    return 'flex items-end gap-2';
+  }
+  return 'flex items-center gap-2';
+}
+
+function triggerClass(look: PickerLook): string {
+  if (look === 'tab') {
+    return `${TAB_CONTROL} cursor-pointer list-none [&::-webkit-details-marker]:hidden`;
+  }
+  return `${CONTROL} cursor-pointer list-none border-edge-strong bg-surface text-fg-soft hover:bg-surface-active [&::-webkit-details-marker]:hidden`;
+}
+
+function triggerLabel(look: PickerLook): string {
+  if (look === 'tab') {
+    return 'Open another cluster';
+  }
+  return 'Open a cluster';
 }
 
 const MENU_ROW = 'px-3 py-1.5 text-left whitespace-nowrap hover:bg-surface-active';
@@ -59,7 +83,7 @@ function current(active: boolean): 'true' | undefined {
   return undefined;
 }
 
-export default function ContextPicker({ onSwitched }: ContextPickerProps) {
+export default function ContextPicker({ onSwitched, look = 'control' }: ContextPickerProps) {
   const list = useContextList();
   const tabs = useTabs();
   const openContext = useSettingsStore((state) => state.openContext);
@@ -338,7 +362,7 @@ export default function ContextPicker({ onSwitched }: ContextPickerProps) {
 
   if (groups.length === 0 && loadError !== null) {
     return (
-      <span className="flex items-center gap-2">
+      <span className={shellClass(look)}>
         <span role="status" className="max-w-md truncate text-error">
           no cluster context: {loadError}
         </span>
@@ -357,7 +381,7 @@ export default function ContextPicker({ onSwitched }: ContextPickerProps) {
 
   if (groups.length === 0) {
     return (
-      <span className="flex items-center gap-2">
+      <span className={shellClass(look)}>
         {manageButton()}
         {dialog()}
       </span>
@@ -365,12 +389,12 @@ export default function ContextPicker({ onSwitched }: ContextPickerProps) {
   }
 
   return (
-    <span className="flex items-end gap-2">
+    <span className={shellClass(look)}>
       <details ref={menuRef} className="relative">
         <summary
-          aria-label="Open a cluster"
+          aria-label={triggerLabel(look)}
           title="Open another cluster"
-          className={`${TAB_CONTROL} cursor-pointer list-none [&::-webkit-details-marker]:hidden`}
+          className={triggerClass(look)}
         >
           <span aria-hidden="true">+</span>
         </summary>
