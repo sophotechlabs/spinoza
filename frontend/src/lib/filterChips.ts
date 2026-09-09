@@ -135,3 +135,28 @@ export function filterRows(rows: Row[], chips: Chip[], fields: FilterField[]): R
 export function chipsKey(chips: Chip[]): string {
   return chips.map(chipKey).join('&');
 }
+
+export function chipsText(chips: Chip[]): string {
+  return chips.map((one) => `${one.field}:${one.value}`).join(' ');
+}
+
+export function chipsFromText(text: string): Chip[] {
+  const out: Chip[] = [];
+  for (const piece of text.split(' ')) {
+    const trimmed = piece.trim();
+    if (trimmed === '') {
+      continue;
+    }
+    const at = trimmed.indexOf(':');
+    if (at < 0) {
+      out.push({ field: NAME_FIELD, value: trimmed });
+      continue;
+    }
+    const value = trimmed.slice(at + 1).trim();
+    if (value === '') {
+      continue;
+    }
+    out.push({ field: trimmed.slice(0, at), value });
+  }
+  return out;
+}

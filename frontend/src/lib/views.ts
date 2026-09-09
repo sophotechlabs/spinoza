@@ -15,6 +15,7 @@ export const VIEW_LABELS: Record<View, string> = {
   'argo-graph': 'Argo CD Graph',
   'argo-list': 'Argo CD Resource list',
   traffic: 'Traffic',
+  waste: 'Reserved against used',
   fleet: 'Fleet',
   rbac: 'Who can do what',
 };

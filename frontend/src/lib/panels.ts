@@ -4,10 +4,12 @@ import type { Selection } from './refs';
 import type { PodTarget } from './pods';
 import { readStored, writeStored } from './persist';
 import { isGitopsApp } from './gitopsApp';
+import { REVERTIBLE_KINDS } from './rollout';
 
 export type PanelId =
   | 'overview'
   | 'yaml'
+  | 'revisions'
   | 'events'
   | 'logs'
   | 'metrics'
@@ -53,6 +55,7 @@ const LOGGABLE_WORKLOADS = [
   'ReplicationController',
 ];
 const NOT_FOR_EVENTS = 'An event has no events of its own';
+const NO_REVISIONS = 'Select a Deployment, StatefulSet or DaemonSet to see what it rolled out';
 
 function isPod(detail: ObjectDetail | null): boolean {
   if (detail === null) {
@@ -98,6 +101,13 @@ function isGitopsApplier(ctx: PanelContext): boolean {
   return isGitopsApp(ctx.detail.apiVersion, ctx.detail.kind);
 }
 
+function keepsRevisions(ctx: PanelContext): boolean {
+  if (ctx.detail === null) {
+    return false;
+  }
+  return REVERTIBLE_KINDS.includes(ctx.detail.kind);
+}
+
 export const PANELS: PanelDescriptor[] = [
   {
     id: 'overview',
@@ -107,6 +117,13 @@ export const PANELS: PanelDescriptor[] = [
     enabled: hasSelection,
   },
   { id: 'yaml', label: 'YAML', defaultSide: 'right', hint: SELECT_ROW, enabled: hasSelection },
+  {
+    id: 'revisions',
+    label: 'Revisions',
+    defaultSide: 'right',
+    hint: NO_REVISIONS,
+    enabled: keepsRevisions,
+  },
   {
     id: 'events',
     label: 'Events',

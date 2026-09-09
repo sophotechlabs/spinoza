@@ -1,4 +1,4 @@
-import type { Category, ObjectRef, ResourceDescriptor, SearchHit, View } from './types';
+import type { Category, ObjectRef, ResourceDescriptor, SavedView, SearchHit, View } from './types';
 import { ARGO_VIEWS, FLEET_VIEWS, FLUX_VIEWS } from './types';
 import { refOf } from './search';
 import { typeFor } from './catalog';
@@ -6,6 +6,7 @@ import { argoInstalled, fluxInstalled } from './gitops';
 import { useClustersStore } from '../store/clusters';
 import { contextOf } from './tabs';
 import { VIEW_LABELS } from './views';
+import { describeView } from './savedViews';
 
 const VIEW_ORDER: View[] = [
   'fleet',
@@ -23,11 +24,13 @@ const VIEW_ORDER: View[] = [
   'argo-graph',
   'argo-list',
   'traffic',
+  'waste',
   'rbac',
 ];
 
 export type PaletteItem =
   | { id: string; label: string; hint: string; kind: 'view'; view: View }
+  | { id: string; label: string; hint: string; kind: 'saved'; saved: SavedView }
   | { id: string; label: string; hint: string; kind: 'resource'; descriptor: ResourceDescriptor }
   | {
       id: string;
@@ -54,6 +57,7 @@ export interface PaletteGroup {
 }
 
 const PALETTE_GROUPS: { id: PaletteItem['kind']; label: string }[] = [
+  { id: 'saved', label: 'Saved views' },
   { id: 'view', label: 'Views' },
   { id: 'resource', label: 'Resource kinds' },
   { id: 'object', label: 'Objects' },
@@ -121,8 +125,18 @@ export function paletteItems(
   categories: Category[],
   recents: ObjectRef[],
   traffic: boolean,
+  saved: SavedView[] = [],
 ): PaletteItem[] {
   const items: PaletteItem[] = [];
+  for (const one of saved) {
+    items.push({
+      id: `saved:${one.id}`,
+      label: one.name,
+      hint: one.shared === true ? `${describeView(one)} · everybody` : describeView(one),
+      kind: 'saved',
+      saved: one,
+    });
+  }
   for (const ref of recents) {
     items.push({
       id: `object:${ref.group}/${ref.version}/${ref.resource}/${ref.namespace}/${ref.name}`,

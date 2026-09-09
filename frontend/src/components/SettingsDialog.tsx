@@ -23,6 +23,8 @@ import { FRONTEND_VERSION, fetchBackendVersion } from '../lib/version';
 import { installUpdate, updateFailure, updateOutcome } from '../lib/update';
 import Announce from './Announce';
 import ColumnSettings from './ColumnSettings';
+import SupportBundle from './SupportBundle';
+import SavedViewsList from './SavedViewsList';
 
 const SECTIONS = [
   'Appearance',
@@ -411,6 +413,18 @@ export default function SettingsDialog({
               </Row>
               <Row label="Backend" hint="Reported by the server this window is talking to.">
                 <span className="font-mono text-fg-soft">{versionLabel(backend)}</span>
+              </Row>
+              <Row
+                label="Saved views"
+                hint="Filtered tables you kept under a name. The command palette lists them."
+              >
+                <SavedViewsList active={open} />
+              </Row>
+              <Row
+                label="Support bundle"
+                hint="What spinoza knows about itself: version, how it was started with secrets removed, what it is waiting for, and its own metrics. No cluster object, log line or transcript."
+              >
+                <SupportBundle />
               </Row>
               <Row
                 label="Update"

@@ -4,7 +4,7 @@ import { request, SLOW_REQUEST_TIMEOUT_MS } from './http';
 import { parseActionResult } from './parse';
 
 export type ObjectAction =
-  'scale' | 'restart' | 'cordon' | 'uncordon' | 'drain' | 'suspend' | 'resume' | 'trigger';
+  'scale' | 'restart' | 'cordon' | 'uncordon' | 'drain' | 'suspend' | 'resume' | 'trigger' | 'undo';
 
 const SCALABLE = [
   'apps/deployments',
@@ -50,6 +50,7 @@ export function hasActions(ref: ObjectRef): boolean {
 
 export interface ActionOptions {
   replicas?: number;
+  revision?: number;
   force?: boolean;
   dryRun?: boolean;
   confirm?: string;
@@ -60,6 +61,9 @@ function query(ref: ObjectRef, action: ObjectAction, options: ActionOptions): st
   params.set('action', action);
   if (options.replicas !== undefined) {
     params.set('replicas', String(options.replicas));
+  }
+  if (options.revision !== undefined) {
+    params.set('revision', String(options.revision));
   }
   if (options.force === true) {
     params.set('force', 'true');

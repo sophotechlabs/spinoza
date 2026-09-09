@@ -32,6 +32,7 @@ import InspectObjectActions from './InspectObjectActions';
 import InspectPorts from './InspectPorts';
 import InspectOverview from './InspectOverview';
 import InspectYaml from './InspectYaml';
+import RolloutRevisions from './RolloutRevisions';
 import InspectEvents from './InspectEvents';
 import InspectLogs from './InspectLogs';
 import ForwardsPanel from './ForwardsPanel';
@@ -232,6 +233,10 @@ const RENDERERS: Record<PanelId, (ctx: RenderContext) => ReactNode> = {
         onApplied={ctx.reload}
         onDeleted={ctx.onDeleted}
       />
+    )),
+  revisions: (ctx) =>
+    objectPanel(ctx, (selection) => (
+      <RolloutRevisions target={selection.ref} onDone={ctx.reload} />
     )),
   events: (ctx) =>
     objectPanel(ctx, (_selection, detail) => (

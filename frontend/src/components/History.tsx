@@ -37,6 +37,7 @@ import { useClusterEpoch } from '../store/cluster';
 import WorkspaceHeader from './WorkspaceHeader';
 import { useShownCluster } from '../lib/tabs';
 import CapabilityState from './CapabilityState';
+import RecordedSessions from './RecordedSessions';
 import DenseToolbar, { ToolbarCount, ToolbarEnd } from './DenseToolbar';
 import { Action } from './ActionGroup';
 
@@ -238,6 +239,7 @@ export default function History({ onOpen }: HistoryProps) {
   const { data, error, reload } = useHistory({ source, fleet: showing });
   const held = useMemory();
   const [clearing, setClearing] = useState(false);
+  const [sessions, setSessions] = useState(false);
   const now = useNow();
 
   useEffect(() => {
@@ -396,6 +398,13 @@ export default function History({ onOpen }: HistoryProps) {
         )}
         <ToolbarEnd>
           <Action
+            label={sessions ? 'Changes' : 'Recorded sessions'}
+            size="dense"
+            onClick={() => {
+              setSessions((held) => !held);
+            }}
+          />
+          <Action
             label="Clear"
             size="dense"
             disabled={clearing || data.entries.length === 0}
@@ -405,12 +414,13 @@ export default function History({ onOpen }: HistoryProps) {
           />
         </ToolbarEnd>
       </DenseToolbar>
-      {rows.length === 0 && (
+      {sessions && <RecordedSessions />}
+      {!sessions && rows.length === 0 && (
         <div className="flex flex-1 items-center justify-center text-fg-muted">
           {nothingYet(source)}
         </div>
       )}
-      {rows.length > 0 && (
+      {!sessions && rows.length > 0 && (
         <div className="min-h-0 flex-1 overflow-auto">
           <table className="w-full table-fixed border-collapse text-left font-mono whitespace-nowrap">
             <thead className="sticky top-0 z-10 bg-surface-raised text-fg-muted">

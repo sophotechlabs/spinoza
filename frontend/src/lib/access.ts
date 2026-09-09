@@ -8,6 +8,7 @@ export type Capability =
   | 'delete'
   | 'scale'
   | 'restart'
+  | 'undo'
   | 'cordon'
   | 'drain'
   | 'logs'

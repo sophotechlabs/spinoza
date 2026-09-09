@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
-import type { Category, ResourceDescriptor, View } from '../lib/types';
+import type { Category, ResourceDescriptor, SavedView, View } from '../lib/types';
 import { fetchResources } from '../lib/discovery';
 import { clusterItems, groupPaletteItems, paletteItems } from '../lib/palette';
 import type { PaletteGroup, PaletteItem, PaletteOpen } from '../lib/palette';
 import { SEARCH_DELAY_MS, searchObjects, worthSearching } from '../lib/search';
 import type { SearchHit } from '../lib/types';
 import { useRecents } from '../store/recents';
+import { fetchSavedViews } from '../lib/savedViews';
 import { useClusterEpoch } from '../store/cluster';
 import { useTrafficSupport } from '../store/traffic';
 import { useTabStrip } from '../store/clusters';
@@ -16,6 +17,7 @@ interface CommandPaletteProps {
   onSelectView: (view: View) => void;
   onSelectResource: (descriptor: ResourceDescriptor) => void;
   onOpenObject: (found: PaletteOpen) => void;
+  onOpenSaved?: (saved: SavedView) => void;
 }
 
 const MAX_MATCHES = 60;
@@ -48,6 +50,7 @@ export default function CommandPalette({
   onSelectView,
   onSelectResource,
   onOpenObject,
+  onOpenSaved,
 }: CommandPaletteProps) {
   const ref = useRef<HTMLDialogElement | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
@@ -66,6 +69,28 @@ export default function CommandPalette({
     setQuery('');
   }
   const [hits, setHits] = useState<SearchHit[]>([]);
+  const [saved, setSaved] = useState<SavedView[]>([]);
+
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+    let live = true;
+    fetchSavedViews()
+      .then((page) => {
+        if (live) {
+          setSaved(page.views);
+        }
+      })
+      .catch(() => {
+        if (live) {
+          setSaved([]);
+        }
+      });
+    return () => {
+      live = false;
+    };
+  }, [open, epoch]);
   const [partial, setPartial] = useState(false);
   const asked = useRef(0);
 
@@ -142,7 +167,10 @@ export default function CommandPalette({
   }, [open, query, several]);
 
   const allGroups = groupPaletteItems(
-    [...paletteItems(categories, recents, traffic.available), ...clusterItems(hits, categories)],
+    [
+      ...paletteItems(categories, recents, traffic.available, saved),
+      ...clusterItems(hits, categories),
+    ],
     query,
   );
   const groups = limitGroups(allGroups, MAX_MATCHES);
@@ -161,6 +189,10 @@ export default function CommandPalette({
     }
     if (item.kind === 'resource') {
       onSelectResource(item.descriptor);
+      return;
+    }
+    if (item.kind === 'saved') {
+      onOpenSaved?.(item.saved);
       return;
     }
     let cluster: string | undefined;

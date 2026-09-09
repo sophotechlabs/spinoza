@@ -1,6 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
 import type { CheckCategory, Mute, NamespaceCount, ObjectRef, RuleFault } from '../lib/types';
-import type { CheckFindingView, CheckGroupView, CheckReportView } from '../lib/checks';
+import type {
+  CheckFindingView,
+  CheckGroupView,
+  CheckReportView,
+  ExportFormat,
+} from '../lib/checks';
 import { fetchCheckPage, sourceLabel, sourceStale } from '../lib/checks';
 import {
   CATEGORY_LABELS,
@@ -10,6 +15,9 @@ import {
   driftLabel,
   countLabel,
   partialLabel,
+  EXPORT_FILENAMES,
+  EXPORT_FORMATS,
+  EXPORT_HINTS,
   exportChecks,
   fetchMutes,
   findingLabel,
@@ -42,6 +50,7 @@ import { actionClass } from '../lib/actions';
 import { ROW } from '../lib/rows';
 import { useShownCluster } from '../lib/tabs';
 import CapabilityState from './CapabilityState';
+import FrameworkPosture from './FrameworkPosture';
 
 const PAGE_SIZE = 200;
 
@@ -1160,6 +1169,7 @@ function BaselineFile({
 function ExportButton({ onFailed }: { onFailed: (message: string) => void }) {
   const keep = useChecksFilter();
   const [working, setWorking] = useState(false);
+  const [format, setFormat] = useState<ExportFormat>('csv');
   const scope = useContextScope();
   const operation = useScopedOperation();
 
@@ -1168,34 +1178,54 @@ function ExportButton({ onFailed }: { onFailed: (message: string) => void }) {
   }, [scope]);
 
   return (
-    <button
-      type="button"
-      disabled={working}
-      className="rounded border border-edge px-2 py-0.5 text-fg-soft disabled:text-fg-subtle"
-      onClick={() => {
-        operation.current += 1;
-        const token = operation.current;
-        setWorking(true);
-        exportChecks(keep)
-          .then((body) => {
-            if (operation.current === token) {
-              saveAs('spinoza-checks.csv', body);
-            }
-          })
-          .catch((err: unknown) => {
-            if (operation.current === token) {
-              onFailed(messageOf(err));
-            }
-          })
-          .finally(() => {
-            if (operation.current === token) {
-              setWorking(false);
-            }
-          });
-      }}
-    >
-      {exportLabel(working)}
-    </button>
+    <span className="flex items-center gap-1">
+      <label className="sr-only" htmlFor="checks-export-format">
+        Export format
+      </label>
+      <select
+        id="checks-export-format"
+        value={format}
+        onChange={(event) => {
+          setFormat(event.target.value as ExportFormat);
+        }}
+        className="rounded border border-edge bg-surface px-1 py-0.5 text-fg-soft"
+      >
+        {EXPORT_FORMATS.map((one) => (
+          <option key={one} value={one}>
+            {one}
+          </option>
+        ))}
+      </select>
+      <button
+        type="button"
+        disabled={working}
+        title={EXPORT_HINTS[format]}
+        className="rounded border border-edge px-2 py-0.5 text-fg-soft disabled:text-fg-subtle"
+        onClick={() => {
+          operation.current += 1;
+          const token = operation.current;
+          setWorking(true);
+          exportChecks(keep, format)
+            .then((body) => {
+              if (operation.current === token) {
+                saveAs(EXPORT_FILENAMES[format], body);
+              }
+            })
+            .catch((err: unknown) => {
+              if (operation.current === token) {
+                onFailed(messageOf(err));
+              }
+            })
+            .finally(() => {
+              if (operation.current === token) {
+                setWorking(false);
+              }
+            });
+        }}
+      >
+        {exportLabel(working)}
+      </button>
+    </span>
   );
 }
 
@@ -1503,6 +1533,7 @@ export default function Checks({ onOpen }: ChecksProps) {
   const shownCluster = useShownCluster();
   const several = useTabStrip();
   const [fleet, setFleet] = useState(false);
+  const [byFramework, setByFramework] = useState(false);
   const [configuring, setConfiguring] = useState(false);
   const configureRef = useRef<HTMLButtonElement | null>(null);
   const showing = fleet && several;
@@ -1553,6 +1584,16 @@ export default function Checks({ onOpen }: ChecksProps) {
         {report !== null && <ToolbarCount>{baselineChip(report)}</ToolbarCount>}
         <ToolbarEnd>
           <button
+            type="button"
+            aria-pressed={byFramework}
+            onClick={() => {
+              setByFramework((held) => !held);
+            }}
+            className={actionClass('plain', 'dense')}
+          >
+            {byFramework ? 'By check' : 'By framework'}
+          </button>
+          <button
             ref={configureRef}
             type="button"
             onClick={() => {
@@ -1571,7 +1612,8 @@ export default function Checks({ onOpen }: ChecksProps) {
       {data === null && error === null && (
         <CapabilityState state="loading" what="the cluster audit" />
       )}
-      {data !== null && (
+      {byFramework && <FrameworkPosture />}
+      {data !== null && !byFramework && (
         <>
           <div className="flex shrink-0 items-baseline gap-3 border-b border-edge px-3 py-1.5 text-fg-muted">
             <span className="min-w-0 flex-1">

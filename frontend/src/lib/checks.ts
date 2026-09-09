@@ -8,6 +8,7 @@ import type {
   CheckPage,
   CheckReport,
   CheckSeverity,
+  FrameworkPosture,
   Baseline,
   Mute,
   Mutes,
@@ -407,12 +408,49 @@ export async function fetchMutes(): Promise<Mute[]> {
   return body.mutes ?? [];
 }
 
-export async function exportChecks(keep: ChecksFilter): Promise<Blob> {
-  const response = await request(withParams('/api/checks/export', filterParams(keep)));
+export const EXPORT_FORMATS = ['csv', 'json', 'sarif'] as const;
+
+export type ExportFormat = (typeof EXPORT_FORMATS)[number];
+
+export const EXPORT_FILENAMES: Record<ExportFormat, string> = {
+  csv: 'spinoza-checks.csv',
+  json: 'spinoza-checks.json',
+  sarif: 'spinoza-checks.sarif',
+};
+
+export const EXPORT_HINTS: Record<ExportFormat, string> = {
+  csv: 'a spreadsheet',
+  json: 'the report as spinoza holds it',
+  sarif: 'for whatever already reads sarif',
+};
+
+export async function exportChecks(
+  keep: ChecksFilter,
+  format: ExportFormat = 'csv',
+): Promise<Blob> {
+  const params = filterParams(keep);
+  if (format !== 'csv') {
+    params.set('format', format);
+  }
+  const response = await request(withParams('/api/checks/export', params));
   if (!response.ok) {
     throw await failure(response, `the export failed with status ${response.status}`);
   }
   return response.blob();
+}
+
+export async function fetchPosture(framework = ''): Promise<FrameworkPosture> {
+  const params = new URLSearchParams();
+  if (framework !== '') {
+    params.set('framework', framework);
+  }
+  const query = params.toString();
+  const suffix = query === '' ? '' : `?${query}`;
+  const response = await request(`/api/checks/frameworks${suffix}`);
+  if (!response.ok) {
+    throw await failure(response, `framework posture failed with status ${response.status}`);
+  }
+  return (await response.json()) as FrameworkPosture;
 }
 
 export async function ruleFaults(rules: string): Promise<RuleFault[]> {

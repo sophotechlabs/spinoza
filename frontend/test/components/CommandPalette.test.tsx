@@ -374,10 +374,17 @@ describe('CommandPalette', () => {
     const next = new Promise<{ ok: boolean; json: () => Promise<unknown> }>((resolve) => {
       finishNext = resolve;
     });
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ categories }) })
-      .mockImplementationOnce(() => next);
+    const catalogCalls: string[] = [];
+    const fetchMock = vi.fn((url: string) => {
+      if (!url.startsWith('/api/resources')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ views: [] }) });
+      }
+      catalogCalls.push(url);
+      if (catalogCalls.length === 1) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ categories }) });
+      }
+      return next;
+    });
     vi.stubGlobal('fetch', fetchMock);
     renderPalette();
     await screen.findByRole('button', { name: /Pod/ });
@@ -387,7 +394,7 @@ describe('CommandPalette', () => {
     });
 
     expect(screen.queryByRole('button', { name: /Pod/ })).not.toBeInTheDocument();
-    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(catalogCalls).toHaveLength(2);
     await act(async () => {
       finishNext({
         ok: true,

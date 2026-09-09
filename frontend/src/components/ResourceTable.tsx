@@ -45,8 +45,9 @@ import { useDismissMenu } from '../lib/useDismissMenu';
 import { extraWidths, widthOf } from '../lib/columnFit';
 import { useNow } from '../lib/useNow';
 import { ago, clockAt } from '../lib/time';
-import { fieldsOf, filterRows, parseChip } from '../lib/filterChips';
+import { chipsText, fieldsOf, filterRows, parseChip } from '../lib/filterChips';
 import { scopedBy } from '../lib/catalog';
+import { useNamespace } from '../store/namespace';
 import { useChips, useFiltersStore } from '../store/filters';
 import { opensRow } from '../lib/rowClick';
 import {
@@ -59,6 +60,7 @@ import {
 } from '../lib/tableState';
 import type { MetricBasis } from '../lib/tableState';
 import FilterBar from './FilterBar';
+import SaveViewButton from './SaveViewButton';
 import WorkspaceHeader from './WorkspaceHeader';
 import ContainerSquares from './ContainerSquares';
 import UsageBar from './UsageBar';
@@ -348,6 +350,7 @@ export default function ResourceTable({
   const chips = useChips(stateKey);
   const clearKind = useFiltersStore((state) => state.clearKind);
   const scoped = scopedBy(scope, namespaced);
+  const chosenNamespace = useNamespace();
   const fields = useMemo(() => fieldsOf(dataColumns, scoped), [dataColumns, scoped]);
 
   function changeSorting(next: SortingState) {
@@ -747,6 +750,13 @@ export default function ResourceTable({
             ))}
           </div>
         </details>
+        <SaveViewButton
+          view="resources"
+          resource={active.resource}
+          namespace={chosenNamespace}
+          filter={chipsText(chips)}
+          columns={hideable.filter((column) => column.getIsVisible()).map((column) => column.id)}
+        />
         <span className="ml-auto text-fg-muted">
           {countLabel(visibleRows.length, rows.length, total, limit, chips.length > 0)}
         </span>

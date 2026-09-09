@@ -40,7 +40,7 @@ interface SidebarProps {
   onSelectView: (view: View) => void;
 }
 
-const TOP_VIEWS: View[] = ['issues', 'topology', 'helm', 'checks', 'rbac', 'history'];
+const TOP_VIEWS: View[] = ['issues', 'topology', 'helm', 'checks', 'waste', 'rbac', 'history'];
 
 const CLUSTER_CATEGORY = 'Cluster';
 
