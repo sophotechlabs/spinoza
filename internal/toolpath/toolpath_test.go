@@ -307,3 +307,16 @@ func TestAFailedProbeLeavesThePathAsItWas(t *testing.T) {
 		t.Fatalf("the environment changed to %q", os.Getenv("PATH"))
 	}
 }
+
+func TestAShellThatTalksBeforeItsEnvironmentIsStillRead(t *testing.T) {
+	raw := "\n" + marker + "\nzsh: no matches found\nPATH=/usr/bin\nEDITOR=vi\n"
+
+	got := parse(raw)
+
+	if got["PATH"] != "/usr/bin" {
+		t.Fatalf("PATH = %q, want the value that follows the shell's own chatter", got["PATH"])
+	}
+	if len(got) != 2 {
+		t.Fatalf("environment = %v, want only the two variables the shell reported", got)
+	}
+}

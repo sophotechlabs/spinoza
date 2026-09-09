@@ -329,3 +329,23 @@ func TestALandingPageOffSpinozaIsNotFollowed(t *testing.T) {
 		})
 	}
 }
+
+func TestOnlyAProxyDeploymentCapsHowLongASocketMayStayOpen(t *testing.T) {
+	proxied := modeless(t, Config{Mode: ModeProxy, Proxy: ProxyConfig{WebSocketMaxAge: 90 * time.Second}})
+	open := modeless(t, Config{Mode: ModeNone})
+
+	if got := proxied.LiveSessionLimit(); got != 90*time.Second {
+		t.Fatalf("proxy socket limit = %s, want %s", got, 90*time.Second)
+	}
+	if got := open.LiveSessionLimit(); got != 0 {
+		t.Fatalf("socket limit without a proxy = %s, want none; nothing signs the session out underneath us", got)
+	}
+}
+
+func TestAnAbsentAuthenticatorCapsNothing(t *testing.T) {
+	var missing *Authenticator
+
+	if got := missing.LiveSessionLimit(); got != 0 {
+		t.Fatalf("socket limit = %s, want none", got)
+	}
+}

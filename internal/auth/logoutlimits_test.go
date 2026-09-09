@@ -101,3 +101,53 @@ func TestLogoutVerificationCooldownAndSourceCacheAreBounded(t *testing.T) {
 		release()
 	}
 }
+
+func TestALogoutVerificationInFlightIsNeverEvictedToMakeRoom(t *testing.T) {
+	now := time.Date(2026, 9, 7, 12, 0, 0, 0, time.UTC)
+	budget := newLogoutVerificationBudget(func() time.Time { return now })
+	budget.sourceCapacity = 3
+
+	stillVerifying, ok := budget.claim("busy")
+	if !ok {
+		t.Fatal("the first source was refused")
+	}
+	for _, source := range []string{"left", "right"} {
+		release, claimed := budget.claim(source)
+		if !claimed {
+			t.Fatalf("%s was refused", source)
+		}
+		release()
+	}
+
+	release, claimed := budget.claim("newcomer")
+
+	if !claimed {
+		t.Fatal("a new source was refused while two idle sources could have made room")
+	}
+	release()
+	stillVerifying()
+	if _, held := budget.sources["busy"]; !held {
+		t.Fatal("the source still verifying a logout was evicted to make room")
+	}
+	_, keptLeft := budget.sources["left"]
+	_, keptRight := budget.sources["right"]
+	if keptLeft == keptRight {
+		t.Fatalf("left kept = %t, right kept = %t, want exactly one idle source evicted", keptLeft, keptRight)
+	}
+}
+
+func TestANewLogoutSourceIsRefusedWhenEverySlotIsVerifying(t *testing.T) {
+	now := time.Date(2026, 9, 7, 12, 0, 0, 0, time.UTC)
+	budget := newLogoutVerificationBudget(func() time.Time { return now })
+	budget.sourceCapacity = 2
+
+	for _, source := range []string{"first", "second"} {
+		if _, claimed := budget.claim(source); !claimed {
+			t.Fatalf("%s was refused", source)
+		}
+	}
+
+	if _, claimed := budget.claim("newcomer"); claimed {
+		t.Fatal("a new source displaced a logout that was still being verified")
+	}
+}

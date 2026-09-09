@@ -2,6 +2,8 @@ package auth
 
 import (
 	"errors"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 	"time"
 )
@@ -51,4 +53,22 @@ func TestTokenExchangeBudgetBoundsGlobalAndSourceConcurrency(t *testing.T) {
 		t.Fatal("released exchange capacity was not reusable")
 	}
 	releaseC()
+}
+
+func TestACallbackWithoutAPortIsStillChargedToItsCaller(t *testing.T) {
+	request := httptest.NewRequest(http.MethodGet, "/oauth2/callback", http.NoBody)
+	request.RemoteAddr = "10.1.2.3"
+
+	if got := callbackSource(request); got != "10.1.2.3" {
+		t.Fatalf("source = %q, want the address itself when it carries no port", got)
+	}
+}
+
+func TestACallbackFromNowhereSharesOneBudget(t *testing.T) {
+	request := httptest.NewRequest(http.MethodGet, "/oauth2/callback", http.NoBody)
+	request.RemoteAddr = ""
+
+	if got := callbackSource(request); got != "unknown" {
+		t.Fatalf("source = %q, want %q so an unattributable callback cannot claim its own budget", got, "unknown")
+	}
 }
