@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "smokeGroup": "foundation-security",
   "specRoots": ["cluster-mode", "specs", "specs-full"],
   "productionRoots": [
@@ -12,38 +12,119 @@
     "install.sh",
     "install.ps1"
   ],
+  "unitOnlyPaths": [
+    "*_test.go",
+    "cmd/**/*_test.go",
+    "internal/**/*_test.go",
+    "internal/**/testdata/**",
+    "internal/testguard/**"
+  ],
   "fullRunPaths": [
     ".github/workflows/**",
     "Dockerfile",
+    "assets_embed.go",
+    "clusterflags.go",
     "e2e/harness/**",
     "e2e/package-lock.json",
     "e2e/package.json",
     "e2e/playwright.config.ts",
     "e2e/scripts/**",
     "e2e/suite.json",
-    "e2e/versions.json",
+    "flags.go",
     "frontend/package-lock.json",
-    "frontend/src/**",
     "frontend/src/App.tsx",
     "frontend/src/Root.tsx",
+    "frontend/src/components/Announce.tsx",
+    "frontend/src/components/ErrorBoundary.tsx",
+    "frontend/src/components/LoadFailure.tsx",
+    "frontend/src/components/LoadWarning.tsx",
+    "frontend/src/components/Loading.tsx",
+    "frontend/src/components/MovedToDesktop.tsx",
+    "frontend/src/components/StaleBanner.tsx",
+    "frontend/src/components/Toasts.tsx",
+    "frontend/src/components/icons.tsx",
+    "frontend/src/lib/clipboard.ts",
+    "frontend/src/lib/contexts.ts",
+    "frontend/src/lib/controls.ts",
+    "frontend/src/lib/feed.ts",
     "frontend/src/lib/http.ts",
+    "frontend/src/lib/namespaceOffer.ts",
+    "frontend/src/lib/object.ts",
+    "frontend/src/lib/parse.ts",
+    "frontend/src/lib/persist.ts",
+    "frontend/src/lib/refs.ts",
+    "frontend/src/lib/settings.ts",
+    "frontend/src/lib/settingsSync.ts",
+    "frontend/src/lib/tabs.ts",
+    "frontend/src/lib/time.ts",
     "frontend/src/lib/types.ts",
-    "frontend/src/store/**",
+    "frontend/src/lib/units.ts",
+    "frontend/src/lib/unsaved.ts",
+    "frontend/src/lib/update.ts",
+    "frontend/src/lib/useNow.ts",
+    "frontend/src/lib/usePoll.ts",
+    "frontend/src/lib/view.ts",
+    "frontend/src/lib/warningText.ts",
+    "frontend/src/lib/wire.ts",
+    "frontend/src/main.tsx",
+    "frontend/src/store/access.ts",
+    "frontend/src/store/catalog.ts",
+    "frontend/src/store/cluster.ts",
+    "frontend/src/store/clusters.ts",
+    "frontend/src/store/contexts.ts",
+    "frontend/src/store/filters.ts",
+    "frontend/src/store/identity.ts",
+    "frontend/src/store/namespace.ts",
+    "frontend/src/store/panels.ts",
+    "frontend/src/store/perCluster.ts",
+    "frontend/src/store/recents.ts",
+    "frontend/src/store/resources.ts",
+    "frontend/src/store/session.ts",
+    "frontend/src/store/settings.ts",
+    "frontend/src/store/terminals.ts",
+    "frontend/src/store/theme.ts",
+    "frontend/src/store/toasts.ts",
+    "frontend/src/vite-env.d.ts",
     "go.mod",
     "go.sum",
-    "internal/**",
+    "httpserver.go",
     "internal/api/**",
+    "internal/atomicfile/**",
     "internal/cluster/**",
-    "internal/server/**",
+    "internal/commandbuffer/**",
+    "internal/filetx/**",
+    "internal/listerr/**",
+    "internal/server/assets.go",
+    "internal/server/auth.go",
+    "internal/server/backend.go",
+    "internal/server/guard.go",
+    "internal/server/listen.go",
+    "internal/server/policy.go",
+    "internal/server/respond.go",
+    "internal/server/routes.go",
+    "internal/server/server.go",
+    "internal/server/shutdown.go",
+    "internal/server/update.go",
+    "internal/server/view.go",
+    "internal/server/ws.go",
+    "internal/settings/**",
+    "internal/toolpath/**",
+    "internal/unstr/**",
+    "internal/update/**",
+    "internal/version/**",
     "justfile",
-    "*.go",
+    "logging.go",
     "main.go",
     "main_desktop.go",
     "mise.lock",
     "mise.toml",
+    "notices.go",
     "serve.go",
+    "store.go",
+    "update.go",
     "wails.json"
   ],
+  "fullRunBudget": 93,
   "groups": [
     {
       "id": "foundation-security",
@@ -64,7 +145,18 @@
         "frontend/src/lib/identity.ts",
         "e2e/specs/access.spec.ts",
         "e2e/specs/degrade.spec.ts",
-        "e2e/specs/guard.spec.ts"
+        "e2e/specs/guard.spec.ts",
+        "frontend/src/components/KubeconfigDialog.tsx",
+        "frontend/src/components/Wordmark.tsx",
+        "frontend/src/lib/capabilities.ts",
+        "frontend/src/lib/useAccess.ts",
+        "frontend/src/lib/wsBase.ts",
+        "frontend/src/store/clusterHealth.ts",
+        "frontend/src/store/logs.ts",
+        "internal/server/access.go",
+        "internal/server/capabilities.go",
+        "internal/server/health.go",
+        "internal/server/sinkwatch.go"
       ]
     },
     {
@@ -95,7 +187,30 @@
         "e2e/specs/navigation.spec.ts",
         "e2e/specs/palette.spec.ts",
         "e2e/specs/panels.spec.ts",
-        "e2e/specs/settings.spec.ts"
+        "e2e/specs/settings.spec.ts",
+        "frontend/src/components/Notifications*.tsx",
+        "frontend/src/components/ViewSwitch.tsx",
+        "frontend/src/components/Wordmark.tsx",
+        "frontend/src/lib/containers.ts",
+        "frontend/src/lib/defaultTheme.ts",
+        "frontend/src/lib/kindLabels.ts",
+        "frontend/src/lib/namespaces.ts",
+        "frontend/src/lib/platform.ts",
+        "frontend/src/lib/pods.ts",
+        "frontend/src/lib/sidebar*.ts",
+        "frontend/src/lib/useAccess.ts",
+        "frontend/src/lib/useDismissMenu.ts",
+        "frontend/src/lib/useObjectDetail.ts",
+        "frontend/src/lib/usePanelWidth.ts",
+        "frontend/src/lib/useTrafficProbe.ts",
+        "frontend/src/lib/version.ts",
+        "frontend/src/lib/views.ts",
+        "frontend/src/lib/wsBase.ts",
+        "frontend/src/store/clusterHealth.ts",
+        "frontend/src/store/forwards.ts",
+        "frontend/src/store/logs.ts",
+        "frontend/src/store/traffic.ts",
+        "internal/server/settings.go"
       ]
     },
     {
@@ -113,7 +228,9 @@
         "frontend/src/lib/theme*.ts",
         "frontend/themes/**",
         "e2e/specs/zz-a11y.spec.ts",
-        "e2e/specs-full/design-review.spec.ts"
+        "e2e/specs-full/design-review.spec.ts",
+        "frontend/src/lib/defaultTheme.ts",
+        "frontend/src/lib/tooltip.ts"
       ]
     },
     {
@@ -142,7 +259,19 @@
         "e2e/specs/crds.spec.ts",
         "e2e/specs/live.spec.ts",
         "e2e/specs/resources.spec.ts",
-        "e2e/specs-full/scale.spec.ts"
+        "e2e/specs-full/scale.spec.ts",
+        "frontend/src/components/ContainerSquares.tsx",
+        "frontend/src/components/CopyButton.tsx",
+        "frontend/src/components/UsageBar.tsx",
+        "frontend/src/lib/columnFit.ts",
+        "frontend/src/lib/containers.ts",
+        "frontend/src/lib/rowClick.ts",
+        "frontend/src/lib/status.ts",
+        "frontend/src/lib/useDismissMenu.ts",
+        "frontend/src/lib/useElementWidth.ts",
+        "internal/overview/**",
+        "internal/podcount/**",
+        "internal/server/catalog.go"
       ]
     },
     {
@@ -175,7 +304,30 @@
         "e2e/specs/compare-rbac.spec.ts",
         "e2e/specs/inspect.spec.ts",
         "e2e/specs/secrets.spec.ts",
-        "e2e/specs/topology.spec.ts"
+        "e2e/specs/topology.spec.ts",
+        "frontend/src/components/CopyButton.tsx",
+        "frontend/src/components/DataEntries.tsx",
+        "frontend/src/components/DisabledActionReasons.tsx",
+        "frontend/src/components/Graph*.tsx",
+        "frontend/src/components/NodeShellButton.tsx",
+        "frontend/src/components/Yaml*.tsx",
+        "frontend/src/lib/actionAvailability.ts",
+        "frontend/src/lib/entityLabel.ts",
+        "frontend/src/lib/graph*.ts",
+        "frontend/src/lib/logColor.ts",
+        "frontend/src/lib/monaco.ts",
+        "frontend/src/lib/openExternal.ts",
+        "frontend/src/lib/scroll.ts",
+        "frontend/src/lib/status.ts",
+        "frontend/src/lib/useElementWidth.ts",
+        "frontend/src/lib/useLogStream.ts",
+        "frontend/src/lib/useObjectDetail.ts",
+        "frontend/src/store/forwards.ts",
+        "frontend/src/store/logs.ts",
+        "internal/server/compare.go",
+        "internal/server/objects.go",
+        "internal/server/rbac.go",
+        "internal/server/views.go"
       ]
     },
     {
@@ -198,7 +350,12 @@
         "frontend/src/lib/history.ts",
         "e2e/specs/actions.spec.ts",
         "e2e/specs/guarded.spec.ts",
-        "e2e/specs/history.spec.ts"
+        "e2e/specs/history.spec.ts",
+        "frontend/src/components/DisabledActionReasons.tsx",
+        "frontend/src/components/NodeShellButton.tsx",
+        "frontend/src/lib/actionAvailability.ts",
+        "internal/server/history.go",
+        "internal/server/objects.go"
       ]
     },
     {
@@ -223,7 +380,26 @@
         "frontend/src/lib/terminal.ts",
         "e2e/specs/exec.spec.ts",
         "e2e/specs/portforward.spec.ts",
-        "e2e/specs/terminals.spec.ts"
+        "e2e/specs/terminals.spec.ts",
+        "frontend/src/components/CopyButton.tsx",
+        "frontend/src/components/NodeShellButton.tsx",
+        "frontend/src/lib/capabilities.ts",
+        "frontend/src/lib/containers.ts",
+        "frontend/src/lib/debugContainer.ts",
+        "frontend/src/lib/logColor.ts",
+        "frontend/src/lib/motion.ts",
+        "frontend/src/lib/openExternal.ts",
+        "frontend/src/lib/pods.ts",
+        "frontend/src/lib/useLocalShell.ts",
+        "frontend/src/lib/useLogStream.ts",
+        "frontend/src/lib/useShellSupport.ts",
+        "frontend/src/lib/wsBase.ts",
+        "frontend/src/store/forwards.ts",
+        "frontend/src/store/logs.ts",
+        "internal/imagepin/**",
+        "internal/server/exec.go",
+        "internal/server/forwards.go",
+        "internal/server/localshell.go"
       ]
     },
     {
@@ -236,7 +412,6 @@
       "paths": [
         "internal/baseline/**",
         "internal/checks/**",
-        "internal/facts/**",
         "internal/faults/**",
         "internal/issues/**",
         "frontend/src/components/Checks.tsx",
@@ -245,7 +420,15 @@
         "frontend/src/lib/issues.ts",
         "e2e/specs/checks.spec.ts",
         "e2e/specs/issues.spec.ts",
-        "e2e/specs/worklist.spec.ts"
+        "e2e/specs/worklist.spec.ts",
+        "frontend/src/store/issues.ts",
+        "internal/server/baselines.go",
+        "internal/server/export.go",
+        "internal/server/fleetchecks.go",
+        "internal/server/mutes.go",
+        "internal/server/rules.go",
+        "internal/server/settings.go",
+        "internal/server/views.go"
       ]
     },
     {
@@ -263,7 +446,18 @@
         "frontend/src/lib/chart.ts",
         "frontend/src/lib/helm*.ts",
         "e2e/fixtures/chart/**",
-        "e2e/specs/helm.spec.ts"
+        "e2e/specs/helm.spec.ts",
+        "frontend/src/components/CopyButton.tsx",
+        "frontend/src/components/DisabledActionReasons.tsx",
+        "frontend/src/components/ManifestDiff.tsx",
+        "frontend/src/components/YamlEditor.tsx",
+        "frontend/src/lib/actionAvailability.ts",
+        "frontend/src/lib/capabilities.ts",
+        "frontend/src/lib/monaco.ts",
+        "frontend/src/lib/useHelmAccess.ts",
+        "frontend/src/store/helm*.ts",
+        "internal/server/access.go",
+        "internal/server/helm.go"
       ]
     },
     {
@@ -286,7 +480,15 @@
         "e2e/fixtures/gitops.yaml",
         "e2e/specs-full/argo.spec.ts",
         "e2e/specs-full/flux.spec.ts",
-        "e2e/specs-full/gitops.spec.ts"
+        "e2e/specs-full/gitops.spec.ts",
+        "frontend/src/components/Graph*.tsx",
+        "frontend/src/lib/columnFit.ts",
+        "frontend/src/lib/entityLabel.ts",
+        "frontend/src/lib/graph*.ts",
+        "frontend/src/lib/readiness.ts",
+        "frontend/src/lib/useElementWidth.ts",
+        "internal/server/fleetgitops.go",
+        "internal/server/gitops.go"
       ]
     },
     {
@@ -307,7 +509,13 @@
         "frontend/src/lib/traffic*.ts",
         "e2e/fixtures/prometheus.yaml",
         "e2e/specs/metrics.spec.ts",
-        "e2e/specs/traffic.spec.ts"
+        "e2e/specs/traffic.spec.ts",
+        "frontend/src/components/Graph*.tsx",
+        "frontend/src/lib/capabilities.ts",
+        "frontend/src/lib/graph*.ts",
+        "frontend/src/lib/useTrafficProbe.ts",
+        "frontend/src/store/traffic.ts",
+        "internal/server/views.go"
       ]
     },
     {
@@ -328,7 +536,26 @@
         "frontend/src/lib/fleet.ts",
         "e2e/specs/clusters.spec.ts",
         "e2e/specs/fleet.spec.ts",
-        "e2e/specs-full/twoclusters.spec.ts"
+        "e2e/specs-full/twoclusters.spec.ts",
+        "frontend/src/components/EntityLabel.tsx",
+        "frontend/src/components/KubeconfigDialog.tsx",
+        "frontend/src/components/TabMenu.tsx",
+        "frontend/src/components/UsageBar.tsx",
+        "frontend/src/lib/entityLabel.ts",
+        "frontend/src/lib/overview.ts",
+        "frontend/src/lib/useDismissMenu.ts",
+        "frontend/src/store/clusterHealth.ts",
+        "frontend/src/store/forwards.ts",
+        "internal/overview/**",
+        "internal/server/clusters.go",
+        "internal/server/contexts.go",
+        "internal/server/fleet.go",
+        "internal/server/fleetchecks.go",
+        "internal/server/fleetgitops.go",
+        "internal/server/fleetinventory.go",
+        "internal/server/fleetlists.go",
+        "internal/server/fleetoverview.go",
+        "internal/server/timeline.go"
       ]
     },
     {
@@ -349,7 +576,8 @@
         "internal/server/auth.go",
         "internal/server/guard.go",
         "serve.go",
-        "test/clustermode/**"
+        "test/clustermode/**",
+        "frontend/src/lib/useDismissMenu.ts"
       ]
     },
     {
@@ -364,7 +592,11 @@
         "internal/safe/**",
         "e2e/specs/resilience.spec.ts",
         "e2e/specs/capacity.spec.ts",
-        "test/integration/faults_test.go"
+        "test/integration/faults_test.go",
+        "internal/server/budget.go",
+        "internal/server/health.go",
+        "internal/server/memory.go",
+        "internal/server/sinkwatch.go"
       ]
     },
     {

@@ -86,6 +86,47 @@ reloads must wait on the request, not on a sleep.
 - Write specs run before read specs alphabetically and recycle the pods the reads look at, so a read
   picks a *Running* row rather than the first one.
 
+## Which groups a change runs
+
+`suite.json` maps the repository onto sixteen capability groups, and `scripts/select-groups.mjs`
+picks the groups a diff needs; CI runs only those, on every browser. Per changed file, in order:
+
+1. `unitOnlyPaths` — Go unit tests and testdata inside the production trees. They cannot change
+   the binary, so they select nothing beyond the smoke group.
+2. `fullRunPaths` — cross-cutting code: the harness, the router, the WebSocket, the stores, the
+   shared frontend libraries. One such file runs every group.
+3. A group's `paths` — the file selects that group. A file may belong to several.
+4. Anything else under `productionRoots` is production code no group owns. It runs every group,
+   and `scripts/validate-suite.mjs` refuses to let one be committed.
+
+The smoke group always runs. `fullRunBudget` is how many production files sit in `fullRunPaths`;
+the validator fails when the number grows, so a new file gets an owning group instead of a free
+pass, and says when the budget can come down. The mapping was derived from the import graph on
+2026-09-07: a frontend file whose importers span five or more groups, or that `App` or `Root`
+import directly, is cross-cutting; a server handler belongs to the groups whose packages it
+calls. To see what a diff would run:
+
+```sh
+node e2e/scripts/select-groups.mjs --files changed.txt
+```
+
+The stderr line names the file that forced a full run, and CI's step summary repeats it.
+
+## Coverage and flakes
+
+The binary the suite drives is built with `-cover`, and every instance writes its counters to
+`e2e/.tmp/cover/<instance>` when it exits. `just e2e-cover` merges them into `e2e/coverage.out`
+and prints per-package percentages. CI uploads each job's counters, and a final job merges every
+selected group's into one number, marked partial when the run was selective or a job failed.
+This is what the browser suite exercises, as distinct from what the unit tests exercise; the two
+profiles are kept apart on purpose. An instance that has to be killed leaves a `<name>.unclean`
+marker and the merge refuses to report rather than report less than it should. A binary reused
+through `SPINOZA_E2E_SKIP_BUILD=1` that was built without `-cover` writes no counters, and the
+merge says so instead of reporting zero.
+
+In CI Playwright also writes `test-results/report.json`, and `just e2e-flaky` lists the tests
+that passed only on retry in the step summary. The count is informational until a baseline exists.
+
 ## Not covered
 
 The Wails desktop window. Playwright cannot drive it. It is the same server and the same frontend as

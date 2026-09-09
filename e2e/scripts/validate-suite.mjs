@@ -1,7 +1,7 @@
 import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { relative, resolve } from 'node:path';
-import { loadSuite, matchesAny } from './suite.mjs';
+import { FULL, UNMAPPED, classify, loadSuite, matches, matchesAny } from './suite.mjs';
 
 const e2e = resolve(import.meta.dirname, '..');
 const repo = resolve(e2e, '..');
@@ -39,8 +39,8 @@ function fail(message) {
   process.exitCode = 1;
 }
 
-if (suite.schemaVersion !== 1) {
-  fail(`suite schema is ${String(suite.schemaVersion)}, want 1`);
+if (suite.schemaVersion !== 2) {
+  fail(`suite schema is ${String(suite.schemaVersion)}, want 2`);
 }
 
 const actualGroups = suite.groups.map((group) => group.id);
@@ -94,16 +94,37 @@ for (const [spec, owners] of claimed.entries()) {
   }
 }
 
+let crossCutting = 0;
 for (const path of files) {
-  if (!matchesAny(path, suite.productionRoots)) {
-    continue;
-  }
-  if (matchesAny(path, suite.fullRunPaths)) {
-    continue;
-  }
-  const mapped = suite.groups.some((group) => matchesAny(path, group.paths));
-  if (!mapped) {
+  const verdict = classify(suite, path);
+  if (verdict.kind === UNMAPPED) {
     fail(`${path} has no E2E change mapping`);
+    continue;
+  }
+  if (verdict.kind === FULL && matchesAny(path, suite.productionRoots)) {
+    crossCutting += 1;
+  }
+}
+if (typeof suite.fullRunBudget !== 'number') {
+  fail('suite has no fullRunBudget');
+} else if (crossCutting > suite.fullRunBudget) {
+  fail(
+    `${String(crossCutting)} production files select every group, budget is ` +
+      `${String(suite.fullRunBudget)}; give the new ones an owning group`,
+  );
+}
+
+const patternSets = [
+  ['productionRoots', suite.productionRoots],
+  ['fullRunPaths', suite.fullRunPaths],
+  ['unitOnlyPaths', suite.unitOnlyPaths],
+  ...suite.groups.map((group) => [`${group.id}.paths`, group.paths]),
+];
+for (const [field, patterns] of patternSets) {
+  for (const pattern of patterns) {
+    if (!files.some((path) => matches(path, pattern))) {
+      fail(`${field} pattern ${pattern} matches no tracked file`);
+    }
   }
 }
 
@@ -127,7 +148,13 @@ for (const path of files) {
 }
 
 if (process.exitCode === undefined) {
+  let slack = '';
+  if (crossCutting < suite.fullRunBudget) {
+    slack = `; fullRunBudget can come down to ${String(crossCutting)}`;
+  }
   process.stdout.write(
-    `validated ${String(suite.groups.length)} groups and ${String(claimed.size)} specs\n`,
+    `validated ${String(suite.groups.length)} groups and ${String(claimed.size)} specs; ` +
+      `${String(crossCutting)} of the production files select every group ` +
+      `(budget ${String(suite.fullRunBudget)})${slack}\n`,
   );
 }

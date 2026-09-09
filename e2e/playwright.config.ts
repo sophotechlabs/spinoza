@@ -63,6 +63,7 @@ function reporters(): ReporterDescription[] {
   return [
     ['github'],
     ['html', { open: 'never' }],
+    ['json', { outputFile: 'test-results/report.json' }],
     ['junit', { outputFile: 'test-results/junit.xml' }],
   ];
 }

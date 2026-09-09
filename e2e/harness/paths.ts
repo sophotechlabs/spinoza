@@ -71,3 +71,10 @@ export const SECOND_CLUSTER = `${CLUSTER}-second`;
 export const SECOND_CONTEXT = `kind-${SECOND_CLUSTER}`;
 
 export const SECOND_KUBECONFIG = join(TMP_DIR, 'kubeconfig-second');
+
+let cover = join(TMP_DIR, 'cover');
+if (process.env.SPINOZA_E2E_COVERDIR !== undefined) {
+  cover = process.env.SPINOZA_E2E_COVERDIR;
+}
+
+export const COVER_DIR = cover;

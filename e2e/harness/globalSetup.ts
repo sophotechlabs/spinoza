@@ -1,6 +1,14 @@
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { BASE_URL, NOWHERE_KUBECONFIG, STATE_FILE, STORAGE_STATE, TMP_DIR, sideAddr } from './paths';
+import {
+  ADDR,
+  BASE_URL,
+  NOWHERE_KUBECONFIG,
+  STATE_FILE,
+  STORAGE_STATE,
+  TMP_DIR,
+  sideAddr,
+} from './paths';
 import { KUBECONFIG } from './paths';
 import {
   ensureCluster,
@@ -9,16 +17,9 @@ import {
   readonlyKubeconfig,
   refuseAnythingButKind,
 } from './cluster';
-import {
-  installFlux,
-  seed,
-  seedGitops,
-  seedHelm,
-  seedScale,
-  waitForFixtures,
-} from './fixtures';
+import { installFlux, seed, seedGitops, seedHelm, seedScale, waitForFixtures } from './fixtures';
 import { packageCharts, serveCharts, writeRepositoryCache, writeRepositoryConfig } from './charts';
-import { build, freePort, launch, start, stopStale, token } from './spinoza';
+import { build, freePort, launch, resetCoverage, start, token } from './spinoza';
 import type { Instance } from './spinoza';
 
 function unreachableKubeconfig(): string {
@@ -48,10 +49,16 @@ function unreachableKubeconfig(): string {
   return path;
 }
 
-async function side(name: string, index: number, kubeconfig: string, extra: string[]): Promise<Instance> {
+async function side(
+  name: string,
+  index: number,
+  kubeconfig: string,
+  extra: string[],
+): Promise<Instance> {
   const addr = sideAddr(index);
-  freePort(addr.split(':')[1]);
+  await freePort(addr.split(':')[1]);
   return launch({
+    name,
     addr,
     kubeconfig,
     tokenFile: join(TMP_DIR, `token-${name}`),
@@ -73,6 +80,18 @@ export default async function globalSetup(): Promise<void> {
   ]) {
     rmSync(join(TMP_DIR, name), { recursive: true, force: true });
   }
+  for (const port of [
+    ADDR,
+    sideAddr(1),
+    sideAddr(2),
+    sideAddr(3),
+    sideAddr(4),
+    sideAddr(5),
+    sideAddr(6),
+  ]) {
+    await freePort(port.split(':')[1]);
+  }
+  resetCoverage();
   ensureCluster();
   exportKubeconfig();
   refuseAnythingButKind();
@@ -93,7 +112,6 @@ export default async function globalSetup(): Promise<void> {
   writeRepositoryConfig();
   writeRepositoryCache();
   const charts = await serveCharts();
-  stopStale();
   const pid = await start(['--node-shell']);
   const value = token();
   const readonly = await side('readonly', 1, readonlyKubeconfig(), []);

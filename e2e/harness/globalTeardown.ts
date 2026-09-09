@@ -10,15 +10,15 @@ interface Stopping {
   sides?: Record<string, { pid: number }>;
 }
 
-export default function globalTeardown(): void {
+export default async function globalTeardown(): Promise<void> {
   if (existsSync(STATE_FILE)) {
     const state = JSON.parse(readFileSync(STATE_FILE, 'utf8')) as Stopping;
-    stop(state.pid);
-    for (const one of Object.values(state.sides ?? {})) {
-      stop(one.pid);
+    await stop('main', state.pid);
+    for (const [name, one] of Object.entries(state.sides ?? {})) {
+      await stop(name, one.pid);
     }
     if (state.charts !== undefined) {
-      stop(state.charts);
+      await stop('charts', state.charts);
     }
   }
   if (process.env.SPINOZA_E2E_KEEP === '1') {

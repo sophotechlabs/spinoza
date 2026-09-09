@@ -1,6 +1,6 @@
 import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
-import { loadSuite, matchesAny } from './suite.mjs';
+import { groupByID, loadSuite, selectGroups } from './suite.mjs';
 
 function argument(name) {
   const index = process.argv.indexOf(name);
@@ -42,40 +42,14 @@ function changedFiles() {
     .filter((path) => path !== '');
 }
 
-function select(suite, files) {
-  const selected = new Set([suite.smokeGroup]);
-  if (flag('--all')) {
-    return suite.groups.map((group) => group.id);
-  }
-  if (files.length === 0 && flag('--push')) {
-    return suite.groups.map((group) => group.id);
-  }
-  for (const path of files) {
-    if (matchesAny(path, suite.fullRunPaths)) {
-      return suite.groups.map((group) => group.id);
-    }
-    let mapped = false;
-    for (const group of suite.groups) {
-      if (matchesAny(path, group.paths)) {
-        selected.add(group.id);
-        mapped = true;
-      }
-    }
-    if (!mapped && matchesAny(path, suite.productionRoots)) {
-      return suite.groups.map((group) => group.id);
-    }
-  }
-  return suite.groups.filter((group) => selected.has(group.id)).map((group) => group.id);
-}
-
 const suite = loadSuite();
 const files = changedFiles();
-const ids = select(suite, files);
+const { groups: ids, reason } = selectGroups(suite, files, {
+  all: flag('--all'),
+  push: flag('--push'),
+});
 const include = ids.map((id) => {
-  const group = suite.groups.find((candidate) => candidate.id === id);
-  if (group === undefined) {
-    throw new Error(`selected unknown group ${id}`);
-  }
+  const group = groupByID(suite, id);
   return {
     group: group.id,
     runner: group.runner,
@@ -83,5 +57,11 @@ const include = ids.map((id) => {
     timeout: group.timeoutMinutes,
   };
 });
-process.stderr.write(`selected ${ids.join(', ')} for ${String(files.length)} changed files\n`);
-process.stdout.write(`${JSON.stringify({ include })}\n`);
+let why = '';
+if (reason !== '') {
+  why = ` because ${reason}`;
+}
+process.stderr.write(
+  `selected ${ids.join(', ')} for ${String(files.length)} changed files${why}\n`,
+);
+process.stdout.write(`${JSON.stringify({ include, reason })}\n`);

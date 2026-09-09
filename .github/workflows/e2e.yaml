@@ -63,9 +63,13 @@ jobs:
           selected=$(node e2e/scripts/select-groups.mjs "${args[@]}")
           browser=$(printf '%s' "$selected" | jq -c '{include: [.include[] | select(.runner == "playwright")]}')
           groups=$(printf '%s' "$selected" | jq -c '[.include[].group]')
+          reason=$(printf '%s' "$selected" | jq -r '.reason')
           echo "browser=$browser" >> "$GITHUB_OUTPUT"
           echo "groups=$groups" >> "$GITHUB_OUTPUT"
           printf 'Selected groups: %s\n' "$groups" >> "$GITHUB_STEP_SUMMARY"
+          if [ -n "$reason" ]; then
+            printf 'Why: %s\n' "$reason" >> "$GITHUB_STEP_SUMMARY"
+          fi
 
   suite-contract:
     needs: select
@@ -78,6 +82,7 @@ jobs:
         with:
           install_args: node
       - run: node e2e/scripts/validate-suite.mjs
+      - run: node --test 'e2e/scripts/*.test.mjs'
 
   browser:
     needs: select
@@ -113,6 +118,23 @@ jobs:
           E2E_BROWSER: ${{ matrix.browser }}
           E2E_GROUP: ${{ matrix.group.group }}
         run: just test-e2e-group "$E2E_GROUP" "$E2E_BROWSER"
+      - run: just e2e-cover
+      - run: just e2e-flaky
+        if: always()
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: e2e-coverage-${{ matrix.group.group }}-${{ matrix.browser }}
+          path: e2e/.tmp/cover
+          retention-days: 14
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        if: always()
+        with:
+          name: e2e-report-${{ matrix.group.group }}-${{ matrix.browser }}
+          path: |
+            e2e/test-results/report.json
+            e2e/test-results/junit.xml
+          if-no-files-found: ignore
+          retention-days: 14
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         if: failure()
         with:
@@ -125,6 +147,38 @@ jobs:
           retention-days: 14
       - run: just cluster-down
         if: always()
+
+  e2e-coverage:
+    needs:
+      - select
+      - browser
+    if: ${{ !cancelled() && needs.browser.result != 'skipped' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: jdx/mise-action@3c2e0cf82a5b2e5249f0d3635a4d83d0ae861518
+        with:
+          install_args: just go
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          pattern: e2e-coverage-*
+          path: e2e/.tmp/cover-all
+      - env:
+          INCLUDE: ${{ needs.select.outputs.browser }}
+          SELECTED: ${{ needs.select.outputs.groups }}
+        run: |
+          expected=$(( $(printf '%s' "$INCLUDE" | jq '.include | length') * 3 ))
+          selected=$(printf '%s' "$SELECTED" | jq 'length')
+          total=$(jq '.groups | length' e2e/suite.json)
+          just e2e-cover-merge e2e/.tmp/cover-all "$expected" "$selected" "$total"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: e2e-coverage
+          path: e2e/coverage.out
+          retention-days: 30
 
   cluster-mode-auth:
     needs: select

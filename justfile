@@ -40,12 +40,14 @@ deps:
 tidy:
     go mod tidy
 
-build:
+build flags='':
     #!/usr/bin/env bash
     set -euo pipefail
     export SPINOZA_VERSION="$(just app-version)"
     cd frontend && npm run build && cd ..
-    go build -trimpath -ldflags "{{ ldflags }} -X {{ version_pkg }}=$SPINOZA_VERSION" -o spinoza{{ exe }} .
+    go build {{ flags }} -trimpath -ldflags "{{ ldflags }} -X {{ version_pkg }}=$SPINOZA_VERSION" -o spinoza{{ exe }} .
+
+build-e2e: (build '-cover -covermode=atomic')
 
 stub-assets:
     #!/usr/bin/env bash
@@ -418,6 +420,18 @@ test-e2e-group group browser='chromium' name='' spec='':
 
 validate-e2e-suite:
     node e2e/scripts/validate-suite.mjs
+
+test-e2e-scripts:
+    node --test 'e2e/scripts/*.test.mjs'
+
+e2e-cover dir='e2e/.tmp/cover':
+    scripts/e2e-cover.sh {{ quote(dir) }} e2e/coverage.out
+
+e2e-cover-merge dir expected selected total:
+    scripts/e2e-cover.sh {{ quote(dir) }} e2e/coverage.out {{ quote(expected) }} {{ quote(selected) }} {{ quote(total) }}
+
+e2e-flaky report='e2e/test-results/report.json':
+    node e2e/scripts/flaky.mjs {{ quote(report) }}
 
 [private]
 e2e-run project name='' spec='':
@@ -1261,6 +1275,7 @@ handoff-gate: stub-assets
     if printf '%s\n' "$changed" | grep -q '^e2e/'; then
         just lint-e2e
         just validate-e2e-suite
+        just test-e2e-scripts
     fi
     git diff --check
 
