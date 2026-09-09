@@ -5,6 +5,7 @@ DELETE /api/history role=admin local=no whole=yes writes=no
 DELETE /api/kubeconfigs role=- local=yes whole=no writes=no
 DELETE /api/object role=editor local=no whole=no writes=yes
 DELETE /api/portforward role=- local=yes whole=no writes=no
+DELETE /api/views role=- local=no whole=no writes=no
 GET /api/access role=- local=no whole=no writes=no
 GET /api/argocd role=- local=no whole=yes writes=no
 GET /api/auth/me role=- local=no whole=no writes=no
@@ -15,7 +16,9 @@ GET /api/checks/export role=- local=no whole=yes writes=no
 GET /api/checks/findings role=- local=no whole=yes writes=no
 GET /api/checks/findings/fleet role=- local=no whole=yes writes=no
 GET /api/checks/fleet role=- local=no whole=yes writes=no
+GET /api/checks/frameworks role=- local=no whole=yes writes=no
 GET /api/checks/mutes role=- local=no whole=yes writes=no
+GET /api/checks/runs role=- local=no whole=yes writes=no
 GET /api/clusters role=- local=no whole=no writes=no
 GET /api/compare role=- local=no whole=yes writes=no
 GET /api/compare/kind role=- local=no whole=yes writes=no
@@ -39,6 +42,7 @@ GET /api/helm/release role=- local=no whole=no writes=no
 GET /api/helm/values role=- local=no whole=no writes=no
 GET /api/helm/versions role=- local=no whole=no writes=no
 GET /api/history role=- local=no whole=yes writes=no
+GET /api/history/export role=admin local=no whole=yes writes=no
 GET /api/images/fleet role=- local=no whole=yes writes=no
 GET /api/issues role=- local=no whole=yes writes=no
 GET /api/issues/fleet role=- local=no whole=yes writes=no
@@ -58,19 +62,28 @@ GET /api/rbac/who role=admin local=no whole=no writes=no
 GET /api/resources role=- local=no whole=no writes=no
 GET /api/resources/counts role=- local=no whole=yes writes=no
 GET /api/resources/fleet role=- local=no whole=yes writes=no
+GET /api/rollout role=- local=no whole=no writes=no
+GET /api/rollout/diff role=- local=no whole=no writes=no
 GET /api/schema role=- local=no whole=no writes=no
 GET /api/search role=- local=no whole=no writes=no
 GET /api/search/fleet role=- local=no whole=yes writes=no
 GET /api/settings role=- local=no whole=no writes=no
 GET /api/shell role=- local=yes whole=no writes=no
+GET /api/support role=admin local=no whole=no writes=no
 GET /api/topology role=- local=no whole=yes writes=no
 GET /api/traffic role=- local=no whole=yes writes=no
+GET /api/transcripts role=admin local=no whole=no writes=no
+GET /api/transcripts/text role=admin local=no whole=no writes=no
 GET /api/update role=- local=yes whole=no writes=no
 GET /api/version role=- local=no whole=no writes=no
 GET /api/view role=- local=no whole=no writes=no
+GET /api/views role=- local=no whole=no writes=no
+GET /api/waste role=- local=no whole=yes writes=no
 GET /auth/callback role=- local=no whole=no writes=no
 GET /auth/login role=- local=no whole=no writes=no
 GET /healthz role=- local=no whole=no writes=no
+GET /metrics role=admin local=no whole=no writes=no
+GET /readyz role=- local=no whole=no writes=no
 GET /ws role=- local=no whole=no writes=no
 POST /api/access role=- local=no whole=no writes=no
 POST /api/action role=editor local=no whole=no writes=yes
@@ -102,6 +115,7 @@ POST /auth/logout role=- local=no whole=no writes=no
 PUT /api/checks/baseline/file role=editor local=no whole=yes writes=no
 PUT /api/object role=editor local=no whole=no writes=yes
 PUT /api/settings role=- local=no whole=no writes=no
+PUT /api/views role=- local=no whole=no writes=no
 action cordon role=admin
 action drain role=admin
 action restart role=editor
@@ -110,3 +124,4 @@ action scale role=editor
 action suspend role=editor
 action trigger role=editor
 action uncordon role=admin
+action undo role=editor

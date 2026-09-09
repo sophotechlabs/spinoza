@@ -243,6 +243,7 @@ export interface LogRequest {
 
 export interface Failure {
   message: string;
+  request?: string;
 }
 
 export interface RowFilter {
@@ -324,6 +325,7 @@ export const VIEWS = [
   'argo-graph',
   'argo-list',
   'traffic',
+  'waste',
   'fleet',
   'rbac',
 ] as const;
@@ -1320,4 +1322,122 @@ export interface CheckReport {
   wasScanned?: number;
   scanned: number;
   error?: string;
+}
+
+export interface Revision {
+  number: number;
+  name: string;
+  current?: boolean;
+  createdAt?: string;
+  cause?: string;
+  images?: string[];
+  replicas?: number;
+  ready?: number;
+}
+
+export interface Revisions {
+  revisions: Revision[];
+  supported: boolean;
+  reason?: string;
+}
+
+export interface RevisionDiff {
+  from: number;
+  to: number;
+  lines: number;
+  same?: boolean;
+  left: string;
+  right: string;
+}
+
+export interface WasteRow {
+  kind?: string;
+  namespace: string;
+  name?: string;
+  pods?: number;
+  cpuRequested: number;
+  cpuUsed: number;
+  cpuReclaimable: number;
+  memRequested: number;
+  memUsed: number;
+  memReclaimable: number;
+  measured?: boolean;
+}
+
+export interface WasteReport {
+  namespaces: WasteRow[];
+  workloads: WasteRow[];
+  window?: string;
+  source?: string;
+  measured?: boolean;
+  partialOn?: string[];
+  reason?: string;
+}
+
+export interface SavedView {
+  id: string;
+  name: string;
+  view: string;
+  resource?: string;
+  namespace?: string;
+  filter?: string;
+  columns?: string[];
+  sort?: string;
+  descending?: boolean;
+  shared?: boolean;
+  at?: string;
+}
+
+export interface SavedViews {
+  views: SavedView[];
+  mayShare?: boolean;
+}
+
+export interface FrameworkControl {
+  framework: string;
+  control: string;
+  title: string;
+  scope: string;
+  reason?: string;
+  checks?: string[];
+  failing: number;
+  muted?: number;
+  objects?: number;
+  covered?: boolean;
+}
+
+export interface FrameworkPosture {
+  frameworks: string[];
+  controls: FrameworkControl[];
+  reason?: string;
+}
+
+export interface AuditRun {
+  id: string;
+  at: string;
+  findings: number;
+  new?: number;
+  cleared?: number;
+  scanned: number;
+}
+
+export interface AuditRuns {
+  runs: AuditRun[];
+  interval?: number;
+  reason?: string;
+}
+
+export interface Transcript {
+  id: string;
+  at: string;
+  actor: string;
+  target: string;
+  kind: string;
+  bytes: number;
+}
+
+export interface Transcripts {
+  sessions: Transcript[];
+  recording: boolean;
+  reason?: string;
 }

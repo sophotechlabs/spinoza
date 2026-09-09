@@ -148,7 +148,7 @@ func publicWhenServing(r *http.Request) bool {
 		return false
 	}
 	switch r.URL.Path {
-	case "/", pathIndex, "/healthz", pathSession, pathLogin, pathCallback, pathLogout:
+	case "/", pathIndex, "/healthz", "/readyz", pathSession, pathLogin, pathCallback, pathLogout:
 		return true
 	default:
 		return false

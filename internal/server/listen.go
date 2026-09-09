@@ -45,5 +45,9 @@ func IsBackendPath(path string) bool {
 	if path == "/ws" {
 		return true
 	}
-	return path == "/healthz"
+	switch path {
+	case "/healthz", "/readyz", "/metrics":
+		return true
+	}
+	return false
 }

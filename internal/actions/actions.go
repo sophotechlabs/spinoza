@@ -31,6 +31,7 @@ const (
 	Suspend  Action = "suspend"
 	Resume   Action = "resume"
 	Trigger  Action = "trigger"
+	Undo     Action = "undo"
 )
 
 var ErrUnsupported = errors.New("action is not supported for this resource")
@@ -53,12 +54,19 @@ var restartable = map[groupResource]bool{
 	{group: appsGroup, resource: "daemonsets"}:   true,
 }
 
+var revertible = map[groupResource]bool{
+	{group: appsGroup, resource: "deployments"}:  true,
+	{group: appsGroup, resource: "statefulsets"}: true,
+	{group: appsGroup, resource: "daemonsets"}:   true,
+}
+
 var cronJobs = groupResource{group: batchGroup, resource: "cronjobs"}
 
 type Request struct {
 	Ref      api.ObjectRef
 	Action   Action
 	Replicas int64
+	Revision int64
 	Force    bool
 	DryRun   bool
 }
@@ -90,13 +98,15 @@ func Supported(ref api.ObjectRef, action Action) bool {
 		return key == groupResource{group: "", resource: "nodes"}
 	case Suspend, Resume, Trigger:
 		return key == cronJobs
+	case Undo:
+		return revertible[key]
 	default:
 		return false
 	}
 }
 
 func Every() []Action {
-	return []Action{Scale, Restart, Cordon, Uncordon, Drain, Suspend, Resume, Trigger}
+	return []Action{Scale, Restart, Cordon, Uncordon, Drain, Suspend, Resume, Trigger, Undo}
 }
 
 func known(action Action) bool {
@@ -130,6 +140,8 @@ func (s *Service) Do(ctx context.Context, req Request, now time.Time) (api.Actio
 		return s.setSuspended(ctx, req.Ref, false)
 	case Trigger:
 		return s.trigger(ctx, req.Ref)
+	case Undo:
+		return s.undo(ctx, req)
 	default:
 		return api.ActionResult{}, fmt.Errorf("unknown action %q", req.Action)
 	}

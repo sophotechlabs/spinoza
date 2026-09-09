@@ -787,6 +787,7 @@ type Event struct {
 
 type Failure struct {
 	Message string `json:"message"`
+	Request string `json:"request,omitempty"`
 }
 
 type RowFilter struct {
@@ -1353,4 +1354,130 @@ type CheckReport struct {
 	WasScanned   int              `json:"wasScanned,omitempty"`
 	Scanned      int              `json:"scanned"`
 	Error        string           `json:"error,omitempty"`
+}
+
+type Revision struct {
+	Number    int64    `json:"number"`
+	Name      string   `json:"name"`
+	Current   bool     `json:"current,omitempty"`
+	CreatedAt string   `json:"createdAt,omitempty"`
+	Cause     string   `json:"cause,omitempty"`
+	Images    []string `json:"images,omitempty"`
+	Replicas  int      `json:"replicas,omitempty"`
+	Ready     int      `json:"ready,omitempty"`
+}
+
+type Revisions struct {
+	Revisions []Revision `json:"revisions"`
+	Supported bool       `json:"supported"`
+	Reason    string     `json:"reason,omitempty"`
+}
+
+type RevisionDiff struct {
+	From  int64  `json:"from"`
+	To    int64  `json:"to"`
+	Lines int    `json:"lines"`
+	Same  bool   `json:"same,omitempty"`
+	Left  string `json:"left"`
+	Right string `json:"right"`
+}
+
+type WasteRow struct {
+	Kind           string `json:"kind,omitempty"`
+	Namespace      string `json:"namespace"`
+	Name           string `json:"name,omitempty"`
+	Pods           int    `json:"pods,omitempty"`
+	CPURequested   int64  `json:"cpuRequested"`
+	CPUUsed        int64  `json:"cpuUsed"`
+	CPUReclaimable int64  `json:"cpuReclaimable"`
+	MemRequested   int64  `json:"memRequested"`
+	MemUsed        int64  `json:"memUsed"`
+	MemReclaimable int64  `json:"memReclaimable"`
+	Measured       bool   `json:"measured,omitempty"`
+}
+
+type WasteReport struct {
+	Namespaces []WasteRow `json:"namespaces"`
+	Workloads  []WasteRow `json:"workloads"`
+	Window     string     `json:"window,omitempty"`
+	Source     string     `json:"source,omitempty"`
+	Measured   bool       `json:"measured,omitempty"`
+	PartialOn  []string   `json:"partialOn,omitempty"`
+	Reason     string     `json:"reason,omitempty"`
+}
+
+type SavedView struct {
+	ID         string   `json:"id"`
+	Name       string   `json:"name"`
+	View       string   `json:"view"`
+	Resource   string   `json:"resource,omitempty"`
+	Namespace  string   `json:"namespace,omitempty"`
+	Filter     string   `json:"filter,omitempty"`
+	Columns    []string `json:"columns,omitempty"`
+	Sort       string   `json:"sort,omitempty"`
+	Descending bool     `json:"descending,omitempty"`
+	Shared     bool     `json:"shared,omitempty"`
+	At         string   `json:"at,omitempty"`
+}
+
+type SavedViews struct {
+	Views    []SavedView `json:"views"`
+	MayShare bool        `json:"mayShare,omitempty"`
+}
+
+type FrameworkControl struct {
+	Framework string   `json:"framework"`
+	Control   string   `json:"control"`
+	Title     string   `json:"title"`
+	Scope     string   `json:"scope"`
+	Reason    string   `json:"reason,omitempty"`
+	Checks    []string `json:"checks,omitempty"`
+	Failing   int      `json:"failing"`
+	Muted     int      `json:"muted,omitempty"`
+	Objects   int      `json:"objects,omitempty"`
+	Covered   bool     `json:"covered,omitempty"`
+}
+
+type FrameworkPosture struct {
+	Frameworks []string           `json:"frameworks"`
+	Controls   []FrameworkControl `json:"controls"`
+	Reason     string             `json:"reason,omitempty"`
+}
+
+type AuditRun struct {
+	ID       string `json:"id"`
+	At       string `json:"at"`
+	Findings int    `json:"findings"`
+	NewCount int    `json:"new,omitempty"`
+	Cleared  int    `json:"cleared,omitempty"`
+	Scanned  int    `json:"scanned"`
+}
+
+type AuditRuns struct {
+	Runs     []AuditRun `json:"runs"`
+	Interval int        `json:"interval,omitempty"`
+	Reason   string     `json:"reason,omitempty"`
+}
+
+type Transcript struct {
+	ID     string `json:"id"`
+	At     string `json:"at"`
+	Actor  string `json:"actor"`
+	Target string `json:"target"`
+	Kind   string `json:"kind"`
+	Bytes  int    `json:"bytes"`
+}
+
+type Transcripts struct {
+	Sessions  []Transcript `json:"sessions"`
+	Recording bool         `json:"recording"`
+	Reason    string       `json:"reason,omitempty"`
+}
+
+type Ready struct {
+	Ready     bool     `json:"ready"`
+	Discovery bool     `json:"discovery"`
+	Informers bool     `json:"informers"`
+	Store     bool     `json:"store"`
+	Waiting   []string `json:"waiting,omitempty"`
 }

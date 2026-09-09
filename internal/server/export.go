@@ -12,6 +12,18 @@ import (
 
 func (s *Server) exportChecks(w http.ResponseWriter, r *http.Request) {
 	report := s.managerFor(r).CheckExport(r.Context(), s.checkFilter(r))
+	switch r.URL.Query().Get("format") {
+	case "json":
+		writeCheckJSON(w, report)
+		return
+	case "sarif":
+		writeCheckSARIF(w, report)
+		return
+	}
+	writeCSV(w, report)
+}
+
+func writeCSV(w http.ResponseWriter, report api.CheckReport) {
 	w.Header().Set("Content-Type", "text/csv; charset=utf-8")
 	w.Header().Set("Content-Disposition", `attachment; filename="spinoza-checks.csv"`)
 	out := csv.NewWriter(w)

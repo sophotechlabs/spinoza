@@ -33,6 +33,7 @@ var sentAsADiscriminatedUnion = map[string]string{
 }
 
 var neverReachesTheBrowser = map[string]bool{
+	"Ready":            true,
 	"Build":            true,
 	"Health":           true,
 	"NodeShellSession": true,

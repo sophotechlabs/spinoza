@@ -44,6 +44,7 @@ var localOnly = map[string]string{
 	"/api/view/browser":         "moves the window",
 	"/api/view/desktop":         "moves the window",
 	"/api/settings":             "writes local settings",
+	"/api/views":                "saves a view for whoever is signed in",
 	"/api/checks/mutes":         "records what you have decided about, on this machine",
 	"/api/checks/rules/faults":  "reads a rule list back to the editor; changes nothing",
 	"/api/checks/baseline":      "keeps a past audit here to compare the next one against",

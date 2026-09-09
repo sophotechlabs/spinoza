@@ -19,6 +19,8 @@ type endpoint struct {
 func (s *Server) routes() []endpoint {
 	return []endpoint{
 		{http.MethodGet, "/healthz", s.handleHealth, true, false},
+		{http.MethodGet, "/readyz", s.handleReady, true, false},
+		{http.MethodGet, "/metrics", s.handleSelfMetrics, true, false},
 		{http.MethodGet, "/api/version", handleVersion, true, false},
 		{http.MethodGet, "/api/update", s.handleUpdate, true, false},
 		{http.MethodPost, "/api/update", s.handleInstallUpdate, true, false},
@@ -61,6 +63,8 @@ func (s *Server) routes() []endpoint {
 		{http.MethodPut, "/api/checks/baseline/file", s.loadBaselineFile, false, false},
 		{http.MethodPost, "/api/checks/rules/faults", s.checkRules, false, false},
 		{http.MethodGet, "/api/checks/export", s.exportChecks, false, false},
+		{http.MethodGet, "/api/checks/frameworks", s.handleFrameworks, false, false},
+		{http.MethodGet, "/api/checks/runs", s.handleAuditRuns, false, false},
 		{http.MethodGet, "/api/checks/mutes", s.readMutes, false, false},
 		{http.MethodPost, "/api/checks/mutes", s.muteFinding, false, false},
 		{http.MethodDelete, "/api/checks/mutes", s.unmuteFinding, false, false},
@@ -68,6 +72,9 @@ func (s *Server) routes() []endpoint {
 		{http.MethodGet, "/api/checks", s.handleChecks, false, false},
 		{http.MethodGet, "/api/gitops/graph", s.handleGraph, false, false},
 		{http.MethodGet, "/api/topology", s.handleTopology, false, false},
+		{http.MethodGet, "/api/waste", s.handleWaste, false, false},
+		{http.MethodGet, "/api/rollout/diff", withRef(s.rolloutDiff), false, false},
+		{http.MethodGet, "/api/rollout", withRef(s.rolloutRevisions), false, false},
 		{http.MethodGet, "/api/gitops/app", withRef(s.gitopsApp), false, false},
 		{http.MethodGet, "/api/gitops/app/graph", withRef(s.gitopsAppGraph), false, false},
 		{http.MethodGet, "/api/flux", s.handleFlux, false, false},
@@ -95,6 +102,7 @@ func (s *Server) routes() []endpoint {
 		{http.MethodDelete, "/api/portforward", s.stopForward, false, false},
 		{http.MethodGet, "/api/exec/support", s.handleExecSupport, false, false},
 		{http.MethodGet, "/api/debug/support", s.handleDebugSupport, false, false},
+		{http.MethodGet, "/api/support", s.handleSupport, true, false},
 		{http.MethodPost, "/api/debug", s.handleDebug, false, true},
 		{http.MethodGet, "/api/exec", s.handleExec, false, false},
 		{http.MethodGet, "/api/nodeshell/support", s.handleNodeShellSupport, false, false},
@@ -107,12 +115,18 @@ func (s *Server) routes() []endpoint {
 		{http.MethodPost, "/api/clusters/name", s.renameCluster, true, false},
 		{http.MethodPost, "/api/clusters/reopen", s.reopenCluster, true, false},
 		{http.MethodPost, "/api/clusters/timeline", s.recordCluster, true, false},
+		{http.MethodGet, "/api/history/export", s.exportHistory, true, false},
 		{http.MethodGet, "/api/history", s.readHistory, true, false},
 		{http.MethodDelete, "/api/history", s.clearHistory, true, false},
 		{http.MethodGet, "/api/view", s.readView, true, false},
 		{http.MethodPost, "/api/view/browser", s.toBrowser, true, false},
 		{http.MethodPost, "/api/view/desktop", s.toDesktop, true, false},
 		{http.MethodGet, "/api/memory", handleMemory, true, false},
+		{http.MethodGet, "/api/views", s.listSavedViews, true, false},
+		{http.MethodPut, "/api/views", s.saveView, true, false},
+		{http.MethodDelete, "/api/views", s.forgetView, true, false},
+		{http.MethodGet, "/api/transcripts/text", s.readTranscript, true, false},
+		{http.MethodGet, "/api/transcripts", s.listTranscripts, true, false},
 		{http.MethodGet, "/api/settings", s.readSettings, true, false},
 		{http.MethodPut, "/api/settings", s.writeSettings, true, false},
 		{http.MethodGet, "/api/shell", s.handleLocalShell, true, false},
@@ -134,6 +148,7 @@ func (s *Server) Handler() http.Handler {
 	for _, entry := range s.allRoutes() {
 		mux.HandleFunc(entry.method+" "+entry.path, s.permitted(entry))
 		known[entry.path] = true
+		rememberRoute(entry.path)
 	}
 	for path := range known {
 		mux.HandleFunc(path, methodNotAllowed)
