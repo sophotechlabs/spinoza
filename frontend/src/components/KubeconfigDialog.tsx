@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import type { ContextList, Kubeconfig } from '../lib/types';
 import {
   addKubeconfig,
@@ -36,6 +36,7 @@ export default function KubeconfigDialog({
   onChanged,
 }: KubeconfigDialogProps) {
   const ref = useRef<HTMLDialogElement | null>(null);
+  const field = useId();
   const [path, setPath] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -165,12 +166,12 @@ export default function KubeconfigDialog({
           ))}
         </ul>
         <div className="mt-3">
-          <label htmlFor="kubeconfig-path" className="text-fg">
+          <label htmlFor={field} className="text-fg">
             Add a kubeconfig
           </label>
           <div className="mt-1 flex items-center gap-2">
             <input
-              id="kubeconfig-path"
+              id={field}
               type="text"
               value={path}
               spellCheck={false}

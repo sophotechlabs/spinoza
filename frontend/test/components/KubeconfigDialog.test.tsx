@@ -84,6 +84,22 @@ afterEach(() => {
 });
 
 describe('KubeconfigDialog', () => {
+  it('gives each dialog on the page its own path field', () => {
+    stubFetch({});
+
+    render(
+      <>
+        <KubeconfigDialog open kubeconfigs={[fallback]} onChanged={vi.fn()} onClose={vi.fn()} />
+        <KubeconfigDialog open kubeconfigs={[fallback]} onChanged={vi.fn()} onClose={vi.fn()} />
+      </>,
+    );
+
+    const fields = screen.getAllByLabelText('Add a kubeconfig');
+    expect(fields).toHaveLength(2);
+    expect(fields[0]).not.toBe(fields[1]);
+    expect(fields[0].id).not.toBe(fields[1].id);
+  });
+
   it('lists every kubeconfig spinoza reads', () => {
     stubFetch({});
 
