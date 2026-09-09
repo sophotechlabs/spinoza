@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ContextList } from '../lib/types';
 import { contextGroups, fetchContexts, sameContext } from '../lib/contexts';
-import { openCluster } from '../lib/clusters';
+import { openCluster, wasCancelled } from '../lib/clusters';
 import type { ContextEntry } from '../lib/contexts';
-import { notifyError, notifyOk } from '../store/toasts';
+import { askToast, dismissToast, notifyError, notifyOk } from '../store/toasts';
 import { useContextList, useContextsStore } from '../store/contexts';
 import { sessionExpired } from '../store/session';
 import { CONTROL } from '../lib/controls';
@@ -19,6 +19,8 @@ interface ContextPickerProps {
 const MENU_ROW = 'px-3 py-1.5 text-left whitespace-nowrap hover:bg-surface-active';
 
 const REFRESH_MS = 30000;
+
+const OPEN_BUDGET = '30s';
 
 const RETRY_BASE_MS = 1000;
 const RETRY_MAX_MS = 15000;
@@ -63,7 +65,6 @@ export default function ContextPicker({ onSwitched }: ContextPickerProps) {
   const named = useActiveTab()?.label ?? '';
   const setList = useContextsStore((state) => state.setList);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [attempt, setAttempt] = useState(0);
   const [managing, setManaging] = useState(false);
@@ -151,11 +152,17 @@ export default function ContextPicker({ onSwitched }: ContextPickerProps) {
     }
     busyRef.current = true;
     setBusy(true);
-    setError(null);
     const generation = listRequest.current + 1;
     listRequest.current = generation;
+    const giveUp = new AbortController();
+    const waiting = askToast(`Opening ${entry.name}, up to ${OPEN_BUDGET}`, {
+      label: 'Cancel',
+      run: () => {
+        giveUp.abort();
+      },
+    });
     try {
-      await openCluster(entry.kubeconfig, entry.name);
+      await openCluster(entry.kubeconfig, entry.name, giveUp.signal);
       const found = await fetchContexts();
       if (listRequest.current !== generation) {
         return;
@@ -167,10 +174,13 @@ export default function ContextPicker({ onSwitched }: ContextPickerProps) {
       if (listRequest.current !== generation) {
         return;
       }
-      const message = errorMessage(err, 'opening the cluster failed');
-      setError(message);
-      notifyError(`Opening ${entry.name}: ${message}`);
+      if (wasCancelled(err)) {
+        notifyOk(`Stopped opening ${entry.name}`);
+        return;
+      }
+      notifyError(`Opening ${entry.name}: ${errorMessage(err, 'opening the cluster failed')}`);
     } finally {
+      dismissToast(waiting);
       if (listRequest.current === generation) {
         busyRef.current = false;
         setBusy(false);
@@ -297,11 +307,6 @@ export default function ContextPicker({ onSwitched }: ContextPickerProps) {
         </div>
       </details>
       {busy && <span className="text-fg-muted">opening</span>}
-      {error !== null && (
-        <span role="status" className="max-w-md truncate text-error">
-          {error}
-        </span>
-      )}
       {dialog()}
     </span>
   );

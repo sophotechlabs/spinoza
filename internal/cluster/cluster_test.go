@@ -176,7 +176,7 @@ func TestCancelingTheRootStopsWaitingForAStalledOpen(t *testing.T) {
 	}
 	done := make(chan error, 1)
 	go func() {
-		_, err := held.dial(root, api.ContextRef{Name: "p-mk2"})
+		_, err := held.dial(root, root, api.ContextRef{Name: "p-mk2"})
 		done <- err
 	}()
 	<-entered
@@ -648,7 +648,7 @@ func TestContextsKeepsTheCurrentContextAndProtectionTogether(t *testing.T) {
 	t.Cleanup(cancel)
 	cluster := newCluster(ctx, (&recorder{}).build, sources, protection, testOpenTimeout, api.ContextRef{})
 	first := cluster.ID()
-	second, err := cluster.Open(api.ContextRef{Name: "p-mk2"})
+	second, err := cluster.Open(t.Context(), api.ContextRef{Name: "p-mk2"})
 	if err != nil {
 		t.Fatalf("open: %v", err)
 	}
@@ -827,7 +827,7 @@ func TestOpeningASecondClusterLeavesTheFirstOpen(t *testing.T) {
 	cluster := newTestCluster(t, &recorder{})
 	first := cluster.ID()
 
-	second, err := cluster.Open(api.ContextRef{Name: "beta"})
+	second, err := cluster.Open(t.Context(), api.ContextRef{Name: "beta"})
 	if err != nil {
 		t.Fatalf("open: %v", err)
 	}
@@ -846,13 +846,13 @@ func TestOpeningASecondClusterLeavesTheFirstOpen(t *testing.T) {
 func TestOpeningAClusterThatIsAlreadyOpenFocusesIt(t *testing.T) {
 	rec := &recorder{}
 	cluster := newTestCluster(t, rec)
-	first, err := cluster.Open(api.ContextRef{Name: "beta"})
+	first, err := cluster.Open(t.Context(), api.ContextRef{Name: "beta"})
 	if err != nil {
 		t.Fatalf("open: %v", err)
 	}
 	held := cluster.Manager(first)
 
-	again, againErr := cluster.Open(api.ContextRef{Name: "beta"})
+	again, againErr := cluster.Open(t.Context(), api.ContextRef{Name: "beta"})
 
 	if againErr != nil {
 		t.Fatalf("open: %v", againErr)
@@ -873,7 +873,7 @@ func TestOpeningAClusterThatRefusesLeavesNothingBehind(t *testing.T) {
 	cluster := newTestCluster(t, rec)
 	before := len(cluster.Opened())
 
-	_, err := cluster.Open(api.ContextRef{Name: "beta"})
+	_, err := cluster.Open(t.Context(), api.ContextRef{Name: "beta"})
 
 	if err == nil {
 		t.Fatal("opening a cluster that refused reported success")
@@ -898,7 +898,7 @@ func TestAnApiserverThatNeverAnswersIsAnErrorNotAHang(t *testing.T) {
 	}
 	cluster := newCluster(ctx, build, newStubSources(), newStubProtection(), 20*time.Millisecond, api.ContextRef{})
 
-	_, err := cluster.Open(api.ContextRef{Name: "wedged"})
+	_, err := cluster.Open(t.Context(), api.ContextRef{Name: "wedged"})
 
 	if err == nil {
 		t.Fatal("an apiserver that never answered opened successfully")
@@ -911,7 +911,7 @@ func TestAnApiserverThatNeverAnswersIsAnErrorNotAHang(t *testing.T) {
 func TestActivatingSwitchesWhichClusterIsCurrent(t *testing.T) {
 	cluster := newTestCluster(t, &recorder{})
 	first := cluster.ID()
-	if _, err := cluster.Open(api.ContextRef{Name: "beta"}); err != nil {
+	if _, err := cluster.Open(t.Context(), api.ContextRef{Name: "beta"}); err != nil {
 		t.Fatalf("open: %v", err)
 	}
 
@@ -950,7 +950,7 @@ func TestWhatIsOpenComesBackSortedAndFlagged(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
 	cluster := newCluster(ctx, (&recorder{}).build, newStubSources(), protection, testOpenTimeout, api.ContextRef{})
-	if _, err := cluster.Open(api.ContextRef{Name: "alpha"}); err != nil {
+	if _, err := cluster.Open(t.Context(), api.ContextRef{Name: "alpha"}); err != nil {
 		t.Fatalf("open: %v", err)
 	}
 	protection.verdicts["https://alpha:6443"] = api.ProtectionProtected
@@ -982,7 +982,7 @@ func TestWhatIsOpenComesBackSortedAndFlagged(t *testing.T) {
 
 func TestClosingAClusterDropsItsConnection(t *testing.T) {
 	cluster := newTestCluster(t, &recorder{})
-	beta, err := cluster.Open(api.ContextRef{Name: "beta"})
+	beta, err := cluster.Open(t.Context(), api.ContextRef{Name: "beta"})
 	if err != nil {
 		t.Fatalf("open: %v", err)
 	}
@@ -1002,7 +1002,7 @@ func TestClosingAClusterDropsItsConnection(t *testing.T) {
 func TestClosingTheActiveClusterPromotesAnother(t *testing.T) {
 	cluster := newTestCluster(t, &recorder{})
 	first := cluster.ID()
-	beta, err := cluster.Open(api.ContextRef{Name: "beta"})
+	beta, err := cluster.Open(t.Context(), api.ContextRef{Name: "beta"})
 	if err != nil {
 		t.Fatalf("open: %v", err)
 	}
@@ -1022,7 +1022,7 @@ func TestClosingTheActiveClusterPromotesAnother(t *testing.T) {
 func TestClosingAClusterThatIsNotActiveLeavesTheActiveAlone(t *testing.T) {
 	cluster := newTestCluster(t, &recorder{})
 	first := cluster.ID()
-	beta, err := cluster.Open(api.ContextRef{Name: "beta"})
+	beta, err := cluster.Open(t.Context(), api.ContextRef{Name: "beta"})
 	if err != nil {
 		t.Fatalf("open: %v", err)
 	}
@@ -1096,5 +1096,44 @@ func TestSwitchingToTheSameClusterCancelsTheConnectionItReplaced(t *testing.T) {
 	case <-rec.live[0].Done():
 	case <-time.After(2 * time.Second):
 		t.Fatal("the connection that was replaced was left running")
+	}
+}
+
+func TestAnAbandonedOpenStopsRatherThanFinishingInTheBackground(t *testing.T) {
+	entered := make(chan struct{})
+	release := make(chan struct{})
+	held := newCluster(t.Context(), func(ctx context.Context, ref api.ContextRef) (*connection, error) {
+		if ref.Name != "slow" {
+			return nil, errors.New("no context was asked for")
+		}
+		close(entered)
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-release:
+			return nil, errors.New("the build should have been abandoned")
+		}
+	}, newStubSources(), newStubProtection(), time.Minute, api.ContextRef{})
+
+	asked, giveUp := context.WithCancel(t.Context())
+	done := make(chan error, 1)
+	go func() {
+		_, err := held.Open(asked, api.ContextRef{Name: "slow"})
+		done <- err
+	}()
+	<-entered
+	giveUp()
+
+	select {
+	case err := <-done:
+		if !errors.Is(err, context.Canceled) {
+			t.Fatalf("err = %v, want the open abandoned with the request", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("the open outlived the request that asked for it")
+	}
+	close(release)
+	if len(held.Opened()) != 0 {
+		t.Fatal("an abandoned open left a cluster behind")
 	}
 }

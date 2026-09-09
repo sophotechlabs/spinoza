@@ -58,7 +58,7 @@ func TestNewStartsWithoutAClusterWhenNothingAnswers(t *testing.T) {
 		t.Fatalf("current = %q, want no context installed", built.Current().Name)
 	}
 	contexts := built.Contexts()
-	if !strings.Contains(contexts.Error, "lists no resource types") {
+	if !strings.Contains(contexts.Error, "nothing is listening at") {
 		t.Fatalf("error = %q, want the unreachable context named", contexts.Error)
 	}
 	if !strings.Contains(contexts.Error, "dead") {

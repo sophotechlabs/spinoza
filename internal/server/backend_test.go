@@ -206,7 +206,7 @@ func (s *stubBackendCluster) ID() string {
 	return "https://p-mk1:6443"
 }
 
-func (s *stubBackendCluster) Open(api.ContextRef) (string, error) {
+func (s *stubBackendCluster) Open(context.Context, api.ContextRef) (string, error) {
 	return s.ID(), nil
 }
 

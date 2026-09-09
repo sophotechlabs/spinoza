@@ -240,7 +240,7 @@ func (c *Cluster) Use(ref api.ContextRef) error {
 
 func (c *Cluster) use(root context.Context, ref api.ContextRef) error {
 	seq := c.claim()
-	opened, err := c.dial(root, ref)
+	opened, err := c.dial(root, root, ref)
 	if err != nil {
 		return err
 	}
@@ -280,8 +280,8 @@ func (c *Cluster) retire(keep string) []*connection {
 	return gone
 }
 
-func (c *Cluster) Open(ref api.ContextRef) (string, error) {
-	opened, err := c.dial(c.root, ref)
+func (c *Cluster) Open(ctx context.Context, ref api.ContextRef) (string, error) {
+	opened, err := c.dial(c.root, ctx, ref)
 	if err != nil {
 		return "", err
 	}
@@ -358,7 +358,7 @@ func (c *Cluster) Opened() []api.OpenCluster {
 	return out
 }
 
-func (c *Cluster) dial(root context.Context, ref api.ContextRef) (*connection, error) {
+func (c *Cluster) dial(root, until context.Context, ref api.ContextRef) (*connection, error) {
 	ctx, cancel := context.WithCancel(root)
 	type built struct {
 		conn *connection
@@ -383,9 +383,16 @@ func (c *Cluster) dial(root context.Context, ref api.ContextRef) (*connection, e
 	case <-root.Done():
 		cancel()
 		return nil, root.Err()
+	case <-until.Done():
+		cancel()
+		return nil, until.Err()
 	case <-timer.C:
 		cancel()
-		return nil, fmt.Errorf("context %q did not answer within %s", ref.Name, c.openWithin)
+		return nil, fmt.Errorf(
+			"context %q did not answer within %s. Check that its apiserver is reachable from here; a VPN that is down looks exactly like this",
+			ref.Name,
+			c.openWithin,
+		)
 	}
 }
 

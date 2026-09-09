@@ -770,7 +770,7 @@ func (c *swappableCluster) ID() string {
 	return "https://swappable:6443"
 }
 
-func (c *swappableCluster) Open(api.ContextRef) (string, error) {
+func (c *swappableCluster) Open(context.Context, api.ContextRef) (string, error) {
 	return c.ID(), nil
 }
 

@@ -29,6 +29,7 @@ import (
 	"github.com/sophotechlabs/spinoza/internal/portforward"
 	"github.com/sophotechlabs/spinoza/internal/prom"
 	"github.com/sophotechlabs/spinoza/internal/protect"
+	"github.com/sophotechlabs/spinoza/internal/reach"
 	"github.com/sophotechlabs/spinoza/internal/resources"
 )
 
@@ -156,6 +157,9 @@ func unreachable(name, source, host string, discErr error) error {
 	if reason != "" {
 		slog.Warn("the cluster's certificate was not trusted", "context", name, "kubeconfig", source, "error", discErr)
 		return fmt.Errorf("context %q in %s does not trust the certificate %s presented (%s). Either this is not the kubeconfig kubectl reads, or a TLS-inspecting proxy on this machine re-signs the connection and spinoza needs the exemption kubectl has", name, source, host, reason)
+	}
+	if reach.CauseOf(discErr.Error()) == reach.Refused {
+		return fmt.Errorf("context %q: nothing is listening at %s. Check the address in %s", name, host, source)
 	}
 	return fmt.Errorf("context %q lists no resource types: %w", name, discErr)
 }

@@ -458,7 +458,7 @@ func (s *stubCluster) ID() string {
 	return "https://" + s.current.Name + ":6443"
 }
 
-func (s *stubCluster) Open(api.ContextRef) (string, error) {
+func (s *stubCluster) Open(context.Context, api.ContextRef) (string, error) {
 	return s.ID(), nil
 }
 

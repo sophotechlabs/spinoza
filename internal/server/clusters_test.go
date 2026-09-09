@@ -73,7 +73,7 @@ func (f *fleet) Opened() []api.OpenCluster {
 	return append([]api.OpenCluster{}, f.held...)
 }
 
-func (f *fleet) Open(ref api.ContextRef) (string, error) {
+func (f *fleet) Open(_ context.Context, ref api.ContextRef) (string, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.askedToOpen = append(f.askedToOpen, ref)

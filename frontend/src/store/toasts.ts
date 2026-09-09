@@ -28,7 +28,7 @@ interface ToastsState {
   toasts: Toast[];
   history: Notification[];
   push: (tone: ToastTone, message: string, ref?: ObjectRef) => void;
-  ask: (message: string, action: ToastAction) => void;
+  ask: (message: string, action: ToastAction) => number;
   dismiss: (id: number) => void;
   clear: () => void;
   clearHistory: () => void;
@@ -73,6 +73,7 @@ export const useToastsStore = create<ToastsState>((set) => ({
       toasts: trim([...state.toasts, toast]),
       history: cap([...state.history, note]),
     }));
+    return toast.id;
   },
   dismiss: (id) => {
     set((state) => ({ toasts: state.toasts.filter((toast) => toast.id !== id) }));
@@ -97,8 +98,12 @@ export function notifyError(message: string, ref?: ObjectRef): void {
   useToastsStore.getState().push('error', message, ref);
 }
 
-export function askToast(message: string, action: ToastAction): void {
-  useToastsStore.getState().ask(message, action);
+export function askToast(message: string, action: ToastAction): number {
+  return useToastsStore.getState().ask(message, action);
+}
+
+export function dismissToast(id: number): void {
+  useToastsStore.getState().dismiss(id);
 }
 
 export function clearHistory(): void {

@@ -56,9 +56,20 @@ func TestACredentialFailureIsSaidInOneLine(t *testing.T) {
 }
 
 func TestAnyOtherFailureKeepsTheWholeReason(t *testing.T) {
-	err := unreachable("p-mk1", "/home/me/.kube/config", "https://10.0.0.1:6443", errors.New("connection refused"))
+	err := unreachable("p-mk1", "/home/me/.kube/config", "https://10.0.0.1:6443", errors.New("the apiserver returned something nobody has classified"))
 
-	want := `context "p-mk1" lists no resource types: connection refused`
+	want := `context "p-mk1" lists no resource types: the apiserver returned something nobody has classified`
+	if err.Error() != want {
+		t.Fatalf("error = %q, want %q", err.Error(), want)
+	}
+}
+
+func TestNothingListeningIsSaidPlainlyWithTheAddress(t *testing.T) {
+	err := unreachable("p-mk1", "/home/me/.kube/config", "https://10.0.0.1:6443", errors.New(
+		`Get "https://10.0.0.1:6443/api?timeout=30s": dial tcp 10.0.0.1:6443: connect: connection refused`,
+	))
+
+	want := `context "p-mk1": nothing is listening at https://10.0.0.1:6443. Check the address in /home/me/.kube/config`
 	if err.Error() != want {
 		t.Fatalf("error = %q, want %q", err.Error(), want)
 	}

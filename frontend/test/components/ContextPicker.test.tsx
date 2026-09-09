@@ -223,14 +223,15 @@ describe('ContextPicker', () => {
 
     await pick(user, 'p-mk1');
 
-    expect(await screen.findByText('context "gone" does not exist')).toBeInTheDocument();
+    await waitFor(() => {
+      expect(useToastsStore.getState().toasts).toEqual([
+        expect.objectContaining({
+          tone: 'error',
+          message: 'Opening p-mk1: context "gone" does not exist',
+        }),
+      ]);
+    });
     expect(onSwitched).not.toHaveBeenCalled();
-    expect(useToastsStore.getState().toasts).toEqual([
-      expect.objectContaining({
-        tone: 'error',
-        message: 'Opening p-mk1: context "gone" does not exist',
-      }),
-    ]);
   });
 
   it('shows a plain label when the kubeconfig has no contexts', async () => {
@@ -364,7 +365,14 @@ describe('ContextPicker', () => {
 
     await pick(user, 'p-mk1');
 
-    expect(await screen.findByText('opening the cluster failed')).toBeInTheDocument();
+    await waitFor(() => {
+      expect(useToastsStore.getState().toasts).toEqual([
+        expect.objectContaining({
+          tone: 'error',
+          message: 'Opening p-mk1: opening the cluster failed',
+        }),
+      ]);
+    });
   });
 
   it('drops a listing that lands after unmount', () => {
@@ -812,5 +820,64 @@ describe('the context menu going away on its own', () => {
     await user.pointer({ target: screen.getByText('p-mk1'), keys: '[MouseLeft>]' });
 
     expect(menu).toHaveAttribute('open');
+  });
+});
+
+describe('opening a context that takes its time', () => {
+  it('says it is opening, with the budget and a way out', async () => {
+    const user = userEvent.setup();
+    const fetchMock = vi.fn((_url: string, init?: { method?: string }) => {
+      if (init?.method === 'POST') {
+        return new Promise<never>(() => undefined);
+      }
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve(listOf(['p-mk1', 'p-mk2'], 'p-mk2')),
+      });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    render(<ContextPicker onSwitched={vi.fn()} />);
+
+    await pick(user, 'p-mk1');
+
+    await waitFor(() => {
+      expect(useToastsStore.getState().toasts).toEqual([
+        expect.objectContaining({ message: 'Opening p-mk1, up to 30s' }),
+      ]);
+    });
+    expect(useToastsStore.getState().toasts[0].action?.label).toBe('Cancel');
+  });
+
+  it('stops the request when the wait is cancelled, and says so once', async () => {
+    const user = userEvent.setup();
+    const fetchMock = vi.fn((_url: string, init?: { method?: string; signal?: AbortSignal }) => {
+      if (init?.method === 'POST') {
+        return new Promise<never>((_resolve, reject) => {
+          init.signal?.addEventListener('abort', () => {
+            reject(new DOMException('aborted', 'AbortError'));
+          });
+        });
+      }
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve(listOf(['p-mk1', 'p-mk2'], 'p-mk2')),
+      });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    render(<ContextPicker onSwitched={vi.fn()} />);
+    await pick(user, 'p-mk1');
+    await waitFor(() => {
+      expect(useToastsStore.getState().toasts).toHaveLength(1);
+    });
+
+    act(() => {
+      useToastsStore.getState().toasts[0].action?.run();
+    });
+
+    await waitFor(() => {
+      expect(useToastsStore.getState().toasts).toEqual([
+        expect.objectContaining({ tone: 'ok', message: 'Stopped opening p-mk1' }),
+      ]);
+    });
   });
 });

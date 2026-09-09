@@ -69,10 +69,21 @@ func flakyServerEvery(t *testing.T, backend *flaky, every time.Duration) *httpte
 
 func flakyServerAndInstance(t *testing.T, backend *flaky, every time.Duration) (*httptest.Server, *Server) {
 	t.Helper()
+	return flakyServerPinging(t, backend, every, defaultFeedPingInterval)
+}
+
+func flakyServerPinging(
+	t *testing.T,
+	backend *flaky,
+	every time.Duration,
+	feedEvery time.Duration,
+) (*httptest.Server, *Server) {
+	t.Helper()
 	mgr, _ := testManager(t)
 	backend.Backend = mgr
 	srv := New(&brokenCluster{stubCluster: fixed(mgr), backend: backend}, testAssets(), testToken)
 	srv.pingEvery = every
+	srv.feedPingEvery = feedEvery
 	ts := httptest.NewServer(authed(srv.Handler()))
 	t.Cleanup(ts.Close)
 	return ts, srv
@@ -323,7 +334,7 @@ func (noCluster) ID() string {
 	return ""
 }
 
-func (noCluster) Open(api.ContextRef) (string, error) {
+func (noCluster) Open(context.Context, api.ContextRef) (string, error) {
 	return "", errors.New("this stub connects to nothing")
 }
 

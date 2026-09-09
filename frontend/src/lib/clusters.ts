@@ -92,13 +92,25 @@ export async function fetchClusters(): Promise<ClusterList> {
   return clustersFrom(await request('/api/clusters'), 'the cluster list');
 }
 
-export async function openCluster(kubeconfig: string, name: string): Promise<ClusterList> {
+export async function openCluster(
+  kubeconfig: string,
+  name: string,
+  signal?: AbortSignal,
+): Promise<ClusterList> {
   const params = new URLSearchParams({ kubeconfig, name });
   const response = await request(`/api/clusters?${params.toString()}`, {
     method: 'POST',
     timeoutMs: SLOW_REQUEST_TIMEOUT_MS,
+    signal,
   });
   return clustersFrom(response, `opening ${name}`);
+}
+
+export function wasCancelled(err: unknown): boolean {
+  if (err instanceof DOMException) {
+    return err.name === 'AbortError';
+  }
+  return false;
 }
 
 export async function activateCluster(id: string): Promise<ClusterList> {

@@ -412,7 +412,7 @@ func (b *brokenCluster) ID() string {
 	return "https://broken:6443"
 }
 
-func (b *brokenCluster) Open(api.ContextRef) (string, error) {
+func (b *brokenCluster) Open(context.Context, api.ContextRef) (string, error) {
 	return b.ID(), nil
 }
 

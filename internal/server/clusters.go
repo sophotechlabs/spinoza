@@ -276,7 +276,7 @@ func (s *Server) openCluster(w http.ResponseWriter, r *http.Request) {
 	defer cancel()
 	restoring := s.restoringTab(kept, ref)
 	was := s.cluster.ID()
-	id, err := s.cluster.Open(ref)
+	id, err := s.cluster.Open(r.Context(), ref)
 	if err != nil {
 		writeAPIError(w, err)
 		return

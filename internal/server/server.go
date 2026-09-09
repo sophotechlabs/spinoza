@@ -40,7 +40,7 @@ type Guarded interface {
 
 type Connections interface {
 	Manager(id string) Backend
-	Open(ref api.ContextRef) (string, error)
+	Open(ctx context.Context, ref api.ContextRef) (string, error)
 	Close(id string) error
 	Activate(id string) error
 	Opened() []api.OpenCluster
