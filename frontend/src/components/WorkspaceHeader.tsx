@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { ROW } from '../lib/rows';
 
 interface WorkspaceHeaderProps {
   title: string;
@@ -54,7 +55,7 @@ export default function WorkspaceHeader({
   }
 
   return (
-    <div className="flex shrink-0 items-center gap-1.5 border-b border-edge bg-surface px-2 py-1.5 text-xs">
+    <div className={ROW}>
       <h2 className="shrink-0 font-semibold whitespace-nowrap text-fg-strong">{title}</h2>
       {said}
       {counted}

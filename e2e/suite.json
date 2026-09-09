@@ -41,6 +41,7 @@
     "frontend/src/components/ActionGroup.tsx",
     "frontend/src/components/Announce.tsx",
     "frontend/src/components/CapabilityState.tsx",
+    "frontend/src/components/DenseToolbar.tsx",
     "frontend/src/components/ErrorBoundary.tsx",
     "frontend/src/components/MovedToDesktop.tsx",
     "frontend/src/components/Toasts.tsx",
@@ -58,6 +59,7 @@
     "frontend/src/lib/parse.ts",
     "frontend/src/lib/persist.ts",
     "frontend/src/lib/refs.ts",
+    "frontend/src/lib/rows.ts",
     "frontend/src/lib/settings.ts",
     "frontend/src/lib/settingsSync.ts",
     "frontend/src/lib/tabs.ts",
@@ -129,7 +131,7 @@
     "update.go",
     "wails.json"
   ],
-  "fullRunBudget": 94,
+  "fullRunBudget": 96,
   "groups": [
     {
       "id": "foundation-security",

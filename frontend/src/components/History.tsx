@@ -37,6 +37,8 @@ import { useClusterEpoch } from '../store/cluster';
 import WorkspaceHeader from './WorkspaceHeader';
 import { useShownCluster } from '../lib/tabs';
 import CapabilityState from './CapabilityState';
+import DenseToolbar, { ToolbarCount, ToolbarEnd } from './DenseToolbar';
+import { Action } from './ActionGroup';
 
 interface HistoryProps {
   onOpen: (ref: ObjectRef) => void;
@@ -346,7 +348,7 @@ export default function History({ onOpen }: HistoryProps) {
       )}
       {notRecording !== '' && <CapabilityState state="partial" why={notRecording} />}
       <WorkspaceHeader title="History" scope={shownCluster} />
-      <div className="flex shrink-0 items-center gap-2 border-b border-edge px-2 py-1.5">
+      <DenseToolbar label="History filters">
         <label className="flex items-center gap-1.5 text-fg-soft">
           Showing
           <select
@@ -380,7 +382,7 @@ export default function History({ onOpen }: HistoryProps) {
         )}
         <Recording />
         {data.more && older.length === 0 && (
-          <span className="text-fg-muted">showing the newest {HISTORY_LIMIT}</span>
+          <ToolbarCount>showing the newest {HISTORY_LIMIT}</ToolbarCount>
         )}
         {held.data !== null && (
           <span className="text-fg-muted" title="what spinoza is holding while it watches">
@@ -392,17 +394,17 @@ export default function History({ onOpen }: HistoryProps) {
             {data.dropped} changes came in faster than they could be written and were not kept
           </span>
         )}
-        <button
-          type="button"
-          disabled={clearing || data.entries.length === 0}
-          onClick={() => {
-            void handleClear();
-          }}
-          className={`${CONTROL} ml-auto border-edge-strong text-fg-soft hover:bg-surface-active disabled:opacity-50`}
-        >
-          Clear
-        </button>
-      </div>
+        <ToolbarEnd>
+          <Action
+            label="Clear"
+            size="dense"
+            disabled={clearing || data.entries.length === 0}
+            onClick={() => {
+              void handleClear();
+            }}
+          />
+        </ToolbarEnd>
+      </DenseToolbar>
       {rows.length === 0 && (
         <div className="flex flex-1 items-center justify-center text-fg-muted">
           {nothingYet(source)}

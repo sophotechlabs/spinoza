@@ -21,6 +21,7 @@ import { useClusterEpoch } from '../store/cluster';
 import WorkspaceHeader from './WorkspaceHeader';
 import { useShownCluster } from '../lib/tabs';
 import CapabilityState from './CapabilityState';
+import DenseToolbar, { FilterInput, ToolbarCount } from './DenseToolbar';
 
 function Powers({ powers }: { powers: string[] }) {
   if (powers.length === 0) {
@@ -211,28 +212,20 @@ export default function Rbac() {
           setAnsweredOn(epoch);
         }}
       />
-      <div className="flex shrink-0 items-center gap-3 border-b border-edge px-2 py-1.5 text-fg-muted">
-        <input
-          aria-label="Filter subjects"
-          placeholder="filter"
-          value={query}
-          onChange={(event) => {
-            setQuery(event.target.value);
-          }}
-          className={`${FIELD} w-56`}
-        />
-        <span>
+      <DenseToolbar label="Subject filters">
+        <FilterInput label="Filter subjects" value={query} onChange={setQuery} />
+        <ToolbarCount>
           {subjects.length} {visibleAnswer === null ? 'subjects' : 'can'}
-        </span>
+        </ToolbarCount>
         {shown.dropped !== undefined && shown.dropped > 0 && (
-          <span>{shown.dropped} more are not shown</span>
+          <ToolbarCount>{shown.dropped} more are not shown</ToolbarCount>
         )}
         {(shown.absent ?? []).length > 0 && (
           <span className="text-warn" title={(shown.absent ?? []).join('\n')}>
             {(shown.absent ?? []).length} bindings name a role that does not exist
           </span>
         )}
-      </div>
+      </DenseToolbar>
       <div className="min-h-0 flex-1 overflow-auto">
         {subjects.length === 0 && <p className="p-3 text-fg-muted">Nobody.</p>}
         <ul>

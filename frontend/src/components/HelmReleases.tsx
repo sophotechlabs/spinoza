@@ -20,6 +20,8 @@ import { useContextScope } from '../store/contexts';
 import WorkspaceHeader from './WorkspaceHeader';
 import { useShownCluster } from '../lib/tabs';
 import CapabilityState from './CapabilityState';
+import DenseToolbar, { FilterInput, ToolbarCount, ToolbarEnd } from './DenseToolbar';
+import { Action } from './ActionGroup';
 
 const HelmInstallDialog = lazy(() => import('./HelmInstallDialog'));
 
@@ -96,33 +98,24 @@ export default function HelmReleases({ active = true, selected, onSelect }: Helm
       {notice}
       {data.error !== undefined && <CapabilityState state="partial" why={data.error} />}
       <WorkspaceHeader title="Helm releases" scope={shownCluster} />
-      <div className="flex shrink-0 items-center gap-2 border-b border-edge px-3 py-1.5">
-        <input
-          type="search"
-          aria-label="Filter releases"
-          placeholder="Filter"
-          value={query}
-          onChange={(event) => {
-            setQuery(event.target.value);
-          }}
-          className="w-56 rounded border border-edge bg-surface-raised px-2 py-0.5 text-fg placeholder:text-fg-muted focus:border-edge-emphasis"
-        />
-        <span className="text-fg-muted">
+      <DenseToolbar label="Release filters">
+        <FilterInput label="Filter releases" value={query} onChange={setQuery} />
+        <ToolbarCount>
           {visible.length} of {data.releases.length}
-        </span>
-        <span className="ml-auto" title={installNote(support)}>
-          <button
-            type="button"
-            disabled={support?.available !== true}
-            onClick={() => {
-              setInstallingOn(clusterScope);
-            }}
-            className="rounded border border-edge-strong px-2 py-0.5 text-fg hover:bg-surface-active disabled:cursor-not-allowed disabled:text-fg-faint"
-          >
-            Install chart
-          </button>
-        </span>
-      </div>
+        </ToolbarCount>
+        <ToolbarEnd>
+          <span title={installNote(support)}>
+            <Action
+              label="Install chart"
+              size="dense"
+              disabled={support?.available !== true}
+              onClick={() => {
+                setInstallingOn(clusterScope);
+              }}
+            />
+          </span>
+        </ToolbarEnd>
+      </DenseToolbar>
       {installing && (
         <Suspense fallback={null}>
           <HelmInstallDialog

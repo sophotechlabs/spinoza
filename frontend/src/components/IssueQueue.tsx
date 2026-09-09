@@ -21,6 +21,7 @@ import { useFleetIssues, useIssuesStore } from '../store/issues';
 import WorkspaceHeader from './WorkspaceHeader';
 import { useShownCluster } from '../lib/tabs';
 import CapabilityState from './CapabilityState';
+import DenseToolbar, { ToolbarEnd } from './DenseToolbar';
 
 interface IssueQueueProps {
   active?: boolean;
@@ -272,22 +273,19 @@ export default function IssueQueue({ active = true, onSelect, onSelectOn }: Issu
         scope={issuesScope(fleet, shownCluster)}
         scale="broken, degraded and warning, by how far the problem reaches"
       />
-      <div className="flex items-center justify-between border-b border-edge px-2 py-1.5">
-        <div className="flex items-center gap-3">
-          <h2 className="text-[11px] tracking-wide text-fg-muted uppercase">Issues</h2>
-          {several && (
-            <label className="flex items-center gap-1.5 text-fg-soft">
-              <input
-                type="checkbox"
-                checked={fleet}
-                onChange={(event) => {
-                  setFleet(event.target.checked);
-                }}
-              />
-              Every open cluster
-            </label>
-          )}
-        </div>
+      <DenseToolbar label="Issue filters">
+        {several && (
+          <label className="flex items-center gap-1.5 text-fg-soft">
+            <input
+              type="checkbox"
+              checked={fleet}
+              onChange={(event) => {
+                setFleet(event.target.checked);
+              }}
+            />
+            Every open cluster
+          </label>
+        )}
         <label className="flex items-center gap-1.5 text-fg-soft">
           Sort
           <select
@@ -305,8 +303,10 @@ export default function IssueQueue({ active = true, onSelect, onSelectOn }: Issu
             ))}
           </select>
         </label>
-        <Tally rows={rows} partial={partial} whole={whole} />
-      </div>
+        <ToolbarEnd>
+          <Tally rows={rows} partial={partial} whole={whole} />
+        </ToolbarEnd>
+      </DenseToolbar>
       <div className="min-h-0 flex-1 overflow-auto">
         {rows.length === 0 && <p className="p-3 text-fg-muted">{emptyWord(showing)}</p>}
         <ul>

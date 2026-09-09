@@ -17,6 +17,7 @@ import { cachedSegments, rawSegments } from '../lib/logColor';
 import { scrollToBottom } from '../lib/scroll';
 import { copyText } from '../lib/clipboard';
 import { useLogView } from '../store/settings';
+import { FilterInput } from './DenseToolbar';
 
 const INSPECT_LOGS_PREFIX = 'inspect-logs';
 const LOG_LINE_HEIGHT = 16;
@@ -292,16 +293,7 @@ export default function InspectLogs({
         >
           Wrap
         </button>
-        <input
-          type="search"
-          aria-label="Filter log lines"
-          placeholder="Filter"
-          value={query}
-          onChange={(event) => {
-            setQuery(event.target.value);
-          }}
-          className="w-40 rounded border border-edge bg-surface-raised px-2 py-0.5 text-fg placeholder:text-fg-muted focus:border-edge-emphasis"
-        />
+        <FilterInput label="Filter log lines" value={query} onChange={setQuery} width="w-40" />
         <button
           type="button"
           onClick={handleCopy}
