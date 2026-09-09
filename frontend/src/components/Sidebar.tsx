@@ -462,7 +462,7 @@ export default function Sidebar({ view, activeResource, onSelect, onSelectView }
       style={{ width: `${width}px` }}
       className="flex min-h-0 shrink-0 border-r border-edge bg-surface"
     >
-      <nav className="min-w-0 flex-1 overflow-y-auto py-2">
+      <nav className="relative min-w-0 flex-1 overflow-y-auto py-2">
         <RegionHeading>Workflows</RegionHeading>
         <div className="mb-1" aria-label="Cluster views">
           {overviewAtTop(categories, error) && (

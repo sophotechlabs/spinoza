@@ -1,7 +1,7 @@
 import { expect, test } from '../harness/test';
 import { kubectl, kubectlApply } from '../harness/cluster';
 import { CONTEXT, NAMESPACE } from '../harness/paths';
-import { openHome, openView, sidebar } from '../harness/app';
+import { expandCategory, openHome, openView, sidebar } from '../harness/app';
 import { primaryShortcut } from '../harness/keyboard';
 import type { Page } from '@playwright/test';
 
@@ -200,6 +200,24 @@ for (const view of VIEWS) {
     await expect(page).toHaveTitle(new RegExp(`^${view.title} `));
   });
 }
+
+test('the page itself never scrolls past the window', async ({ page }) => {
+  await openHome(page);
+  for (const category of ['Cluster', 'Workloads', 'Config', 'Network']) {
+    await expandCategory(page, category);
+  }
+  const tree = page.getByRole('button', { name: /^ConfigMap \d+$/ });
+  await tree.waitFor({ state: 'visible', timeout: 60_000 });
+  for (const view of VIEWS) {
+    await sidebar(page, view.label).click();
+    await expect(page).toHaveTitle(new RegExp(`^${view.title} `));
+    const overflow = await page.evaluate(() => {
+      const root = document.documentElement;
+      return root.scrollHeight - root.clientHeight;
+    });
+    expect(overflow, `${view.label} leaves the window scrollable`).toBeLessThanOrEqual(1);
+  }
+});
 
 test('a view survives a reload because it lives in the URL', async ({ page }) => {
   await openView(page, 'checks');
