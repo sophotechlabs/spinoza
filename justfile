@@ -283,7 +283,7 @@ cluster-up tier:
     just kind-config {{ tier }}
     config={{ kind_merged }}/{{ tier }}.yaml
     if ! kind get clusters | grep -qx {{ test_cluster }}; then
-        kind create cluster --name {{ test_cluster }} --config "$config" --wait 300s
+        scripts/create-kind-cluster.sh {{ test_cluster }} --config "$config" --wait 300s
     fi
     kind export kubeconfig --name {{ test_cluster }}
     wanted=$(yq '.nodes | length' "$config")
@@ -324,7 +324,7 @@ cluster-second:
     #!/usr/bin/env bash
     set -euo pipefail
     if ! kind get clusters | grep -qx {{ test_cluster }}-second; then
-        kind create cluster --name {{ test_cluster }}-second --wait 300s
+        scripts/create-kind-cluster.sh {{ test_cluster }}-second --wait 300s
     fi
     kubectl --context kind-{{ test_cluster }}-second cluster-info
 
@@ -809,7 +809,7 @@ cluster-mode-up:
     #!/usr/bin/env bash
     set -euo pipefail
     if ! kind get clusters | grep -qx {{ cm_cluster }}; then
-        kind create cluster --name {{ cm_cluster }} --config {{ cm_dir }}/kind.yaml --wait 300s
+        scripts/create-kind-cluster.sh {{ cm_cluster }} --config {{ cm_dir }}/kind.yaml --wait 300s
     fi
     kind export kubeconfig --name {{ cm_cluster }}
     kubectl --context {{ cm_context }} apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v1.13.1/deploy/static/provider/kind/deploy.yaml
@@ -1204,7 +1204,8 @@ workflow-triggers:
 hygiene:
     typos
     just editorconfig
-    shellcheck install.sh scripts/check-mutation-report.sh scripts/check-mutation-total.sh scripts/release-commit.sh scripts/release-pending.sh \
+    shellcheck install.sh scripts/check-mutation-report.sh scripts/check-mutation-total.sh scripts/create-kind-cluster.sh \
+        scripts/release-commit.sh scripts/release-pending.sh \
         test/release-commit.sh test/release-pending.sh test/install/container.sh \
         test/install/uninstall.sh test/install/editorconfig-name.sh test/trivy-helm-coverage.sh \
         test/docker-context.sh packaging/render.sh
