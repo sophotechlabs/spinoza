@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { healthClass, orDash, syncClass } from '../../src/lib/argoStatus';
+import {
+  argoSummary,
+  argoSummaryLabel,
+  healthClass,
+  orDash,
+  syncClass,
+} from '../../src/lib/argoStatus';
 
 describe('syncClass', () => {
   it('is calm when the app is synced', () => {
@@ -41,5 +47,22 @@ describe('orDash', () => {
 
   it('marks an empty field with a dash', () => {
     expect(orDash('')).toBe('-');
+  });
+});
+
+describe('what the Argo overview says before the table', () => {
+  it('counts the applications, the synced ones and the healthy ones', () => {
+    const summary = argoSummary([
+      { sync: 'Synced', health: 'Healthy' },
+      { sync: 'OutOfSync', health: 'Healthy' },
+      { sync: 'Synced', health: 'Degraded' },
+    ]);
+
+    expect(summary).toEqual({ total: 3, synced: 2, healthy: 2 });
+    expect(argoSummaryLabel(summary)).toBe('3 applications, 2 synced, 2 healthy');
+  });
+
+  it('says so plainly when there is nothing to summarise', () => {
+    expect(argoSummaryLabel(argoSummary([]))).toBe('No applications on this cluster');
   });
 });

@@ -1,5 +1,5 @@
 import { useArgo, refOf, tree } from '../lib/argocd';
-import { healthClass, orDash, syncClass } from '../lib/argoStatus';
+import { argoSummary, argoSummaryLabel, healthClass, orDash, syncClass } from '../lib/argoStatus';
 import type { ArgoApp } from '../lib/types';
 import Loading from './Loading';
 
@@ -68,6 +68,15 @@ export default function ArgoApps({ onSelect }: ArgoAppsProps) {
           {data.error}
         </p>
       )}
+      <div className="flex shrink-0 items-baseline gap-1.5 border-b border-edge bg-surface px-3 py-1.5">
+        <h2 className="font-semibold whitespace-nowrap text-fg-strong">Argo CD</h2>
+        <span aria-hidden="true" className="text-fg-faint">
+          ·
+        </span>
+        <span className="min-w-0 truncate text-fg-muted">
+          {argoSummaryLabel(argoSummary(data.apps))}
+        </span>
+      </div>
       <div className="flex shrink-0 items-baseline gap-3 border-b border-edge px-3 py-1.5 text-fg-muted">
         <span className="min-w-0 flex-1">Application</span>
         <span className="w-24 shrink-0">Namespace</span>

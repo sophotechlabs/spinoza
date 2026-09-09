@@ -17,6 +17,13 @@ import GraphShell from './GraphShell';
 
 const ALL_EDGE_KINDS: GraphEdgeKind[] = ['source', 'dependsOn', 'manages'];
 
+function countLabel(flow: GitopsFlow | null): string | undefined {
+  if (flow === null) {
+    return undefined;
+  }
+  return `${String(flow.nodes.length)} objects, ${String(flow.edges.length)} links`;
+}
+
 function shapeOf(flow: GitopsFlow): string {
   return `${flow.nodes.length}:${flow.edges.length}:${flow.nodes[0]?.id ?? ''}`;
 }
@@ -138,6 +145,7 @@ export default function GraphCanvas({
   return (
     <GraphShell<GitopsFlowNode>
       what={what}
+      heading={countLabel(flow)}
       loading="graph"
       empty={empty}
       flow={flow}

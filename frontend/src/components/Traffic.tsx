@@ -19,6 +19,17 @@ const POLL_INTERVAL_MS = 5000;
 const WHAT = 'The traffic graph';
 const EMPTY = 'No workload-to-workload traffic in the last five minutes.';
 
+function trafficHeading(flow: TrafficFlow | null): string | undefined {
+  if (flow === null) {
+    return undefined;
+  }
+  const workloads = `${String(flow.nodes.length)} workloads`;
+  if (flow.edges.length === 0) {
+    return `${workloads}, no flows between them in the last five minutes`;
+  }
+  return `${workloads}, ${String(flow.edges.length)} flows`;
+}
+
 const LEGEND = [
   { stroke: EDGE_FLOW_STROKE, label: 'Forwarded flows per second' },
   { stroke: EDGE_DROP_STROKE, label: 'Some flows dropped' },
@@ -86,6 +97,7 @@ export default function Traffic() {
   return (
     <GraphShell<TrafficFlowNode>
       what={WHAT}
+      heading={trafficHeading(flow)}
       loading="the traffic graph"
       empty={EMPTY}
       flow={flow}

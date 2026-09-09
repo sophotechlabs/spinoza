@@ -14,6 +14,7 @@ interface Flow<N extends Node> {
 
 interface GraphShellProps<N extends Node> {
   what: string;
+  heading?: string;
   loading: string;
   empty: string;
   flow: Flow<N> | null;
@@ -29,6 +30,7 @@ interface GraphShellProps<N extends Node> {
 
 export default function GraphShell<N extends Node>({
   what,
+  heading,
   loading,
   empty,
   flow,
@@ -71,6 +73,15 @@ export default function GraphShell<N extends Node>({
     <div className="flex h-full min-h-0 w-full flex-col">
       {error !== null && <StaleBanner what={what} message={error} onRetry={onRetry} />}
       {partial !== null && <LoadWarning message={partial} />}
+      {heading !== undefined && (
+        <div className="flex shrink-0 items-baseline gap-1.5 border-b border-edge bg-surface px-2 py-1.5 text-xs">
+          <h2 className="font-semibold whitespace-nowrap text-fg-strong">{what}</h2>
+          <span aria-hidden="true" className="text-fg-faint">
+            ·
+          </span>
+          <span className="min-w-0 truncate text-fg-muted">{heading}</span>
+        </div>
+      )}
       {banner}
       <div className="relative min-h-0 w-full flex-1">
         <ReactFlow
