@@ -15,6 +15,7 @@ import { useClusterStore } from '../store/cluster';
 export interface ContextEntry {
   cluster: string;
   kubeconfig: string;
+  file: string;
   name: string;
   value: string;
 }
@@ -93,6 +94,7 @@ export function contextGroups(list: ContextList): ContextGroup[] {
     entries: kubeconfig.contexts.map((entry, index) => ({
       cluster: describe(entry),
       kubeconfig: kubeconfig.path,
+      file: kubeconfig.label,
       name: entry.name,
       value: `${group}.${index}`,
     })),

@@ -6,6 +6,7 @@ import {
   displayName,
   forgetTab,
   reopenTab,
+  tabFor,
   tabWidth,
 } from '../../src/lib/tabs';
 import { adoptClusters, useClustersStore } from '../../src/store/clusters';
@@ -32,6 +33,42 @@ describe('the context a tab shows', () => {
 
   it('is nothing when no tab has that id', () => {
     expect(contextOf([], MK1)).toBe('');
+  });
+});
+
+describe('the tab a context is already open on', () => {
+  const HOME_CONFIG = '/home/arch/.kube/config';
+
+  beforeEach(() => {
+    useClustersStore.getState().reset();
+  });
+
+  it('is the tab opened on that kubeconfig and context', () => {
+    adoptClusters(listOf(MK1));
+
+    expect(tabFor(useClustersStore.getState().tabs, '', '', 'p-mk2')?.id).toBe(MK2);
+  });
+
+  it('is nothing when the context is not open', () => {
+    adoptClusters(listOf(MK1));
+
+    expect(tabFor(useClustersStore.getState().tabs, '', '', 'p-mk3')).toBeNull();
+  });
+
+  it('is nothing when the same name comes from another kubeconfig', () => {
+    adoptClusters(listOf(MK1));
+
+    expect(
+      tabFor(useClustersStore.getState().tabs, '/tmp/other', '/tmp/other', 'p-mk2'),
+    ).toBeNull();
+  });
+
+  it('matches a tab that named the file the default kubeconfig resolved to', () => {
+    const list = listOf(MK1);
+    list.clusters = list.clusters.map((one) => ({ ...one, kubeconfig: HOME_CONFIG }));
+    adoptClusters(list);
+
+    expect(tabFor(useClustersStore.getState().tabs, '', HOME_CONFIG, 'p-mk2')?.id).toBe(MK2);
   });
 });
 

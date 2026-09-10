@@ -26,7 +26,7 @@ async function openNowhere(browser: Browser, hash: string): Promise<[Page, () =>
 
 test('a cluster that never answered is named as such, not left blank', async ({ browser }) => {
   const [page, close] = await openNowhere(browser, '');
-  await expect(page.getByRole('navigation', { name: 'Open clusters' })).toContainText('no cluster', {
+  await expect(page.getByRole('navigation', { name: 'Clusters already open' })).toContainText('no cluster', {
     timeout: 60_000,
   });
   await close();

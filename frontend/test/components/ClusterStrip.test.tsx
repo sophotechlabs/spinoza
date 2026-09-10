@@ -73,7 +73,7 @@ describe('the strip of open clusters', () => {
 
     render(<ClusterStrip onShown={vi.fn()} />);
 
-    expect(screen.getByRole('navigation', { name: 'Open clusters' })).toBeInTheDocument();
+    expect(screen.getByRole('navigation', { name: 'Clusters already open' })).toBeInTheDocument();
     expect(screen.getByLabelText('Open another cluster')).toBeInTheDocument();
   });
 
@@ -263,7 +263,7 @@ describe('the strip of open clusters', () => {
     await user.click(screen.getByRole('button', { name: /p-mk1 is answering/ }));
 
     const menu = screen.getByRole('group', { name: 'Settings for p-mk1' });
-    const scroller = screen.getByRole('navigation', { name: 'Open clusters' });
+    const scroller = screen.getByRole('navigation', { name: 'Clusters already open' });
     expect(scroller).not.toContainElement(menu);
     expect(scroller.parentElement).toContainElement(menu);
   });

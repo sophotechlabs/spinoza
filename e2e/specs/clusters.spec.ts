@@ -106,7 +106,7 @@ test('one cluster is open, and it is the one spinoza was pointed at', async ({ p
 
 test('the strip names the open cluster and leads to the kubeconfigs', async ({ page }) => {
   await openHome(page);
-  const strip = page.getByRole('navigation', { name: 'Open clusters' });
+  const strip = page.getByRole('navigation', { name: 'Clusters already open' });
   await expect(strip).toContainText(CONTEXT, { timeout: 30_000 });
   await contextPicker(page).click();
   await expect(page.getByRole('button', { name: 'Manage kubeconfigs', exact: true })).toBeVisible();
@@ -301,7 +301,7 @@ test('removing a kubeconfig removes its context from the picker and adding it ba
 
 test('the plus opens the context list clear of the strip', async ({ page }) => {
   await openHome(page);
-  const strip = page.getByRole('navigation', { name: 'Open clusters' });
+  const strip = page.getByRole('navigation', { name: 'Clusters already open' });
   await expect(strip).toBeVisible({ timeout: 30_000 });
 
   await contextPicker(page).click();
@@ -329,7 +329,7 @@ test('the plus opens the context list clear of the strip', async ({ page }) => {
 
 test('the tab swatch opens its menu clear of the strip', async ({ page }) => {
   await openHome(page);
-  const strip = page.getByRole('navigation', { name: 'Open clusters' });
+  const strip = page.getByRole('navigation', { name: 'Clusters already open' });
   await expect(strip).toBeVisible({ timeout: 30_000 });
 
   await page

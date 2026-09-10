@@ -210,7 +210,7 @@ test('choosing a fleet cluster activates that cluster', async ({ page }) => {
     .getByRole('button', { name: new RegExp(SECOND_CONTEXT) })
     .first()
     .click();
-  await expect(page.getByRole('navigation', { name: 'Open clusters' })).toContainText(
+  await expect(page.getByRole('navigation', { name: 'Clusters already open' })).toContainText(
     SECOND_CONTEXT,
     { timeout: 90_000 },
   );

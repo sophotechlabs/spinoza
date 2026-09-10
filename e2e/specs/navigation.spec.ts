@@ -48,7 +48,7 @@ function settingsWrite(page: Page) {
 
 test('the app opens on the cluster it was pointed at', async ({ page }) => {
   await openHome(page);
-  await expect(page.getByRole('navigation', { name: 'Open clusters' })).toContainText(CONTEXT);
+  await expect(page.getByRole('navigation', { name: 'Clusters already open' })).toContainText(CONTEXT);
   await expect(page).toHaveTitle(new RegExp(CONTEXT));
 });
 

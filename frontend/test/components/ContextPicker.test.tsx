@@ -1120,4 +1120,143 @@ describe('a context pick with the answer already settled', () => {
       ).toBe(true);
     });
   });
+
+  function twoOpen(): void {
+    act(() => {
+      adoptClusters({
+        clusters: [
+          {
+            id: 'https://p-mk1:6443',
+            context: 'p-mk1',
+            active: true,
+            color: 1,
+            reopen: true,
+            protection: 'open',
+            reachable: true,
+          },
+          {
+            id: 'https://p-mk2:6443',
+            context: 'p-mk2',
+            active: false,
+            color: 2,
+            reopen: true,
+            protection: 'open',
+            reachable: true,
+          },
+        ],
+        remembered: [],
+      });
+    });
+  }
+
+  it('says which contexts are already open', async () => {
+    const user = userEvent.setup();
+    stubContexts(listOf(['p-mk1', 'p-mk2'], 'p-mk1'));
+    twoOpen();
+
+    render(<ContextPicker onSwitched={vi.fn()} />);
+    const menu = await openMenu(user);
+
+    expect(within(menu).getByLabelText('Contexts you can open')).toBeInTheDocument();
+    expect(within(menu).getByRole('button', { name: 'p-mk2 already open' })).toBeInTheDocument();
+  });
+
+  it('shows the tab a context already has instead of opening a second one', async () => {
+    const user = userEvent.setup();
+    const switched = vi.fn();
+    const calls = stubContexts(listOf(['p-mk1', 'p-mk2'], 'p-mk1'), {
+      clusters: [],
+      remembered: [],
+    });
+    twoOpen();
+
+    render(<ContextPicker onSwitched={switched} />);
+    await pick(user, 'p-mk2 already open');
+
+    await waitFor(() => {
+      expect(switched).toHaveBeenCalled();
+    });
+    const posted = calls.filter((one) => one.method === 'POST');
+    expect(posted).toHaveLength(1);
+    expect(posted[0].url).toContain('/api/clusters/active?cluster=https');
+  });
+
+  it('opens a second tab for a context that is already open when asked', async () => {
+    const switched = vi.fn();
+    const calls = stubContexts(listOf(['p-mk1', 'p-mk2'], 'p-mk1'), {
+      clusters: [],
+      remembered: [],
+    });
+    twoOpen();
+
+    render(<ContextPicker onSwitched={switched} />);
+    const summary = await screen.findByLabelText('Kubernetes context');
+    fireEvent.click(summary);
+    fireEvent.click(screen.getByRole('button', { name: 'p-mk2 already open' }), { metaKey: true });
+
+    await waitFor(() => {
+      expect(
+        calls.some((one) => one.method === 'POST' && one.url.startsWith('/api/clusters?')),
+      ).toBe(true);
+    });
+  });
+
+  it('needs no request when the context already showing is picked', async () => {
+    const user = userEvent.setup();
+    const switched = vi.fn();
+    const calls = stubContexts(listOf(['p-mk1', 'p-mk2'], 'p-mk1'));
+    twoOpen();
+
+    render(<ContextPicker onSwitched={switched} />);
+    await pick(user, 'p-mk1 already open');
+
+    await waitFor(() => {
+      expect(switched).toHaveBeenCalled();
+    });
+    expect(calls.filter((one) => one.method === 'POST')).toHaveLength(0);
+  });
+
+  it('says so when showing the tab fails', async () => {
+    const user = userEvent.setup();
+    stubContexts(listOf(['p-mk1', 'p-mk2'], 'p-mk1'));
+    twoOpen();
+
+    render(<ContextPicker onSwitched={vi.fn()} />);
+    await pick(user, 'p-mk2 already open');
+
+    await waitFor(() => {
+      expect(
+        useToastsStore.getState().toasts.some((one) => one.message.startsWith('Switching to')),
+      ).toBe(true);
+    });
+  });
+
+  it('shows a tab once while the first switch is still going', async () => {
+    const user = userEvent.setup();
+    const posted = vi.fn();
+    let release: ((value: unknown) => void) | null = null;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((_url: string, init?: { method?: string }) => {
+        if (init?.method === 'POST') {
+          posted();
+          return new Promise((resolve) => {
+            release = resolve;
+          });
+        }
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve(listOf(['p-mk1', 'p-mk2'], 'p-mk1')),
+        });
+      }),
+    );
+    twoOpen();
+    render(<ContextPicker onSwitched={vi.fn()} />);
+
+    await pick(user, 'p-mk2 already open');
+    await pick(user, 'p-mk2 already open');
+
+    expect(posted).toHaveBeenCalledTimes(1);
+    expect(release).not.toBeNull();
+  });
 });

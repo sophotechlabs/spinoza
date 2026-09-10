@@ -63,7 +63,7 @@ describe('the strip carries the way to open a cluster', () => {
     if (menu === null) {
       throw new Error('the plus has no menu around it');
     }
-    expect(within(menu).getByRole('button', { name: 'p-mk2' })).toBeVisible();
+    expect(within(menu).getByRole('button', { name: 'p-mk2 already open' })).toBeVisible();
     expect(within(menu).getByRole('button', { name: 'Manage kubeconfigs' })).toBeVisible();
   });
 
@@ -78,7 +78,7 @@ describe('the strip carries the way to open a cluster', () => {
 
     render(<ClusterStrip onShown={vi.fn()} />);
 
-    const tabs = screen.getByRole('navigation', { name: 'Open clusters' });
+    const tabs = screen.getByRole('navigation', { name: 'Clusters already open' });
     expect(tabs.className).toContain('overflow-x-auto');
     expect(tabs.querySelector('summary')).toBeNull();
   });

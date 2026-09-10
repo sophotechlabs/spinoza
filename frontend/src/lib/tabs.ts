@@ -21,6 +21,18 @@ export function forgetTab(cluster: string): void {
   forgetTerminals(cluster);
 }
 
+export function tabFor(tabs: Tab[], kubeconfig: string, file: string, context: string): Tab | null {
+  for (const tab of tabs) {
+    if (tab.context !== context) {
+      continue;
+    }
+    if (tab.kubeconfig === kubeconfig || tab.kubeconfig === file) {
+      return tab;
+    }
+  }
+  return null;
+}
+
 export function contextOf(tabs: Tab[], cluster: string): string {
   for (const tab of tabs) {
     if (tab.id === cluster) {

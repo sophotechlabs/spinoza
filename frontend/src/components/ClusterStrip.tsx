@@ -157,7 +157,7 @@ export default function ClusterStrip({ onShown }: ClusterStripProps) {
       className="relative flex shrink-0 items-end gap-1 border-b border-edge bg-surface px-2 pt-1 text-xs"
     >
       <nav
-        aria-label="Open clusters"
+        aria-label="Clusters already open"
         className="flex min-w-0 shrink items-end gap-1 overflow-x-auto"
       >
         {inGroups(tabs).map((run) => (

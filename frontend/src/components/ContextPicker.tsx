@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ClusterList, ContextList } from '../lib/types';
 import { contextGroups, fetchContexts, sameContext } from '../lib/contexts';
-import { closeCluster, openCluster, wasCancelled } from '../lib/clusters';
-import { forgetTab } from '../lib/tabs';
-import { useTabs } from '../store/clusters';
+import { activateCluster, closeCluster, openCluster, wasCancelled } from '../lib/clusters';
+import { forgetTab, tabFor } from '../lib/tabs';
+import { reasonOf } from '../lib/object';
+import type { Tab } from '../store/clusters';
+import { nameOf, useActiveCluster, useTabs } from '../store/clusters';
 import { useSettingsStore } from '../store/settings';
 import type { OpenContext } from '../lib/settings';
 import type { ContextEntry } from '../lib/contexts';
@@ -63,13 +65,6 @@ const OPEN_BUDGET = '30s';
 const RETRY_BASE_MS = 1000;
 const RETRY_MAX_MS = 15000;
 
-function errorMessage(err: unknown, fallback: string): string {
-  if (err instanceof Error) {
-    return err.message;
-  }
-  return fallback;
-}
-
 function replacing(mode: Exclude<OpenContext, 'ask'>, held: string, opened: ClusterList): boolean {
   if (mode !== 'replace') {
     return false;
@@ -88,6 +83,20 @@ function rowClass(active: boolean): string {
   return `${MENU_ROW} text-fg-soft`;
 }
 
+function rowLabel(name: string, already: boolean): string {
+  if (already) {
+    return `${name} already open`;
+  }
+  return name;
+}
+
+function rowTitle(cluster: string, already: boolean): string {
+  if (already) {
+    return `${cluster} — already open; this shows that tab`;
+  }
+  return cluster;
+}
+
 function current(active: boolean): 'true' | undefined {
   if (active) {
     return 'true';
@@ -103,6 +112,7 @@ export default function ContextPicker({ onSwitched, look = 'control' }: ContextP
   const [asking, setAsking] = useState<ContextEntry | null>(null);
   const [remember, setRemember] = useState(false);
   const named = useActiveTab()?.label ?? '';
+  const shown = useActiveCluster();
   const setList = useContextsStore((state) => state.setList);
   const [busy, setBusy] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -133,7 +143,7 @@ export default function ContextPicker({ onSwitched, look = 'control' }: ContextP
         if (!live || listRequest.current !== generation) {
           return;
         }
-        setLoadError(errorMessage(err, 'the context list could not be loaded'));
+        setLoadError(reasonOf(err, 'the context list could not be loaded'));
         timer = setTimeout(() => {
           setAttempt((value) => value + 1);
         }, retryDelay(attempt));
@@ -185,8 +195,35 @@ export default function ContextPicker({ onSwitched, look = 'control' }: ContextP
     setManaging(true);
   }
 
+  async function focus(tab: Tab) {
+    if (tab.id === shown) {
+      onSwitched();
+      return;
+    }
+    if (busyRef.current) {
+      return;
+    }
+    busyRef.current = true;
+    setBusy(true);
+    try {
+      await activateCluster(tab.id);
+      notifyOk(`Showing ${nameOf(tab)}`);
+      onSwitched();
+    } catch (err: unknown) {
+      notifyError(`Switching to ${nameOf(tab)}: ${reasonOf(err, 'the request failed')}`);
+    } finally {
+      busyRef.current = false;
+      setBusy(false);
+    }
+  }
+
   function pick(entry: ContextEntry, newTab: boolean) {
     closeMenu();
+    const already = tabFor(tabs, entry.kubeconfig, entry.file, entry.name);
+    if (already !== null && !newTab) {
+      void focus(already);
+      return;
+    }
     if (newTab || tabs.length !== 1) {
       void handleChoose(entry, 'new');
       return;
@@ -212,7 +249,7 @@ export default function ContextPicker({ onSwitched, look = 'control' }: ContextP
       await closeCluster(previous);
       forgetTab(previous);
     } catch (err: unknown) {
-      notifyError(`Closing the tab it replaced: ${errorMessage(err, 'the request failed')}`);
+      notifyError(`Closing the tab it replaced: ${reasonOf(err, 'the request failed')}`);
     }
   }
 
@@ -254,7 +291,7 @@ export default function ContextPicker({ onSwitched, look = 'control' }: ContextP
         notifyOk(`Stopped opening ${entry.name}`);
         return;
       }
-      notifyError(`Opening ${entry.name}: ${errorMessage(err, 'opening the cluster failed')}`);
+      notifyError(`Opening ${entry.name}: ${reasonOf(err, 'opening the cluster failed')}`);
     } finally {
       dismissToast(waiting);
       if (listRequest.current === generation) {
@@ -434,7 +471,14 @@ export default function ContextPicker({ onSwitched, look = 'control' }: ContextP
         >
           {triggerBody()}
         </summary>
-        <div className="absolute left-0 z-30 mt-1 flex max-h-[70vh] w-max max-w-[36rem] min-w-full flex-col overflow-y-auto rounded border border-edge-strong bg-surface-raised shadow">
+        <div
+          role="group"
+          aria-label="Contexts you can open"
+          className="absolute left-0 z-30 mt-1 flex max-h-[70vh] w-max max-w-[36rem] min-w-full flex-col overflow-y-auto rounded border border-edge-strong bg-surface-raised shadow"
+        >
+          <p className="border-b border-edge px-3 py-1 text-[11px] text-fg-muted">
+            Contexts you can open. One already open shows its tab instead.
+          </p>
           {groups.map((group) => (
             <div key={group.path} className="flex flex-col">
               <div
@@ -446,20 +490,27 @@ export default function ContextPicker({ onSwitched, look = 'control' }: ContextP
               {group.error !== undefined && (
                 <div className="px-3 py-1 text-warn-muted">{group.error}</div>
               )}
-              {group.entries.map((entry) => (
-                <button
-                  key={entry.value}
-                  type="button"
-                  aria-current={current(sameContext(entry, list.current))}
-                  title={entry.cluster}
-                  onClick={(event) => {
-                    pick(entry, event.metaKey || event.ctrlKey);
-                  }}
-                  className={rowClass(sameContext(entry, list.current))}
-                >
-                  {entry.name}
-                </button>
-              ))}
+              {group.entries.map((entry) => {
+                const already = tabFor(tabs, entry.kubeconfig, entry.file, entry.name);
+                return (
+                  <button
+                    key={entry.value}
+                    type="button"
+                    aria-current={current(sameContext(entry, list.current))}
+                    aria-label={rowLabel(entry.name, already !== null)}
+                    title={rowTitle(entry.cluster, already !== null)}
+                    onClick={(event) => {
+                      pick(entry, event.metaKey || event.ctrlKey);
+                    }}
+                    className={rowClass(sameContext(entry, list.current))}
+                  >
+                    {entry.name}
+                    {already !== null && (
+                      <span className="ml-2 text-[11px] text-fg-muted">already open</span>
+                    )}
+                  </button>
+                );
+              })}
             </div>
           ))}
           {manageEntry()}

@@ -58,7 +58,7 @@ async function activate(page: Page, id: string): Promise<void> {
     shown = cluster.label;
   }
   const tab = page
-    .getByRole('navigation', { name: 'Open clusters' })
+    .getByRole('navigation', { name: 'Clusters already open' })
     .getByRole('button', { name: shown, exact: true });
   await tab.click();
   await expect
@@ -133,7 +133,7 @@ test('activating the second cluster moves the app onto it', async ({ page }) => 
     .toBe(SECOND_CONTEXT);
   await page.reload();
   await page.waitForLoadState('domcontentloaded');
-  await expect(page.getByRole('navigation', { name: 'Open clusters' })).toContainText(
+  await expect(page.getByRole('navigation', { name: 'Clusters already open' })).toContainText(
     SECOND_CONTEXT,
     { timeout: 60_000 },
   );
