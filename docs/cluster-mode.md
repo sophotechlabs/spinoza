@@ -478,11 +478,17 @@ are worth naming because they are the whole of it:
 - **Live sessions belong to a process.** A feed, a terminal and a port-forward
   registry are held by whichever pod accepted them.
 
-That leaves two honest options, and this is not a decision the chart makes for
-you. Either move the state to something two pods can share, which means a second
-supported storage backend and a way to propagate revocations through it; or stay
-at one replica and make a restart cheap, which is what the readiness and drain
-above are for. Until the first is built, the second is what spinoza supports.
+**The decision is one replica, and it is settled.** The alternative — moving the
+state to something two pods can share — means a second supported storage
+backend, a second set of migrations, and a way to push revocations through it.
+That is a database to run and a second storage path to keep correct forever, and
+spinoza is not buying either. What it buys instead is a cheap restart: the
+readiness and drain above take a pod out of the endpoints before it stops
+answering, so an upgrade costs a reconnect rather than an error.
+
+So there is no `replicaCount: 2` on the roadmap, no Postgres, and no second
+storage path. If your own answer is different, the three items above are the
+whole of the work; nothing in the chart is arranged to make it harder.
 
 ## Troubleshooting
 
