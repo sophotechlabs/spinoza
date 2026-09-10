@@ -29,7 +29,7 @@ import { useTrafficProbe } from '../lib/useTrafficProbe';
 import { useTrafficSupport } from '../store/traffic';
 import { kindLabels } from '../lib/kindLabels';
 import type { SidebarSections } from '../lib/sidebarState';
-import { useTabStrip } from '../store/clusters';
+import { useActiveCluster, useTabStrip } from '../store/clusters';
 import { VIEW_LABELS } from '../lib/views';
 import { FilterInput } from './DenseToolbar';
 
@@ -296,6 +296,7 @@ function RegionHeading({ children }: { children: string }) {
 
 export default function Sidebar({ view, activeResource, onSelect, onSelectView }: SidebarProps) {
   const epoch = useClusterEpoch();
+  const onCluster = useActiveCluster();
   const several = useTabStrip();
   const { size: width, startResize, nudge } = useSidebarWidth();
   const [categories, setCategories] = useState<Category[]>([]);
@@ -368,6 +369,13 @@ export default function Sidebar({ view, activeResource, onSelect, onSelectView }
       stopDiscoveryRetry();
     };
   }, [epoch]);
+
+  useEffect(() => {
+    if (categories.length === 0) {
+      return;
+    }
+    rememberCatalog(categories);
+  }, [categories, onCluster]);
 
   function stopDiscoveryRetry() {
     if (discoveryTimer.current !== null) {

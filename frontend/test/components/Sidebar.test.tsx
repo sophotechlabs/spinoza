@@ -113,6 +113,21 @@ describe('Sidebar', () => {
     expect(categoriesNow()).toEqual(categories);
   });
 
+  it('files the catalog under the cluster once that cluster is known', async () => {
+    act(() => {
+      useClustersStore.getState().reset();
+    });
+    stubFetch(categories);
+    renderSidebar();
+    await screen.findByRole('button', { name: /Workloads/ });
+
+    act(() => {
+      showing(MK1);
+    });
+
+    expect(useCatalogStore.getState().categories[MK1]).toEqual(categories);
+  });
+
   it('offers helm releases at the top', () => {
     stubFetch(categories);
     renderSidebar();
