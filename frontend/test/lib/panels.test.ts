@@ -4,6 +4,9 @@ import type { PanelContext } from '../../src/lib/panels';
 import {
   DEFAULT_LAYOUT,
   DEFAULT_PLACEMENT,
+  PRESETS,
+  PRESET_COLLAPSED,
+  presetOf,
   PANELS,
   PANEL_ORDER,
   panelById,
@@ -315,5 +318,45 @@ describe('a workspace nobody has arranged yet', () => {
 
     expect(layout.collapsed.right).toBe(false);
     expect(layout.collapsed.bottom).toBe(false);
+  });
+});
+
+describe('the dock presets', () => {
+  it('opens a fresh workspace focused', () => {
+    expect(presetOf(DEFAULT_LAYOUT.collapsed)).toBe('focused');
+  });
+
+  it('names console when every dock is open', () => {
+    expect(presetOf({ left: false, right: false, bottom: false })).toBe('console');
+  });
+
+  it('names neither once a dock has been moved on its own', () => {
+    expect(presetOf({ left: true, right: false, bottom: true })).toBeNull();
+  });
+
+  it('recognises each preset it can apply', () => {
+    for (const preset of PRESETS) {
+      expect(presetOf(PRESET_COLLAPSED[preset])).toBe(preset);
+    }
+  });
+});
+
+describe('what a reset writes for the panels e2e to wait on', () => {
+  it('serialises the default placement exactly as e2e/specs/panels.spec.ts spells it', () => {
+    expect(JSON.stringify(DEFAULT_PLACEMENT)).toBe(
+      JSON.stringify({
+        overview: 'right',
+        yaml: 'right',
+        revisions: 'right',
+        events: 'right',
+        logs: 'right',
+        metrics: 'right',
+        forwards: 'bottom',
+        terminal: 'bottom',
+        compare: 'bottom',
+        release: 'bottom',
+        app: 'right',
+      }),
+    );
   });
 });

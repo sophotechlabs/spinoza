@@ -1,8 +1,9 @@
 import { create } from 'zustand';
-import type { DockSide, Layout, PanelId, Placement } from '../lib/panels';
+import type { DockSide, Layout, PanelId, Placement, Preset } from '../lib/panels';
 import {
   DEFAULT_LAYOUT,
   DEFAULT_PLACEMENT,
+  PRESET_COLLAPSED,
   readLayout,
   readPlacement,
   writeLayout,
@@ -20,6 +21,7 @@ interface PanelsState {
   resizeSidebar: (size: number) => void;
   collapse: (side: DockSide, collapsed: boolean) => void;
   activate: (side: DockSide, id: PanelId) => void;
+  applyPreset: (preset: Preset) => void;
   reset: () => void;
 }
 
@@ -66,6 +68,11 @@ export const usePanelsStore = create<PanelsState>((set, get) => ({
     const active = { ...get().active, [side]: id };
     writeLayout({ ...layoutOf(get()), active });
     set({ active });
+  },
+  applyPreset: (preset) => {
+    const collapsed = { ...PRESET_COLLAPSED[preset] };
+    writeLayout({ ...layoutOf(get()), collapsed });
+    set({ collapsed });
   },
   reset: () => {
     const placement = { ...DEFAULT_PLACEMENT };

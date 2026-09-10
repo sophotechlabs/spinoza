@@ -109,6 +109,19 @@ refuses to render without it, and Spinoza refuses invalid values at startup.
 `tolerations`, `affinity`, `topologySpreadConstraints` and `priorityClassName`
 behave the way they do in every other chart.
 
+## What browsers it is built for
+
+The workspace is built for **1280×720 and up**, checked in CI at 1280×720 and
+1440×900 and at 200% browser zoom. Narrower than 1280 it scrolls sideways rather
+than reflowing, and a phone is out of scope — there is no small-screen layout to
+fall back to, so don't put spinoza on a URL people reach from one and expect it
+to work.
+
+A fresh profile opens the **Focused** preset: one workspace, side and bottom
+docks closed. **Console** opens every dock and wants the width to match.
+Settings → Panels switches between them, and a layout somebody arranged
+themselves is never overwritten.
+
 ## What the chart refuses to render
 
 - No `publicURL`.

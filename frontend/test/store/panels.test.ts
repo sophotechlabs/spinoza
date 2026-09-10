@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { readStored, resetStored, writeStored } from '../../src/lib/persist';
-import { DEFAULT_PLACEMENT, PLACEMENT_KEY } from '../../src/lib/panels';
+import { DEFAULT_PLACEMENT, PLACEMENT_KEY, PRESET_COLLAPSED } from '../../src/lib/panels';
 
 async function freshStore() {
   vi.resetModules();
@@ -205,5 +205,42 @@ describe('revealing one panel', () => {
     const reopened = await freshStore();
     expect(reopened.usePanelsStore.getState().active.bottom).toBe('release');
     expect(usePanelsStore.getState().collapsed.bottom).toBe(false);
+  });
+});
+
+describe('applying a dock preset', () => {
+  it('opens every dock for console', async () => {
+    const { usePanelsStore } = await freshStore();
+
+    usePanelsStore.getState().applyPreset('console');
+
+    expect(usePanelsStore.getState().collapsed).toEqual(PRESET_COLLAPSED.console);
+  });
+
+  it('closes the side and bottom docks for focused', async () => {
+    const { usePanelsStore } = await freshStore();
+    usePanelsStore.getState().applyPreset('console');
+
+    usePanelsStore.getState().applyPreset('focused');
+
+    expect(usePanelsStore.getState().collapsed).toEqual(PRESET_COLLAPSED.focused);
+  });
+
+  it('survives a reload', async () => {
+    const { usePanelsStore } = await freshStore();
+    usePanelsStore.getState().applyPreset('console');
+
+    const reopened = await freshStore();
+
+    expect(reopened.usePanelsStore.getState().collapsed).toEqual(PRESET_COLLAPSED.console);
+  });
+
+  it('leaves where each panel is docked alone', async () => {
+    const { usePanelsStore } = await freshStore();
+    usePanelsStore.getState().move('terminal', 'right');
+
+    usePanelsStore.getState().applyPreset('console');
+
+    expect(usePanelsStore.getState().placement.terminal).toBe('right');
   });
 });

@@ -14,6 +14,7 @@ import {
   useSettingsStore,
 } from '../store/settings';
 import { usePanelsStore } from '../store/panels';
+import { PRESETS, PRESET_HINTS, PRESET_LABELS, presetOf } from '../lib/panels';
 import { useContextList } from '../store/contexts';
 import { useNamespaceStore } from '../store/namespace';
 import { useActiveCluster } from '../store/clusters';
@@ -164,6 +165,9 @@ export default function SettingsDialog({
   const setNodeShell = useSettingsStore((state) => state.setNodeShell);
   const applyNamespaceStart = useNamespaceStore((state) => state.applyStart);
   const resetPanels = usePanelsStore((state) => state.reset);
+  const collapsedDocks = usePanelsStore((state) => state.collapsed);
+  const applyPreset = usePanelsStore((state) => state.applyPreset);
+  const preset = presetOf(collapsedDocks);
   const themes = useThemes();
   const sortedThemes = [...themes].sort((a, b) => a.name.localeCompare(b.name));
   const custom = useThemeStore((state) => state.custom);
@@ -563,15 +567,51 @@ export default function SettingsDialog({
           )}
           {section === 'Columns' && <ColumnSettings />}
           {section === 'Panels' && (
-            <Row label="Dock layout" hint="Put every panel and dock back where it started.">
-              <button
-                type="button"
-                onClick={resetPanels}
-                className="rounded border border-edge-strong px-2 py-0.5 text-fg hover:bg-surface-active"
+            <>
+              <Row
+                label="Preset"
+                hint={
+                  preset === null
+                    ? 'Your own arrangement. Pick a preset to replace it.'
+                    : PRESET_HINTS[preset]
+                }
               >
-                Reset
-              </button>
-            </Row>
+                <div className="flex gap-1" role="group" aria-label="Dock preset">
+                  {PRESETS.map((option) => (
+                    <button
+                      key={option}
+                      type="button"
+                      aria-pressed={preset === option}
+                      onClick={() => {
+                        applyPreset(option);
+                      }}
+                      className={
+                        preset === option
+                          ? 'border-accent-line text-accent rounded border px-2 py-0.5'
+                          : 'rounded border border-edge px-2 py-0.5 text-fg-muted hover:bg-surface-active'
+                      }
+                    >
+                      {PRESET_LABELS[option]}
+                    </button>
+                  ))}
+                </div>
+              </Row>
+              <Row
+                label="Window size"
+                hint="Spinoza is built for 1280×720 and up. Below that the workspace scrolls sideways rather than reflowing, and a phone is out of scope."
+              >
+                <span className="text-fg-muted">1280 × 720 or larger</span>
+              </Row>
+              <Row label="Dock layout" hint="Put every panel and dock back where it started.">
+                <button
+                  type="button"
+                  onClick={resetPanels}
+                  className="rounded border border-edge-strong px-2 py-0.5 text-fg hover:bg-surface-active"
+                >
+                  Reset
+                </button>
+              </Row>
+            </>
           )}
         </div>
       </div>

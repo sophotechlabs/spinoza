@@ -186,6 +186,7 @@ Scale, rollout restart, undo, cordon, uncordon, drain. Drain shows its eviction 
 - **Secrets** arrive masked. Reveal one key at a time; the reveal drops the moment you select something else.
 - **Traffic**: a workload graph from Cilium Hubble flow metrics, read through Prometheus.
 - **Nine themes**, Borg by default, contrast-gated in CI, plus your own as JSON. Screenshots here are Borg.
+- **Window size**: built for 1280×720 and up, checked in CI at 1280×720 and 1440×900 and at 200% browser zoom. Narrower than 1280 the workspace scrolls sideways rather than reflowing, and a phone is out of scope. A fresh profile opens the Focused preset — one workspace, side and bottom docks closed; Console opens every dock, and Settings → Panels switches between them. A layout you arranged yourself is never overwritten.
 
 ## Cluster mode
 

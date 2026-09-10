@@ -224,9 +224,38 @@ export interface Layout {
   sidebar: number | null;
 }
 
+export const PRESETS = ['focused', 'console'] as const;
+
+export type Preset = (typeof PRESETS)[number];
+
+export const PRESET_LABELS: Record<Preset, string> = {
+  focused: 'Focused',
+  console: 'Console',
+};
+
+export const PRESET_HINTS: Record<Preset, string> = {
+  focused: 'One workspace, side and bottom docks closed. What a fresh profile opens.',
+  console: 'Every dock open at once. Wants width; at 1280 the workspace gets narrow.',
+};
+
+export const PRESET_COLLAPSED: Record<Preset, Record<DockSide, boolean>> = {
+  focused: { left: false, right: true, bottom: true },
+  console: { left: false, right: false, bottom: false },
+};
+
+export function presetOf(collapsed: Record<DockSide, boolean>): Preset | null {
+  for (const preset of PRESETS) {
+    const want = PRESET_COLLAPSED[preset];
+    if (DOCK_SIDES.every((side) => collapsed[side] === want[side])) {
+      return preset;
+    }
+  }
+  return null;
+}
+
 export const DEFAULT_LAYOUT: Layout = {
   sizes: { left: null, right: null, bottom: null },
-  collapsed: { left: false, right: true, bottom: true },
+  collapsed: { ...PRESET_COLLAPSED.focused },
   active: { left: null, right: null, bottom: null },
   sidebar: null,
 };

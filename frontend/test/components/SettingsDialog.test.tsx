@@ -8,7 +8,7 @@ import { useContextsStore } from '../../src/store/contexts';
 import { usePanelsStore } from '../../src/store/panels';
 import { namespaceNow, useNamespaceStore } from '../../src/store/namespace';
 import { useClustersStore } from '../../src/store/clusters';
-import { DEFAULT_PLACEMENT } from '../../src/lib/panels';
+import { DEFAULT_PLACEMENT, PRESET_COLLAPSED } from '../../src/lib/panels';
 import { readStored, resetStored, startSaving, stopSaving } from '../../src/lib/persist';
 import { NODE_SHELL_KEY, UPDATE_CHECK_KEY } from '../../src/lib/settings';
 
@@ -258,6 +258,57 @@ describe('the settings dialog', () => {
     await user.click(screen.getByRole('button', { name: 'Reset' }));
 
     expect(usePanelsStore.getState().placement).toEqual(DEFAULT_PLACEMENT);
+  });
+
+  it('opens every dock on the console preset', async () => {
+    const user = userEvent.setup();
+    open();
+
+    await user.click(screen.getByRole('button', { name: 'Panels' }));
+    await user.click(screen.getByRole('button', { name: 'Console' }));
+
+    expect(usePanelsStore.getState().collapsed).toEqual(PRESET_COLLAPSED.console);
+    expect(screen.getByRole('button', { name: 'Console' })).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  it('closes the side and bottom docks on the focused preset', async () => {
+    const user = userEvent.setup();
+    act(() => {
+      usePanelsStore.getState().applyPreset('console');
+    });
+    open();
+
+    await user.click(screen.getByRole('button', { name: 'Panels' }));
+    await user.click(screen.getByRole('button', { name: 'Focused' }));
+
+    expect(usePanelsStore.getState().collapsed).toEqual(PRESET_COLLAPSED.focused);
+  });
+
+  it('says the arrangement is the reader\u2019s own when it matches no preset', async () => {
+    const user = userEvent.setup();
+    act(() => {
+      usePanelsStore.getState().collapse('left', true);
+      usePanelsStore.getState().collapse('right', false);
+    });
+    open();
+
+    await user.click(screen.getByRole('button', { name: 'Panels' }));
+
+    expect(screen.getByText(/Your own arrangement/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Focused' })).toHaveAttribute(
+      'aria-pressed',
+      'false',
+    );
+  });
+
+  it('says what window size it is built for', async () => {
+    const user = userEvent.setup();
+    open();
+
+    await user.click(screen.getByRole('button', { name: 'Panels' }));
+
+    expect(screen.getByText('1280 \u00d7 720 or larger')).toBeInTheDocument();
+    expect(screen.getByText(/a phone is out of scope/)).toBeInTheDocument();
   });
 
   it('reports being dismissed', async () => {

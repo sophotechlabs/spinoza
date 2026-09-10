@@ -241,7 +241,8 @@
         "frontend/src/store/traffic.ts",
         "frontend/themes/**",
         "internal/server/savedviews.go",
-        "internal/server/settings.go"
+        "internal/server/settings.go",
+        "frontend/src/lib/openSaved.ts"
       ]
     },
     {
@@ -251,10 +252,11 @@
       "profile": "full",
       "tier": "commit",
       "timeoutMinutes": 75,
-      "observedMinutes": 12,
+      "observedMinutes": 16,
       "specs": [
         "specs/zz-a11y.spec.ts",
-        "specs-full/design-review.spec.ts"
+        "specs-full/design-review.spec.ts",
+        "specs-full/viewport.spec.ts"
       ],
       "paths": [
         "frontend/src/index.css",
@@ -266,7 +268,12 @@
         "e2e/specs/zz-a11y.spec.ts",
         "e2e/specs-full/design-review.spec.ts",
         "frontend/src/lib/defaultTheme.ts",
-        "frontend/src/lib/tooltip.ts"
+        "frontend/src/lib/tooltip.ts",
+        "e2e/specs-full/viewport.spec.ts",
+        "frontend/src/lib/panels.ts",
+        "frontend/src/store/panels.ts",
+        "frontend/src/components/PanelHost.tsx",
+        "frontend/src/components/PanelLayout.tsx"
       ]
     },
     {
@@ -508,7 +515,8 @@
         "internal/server/selfmetrics.go",
         "internal/server/settings.go",
         "internal/server/views.go",
-        "internal/telemetry/**"
+        "internal/telemetry/**",
+        "frontend/src/lib/severity.ts"
       ]
     },
     {

@@ -14,5 +14,13 @@
     "skipLibCheck": true,
     "noEmit": true
   },
-  "include": ["cluster-mode", "harness", "specs", "cluster-mode.config.ts", "playwright.config.ts"]
+  "include": [
+    "cluster-mode",
+    "harness",
+    "specs",
+    "specs-full",
+    "shots",
+    "cluster-mode.config.ts",
+    "playwright.config.ts"
+  ]
 }
