@@ -45,7 +45,7 @@ func TestACustomResourceThatIsNotReadyIsReported(t *testing.T) {
 	}
 
 	row, ok := rowNamed(build(t, lister, catalog()), "wildcard")
-	if !ok || row.Detector != detectorCondition || row.Severity != api.SeverityDegraded {
+	if !ok || row.Detector != detectorCondition || row.Severity != api.SeverityMedium {
 		t.Fatalf("row = %+v, want a degraded condition row", row)
 	}
 	if !contains(row.Detail, "DNS01 challenge") {
@@ -241,7 +241,7 @@ func TestWhichConditionsCountAsBroken(t *testing.T) {
 		},
 		{name: "stalled", conditions: []any{condition("Stalled", "True", nil)}, want: "Stalled"},
 		{name: "not stalled", conditions: []any{condition("Stalled", "False", nil)}, want: ""},
-		{name: "degraded", conditions: []any{condition("Degraded", "True", nil)}, want: "Degraded"},
+		{name: "medium", conditions: []any{condition("Degraded", "True", nil)}, want: "Degraded"},
 		{name: "failed", conditions: []any{condition("Failed", "True", nil)}, want: "Failed"},
 		{
 			name:       "a vocabulary this fallback does not know",

@@ -30,7 +30,7 @@ func TestAQuotaRejectionIsFatalAndNamed(t *testing.T) {
 	queue := build(t, lister, catalog(deploymentDescriptor()))
 
 	row, ok := rowNamed(queue, "web")
-	if !ok || row.Title != "BlockedByQuota" || row.Severity != api.SeverityFatal {
+	if !ok || row.Title != "BlockedByQuota" || row.Severity != api.SeverityHigh {
 		t.Fatalf("row = %+v, want a fatal quota row", row)
 	}
 }
@@ -98,7 +98,7 @@ func TestAStalledRolloutWithNothingAvailableIsFatal(t *testing.T) {
 	lister := &stubLister{items: deploymentItems(deployment)}
 
 	row, _ := rowNamed(build(t, lister, catalog(deploymentDescriptor())), "web")
-	if row.Severity != api.SeverityFatal || row.Title != "ProgressDeadlineExceeded" {
+	if row.Severity != api.SeverityHigh || row.Title != "ProgressDeadlineExceeded" {
 		t.Fatalf("row = %+v, want a fatal stalled rollout", row)
 	}
 }
@@ -111,7 +111,7 @@ func TestAStalledRolloutWithSomethingServingIsDegraded(t *testing.T) {
 	lister := &stubLister{items: deploymentItems(deployment)}
 
 	row, _ := rowNamed(build(t, lister, catalog(deploymentDescriptor())), "web")
-	if row.Severity != api.SeverityDegraded || row.Title != "RolloutStalled" {
+	if row.Severity != api.SeverityMedium || row.Title != "RolloutStalled" {
 		t.Fatalf("row = %+v, want a degraded stalled rollout", row)
 	}
 	if !contains(row.Detail, "stopped making progress") {
@@ -133,7 +133,7 @@ func TestReplicasShortOfDesiredAreReportedAfterTheGrace(t *testing.T) {
 	if !contains(row.Detail, "longer than 2m") {
 		t.Fatalf("detail = %q, want the grace in interface units", row.Detail)
 	}
-	if row.Severity != api.SeverityDegraded {
+	if row.Severity != api.SeverityMedium {
 		t.Fatalf("severity = %q, want degraded while one replica serves", row.Severity)
 	}
 }
@@ -146,7 +146,7 @@ func TestNoReplicasReadyIsFatal(t *testing.T) {
 	lister := &stubLister{items: deploymentItems(deployment)}
 
 	row, _ := rowNamed(build(t, lister, catalog(deploymentDescriptor())), "web")
-	if row.Severity != api.SeverityFatal {
+	if row.Severity != api.SeverityHigh {
 		t.Fatalf("severity = %q, want fatal when nothing is ready", row.Severity)
 	}
 }
@@ -230,7 +230,7 @@ func TestAFailedJobIsFatal(t *testing.T) {
 	lister := &stubLister{items: map[string][]*unstructured.Unstructured{"jobs": {job}}}
 
 	row, _ := rowNamed(build(t, lister, catalog(desc)), "import")
-	if row.Title != "JobFailed" || row.Severity != api.SeverityFatal {
+	if row.Title != "JobFailed" || row.Severity != api.SeverityHigh {
 		t.Fatalf("row = %+v, want a fatal job row", row)
 	}
 	if !contains(row.Detail, "backoff limit") {

@@ -267,14 +267,14 @@ func issuesOfApplier(obj *unstructured.Unstructured) []api.GitopsIssue {
 	out := []api.GitopsIssue{}
 	if obj.GetDeletionTimestamp() != nil {
 		out = append(out, api.GitopsIssue{
-			Severity: api.SeverityWarning,
+			Severity: api.SeverityLow,
 			Title:    "This object is being deleted",
 			Detail:   heldByFinalizers(obj.GetFinalizers()),
 		})
 	}
 	if unstr.Bool(obj, "spec", "suspend") {
 		out = append(out, api.GitopsIssue{
-			Severity: api.SeverityWarning,
+			Severity: api.SeverityLow,
 			Title:    "Nothing will reconcile this",
 			Detail:   "it is suspended; nothing changes until someone resumes it",
 			Subject:  "drift",
@@ -307,7 +307,7 @@ func failingConditions(obj *unstructured.Unstructured) []api.GitopsIssue {
 		}
 		message := unstr.At(entry, "message")
 		out = append(out, api.GitopsIssue{
-			Severity: api.SeverityFatal,
+			Severity: api.SeverityHigh,
 			Title:    unstr.At(entry, "reason"),
 			Detail:   withCause(message),
 			Subject:  kind,

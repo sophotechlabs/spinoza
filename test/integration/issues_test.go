@@ -86,8 +86,8 @@ func TestACrashLoopFoldsUnderItsDeployment(t *testing.T) {
 	if row.Kind != "Deployment" {
 		t.Fatalf("kind = %q, want the row to name the deployment, not a pod", row.Kind)
 	}
-	if row.Severity != api.SeverityFatal {
-		t.Fatalf("severity = %q, want fatal", row.Severity)
+	if row.Severity != api.SeverityHigh {
+		t.Fatalf("severity = %q, want high", row.Severity)
 	}
 	if row.Folded == 0 || len(row.Children) == 0 {
 		t.Fatalf("row = %+v, want the pods folded underneath", row)
@@ -108,8 +108,8 @@ func TestAnImageThatCannotBePulledIsReported(t *testing.T) {
 		return row.Title == "ImagePullBackOff" || row.Title == "ErrImagePull"
 	})
 
-	if row.Severity != api.SeverityFatal {
-		t.Fatalf("severity = %q, want fatal", row.Severity)
+	if row.Severity != api.SeverityHigh {
+		t.Fatalf("severity = %q, want high", row.Severity)
 	}
 }
 
@@ -180,8 +180,8 @@ func TestAJobThatGivesUpIsReported(t *testing.T) {
 		return row.Title == "JobFailed"
 	})
 
-	if row.Severity != api.SeverityFatal {
-		t.Fatalf("severity = %q, want fatal", row.Severity)
+	if row.Severity != api.SeverityHigh {
+		t.Fatalf("severity = %q, want high", row.Severity)
 	}
 }
 

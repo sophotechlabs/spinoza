@@ -69,7 +69,7 @@ function resourceOf(raw: unknown): GitopsResource {
 function issueOf(raw: unknown): GitopsIssue {
   const item = raw as Partial<GitopsIssue>;
   return {
-    severity: oneOf(item.severity, SEVERITIES, 'info'),
+    severity: oneOf(item.severity, SEVERITIES, 'low'),
     title: item.title ?? '',
     detail: item.detail,
     subject: item.subject,

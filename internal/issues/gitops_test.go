@@ -61,7 +61,7 @@ func TestAStalledKustomizationIsFatal(t *testing.T) {
 	lister := &stubLister{items: map[string][]*unstructured.Unstructured{"kustomizations": {obj}}}
 
 	row, ok := rowNamed(build(t, lister, catalog(kustomizationDescriptor())), "apps")
-	if !ok || row.Severity != api.SeverityFatal || row.Title != "BuildFailed" {
+	if !ok || row.Severity != api.SeverityHigh || row.Title != "BuildFailed" {
 		t.Fatalf("row = %+v, want a fatal stalled kustomization", row)
 	}
 	if row.Change != "9f8e7d6" {
@@ -89,7 +89,7 @@ func TestAnUnknownReadyStateIsDegraded(t *testing.T) {
 	lister := &stubLister{items: map[string][]*unstructured.Unstructured{"kustomizations": {obj}}}
 
 	row, _ := rowNamed(build(t, lister, catalog(kustomizationDescriptor())), "apps")
-	if row.Severity != api.SeverityDegraded {
+	if row.Severity != api.SeverityMedium {
 		t.Fatalf("severity = %q, want degraded while it is still unknown", row.Severity)
 	}
 }
@@ -150,7 +150,7 @@ func TestAFailedArgoSyncIsFatal(t *testing.T) {
 	lister := &stubLister{items: map[string][]*unstructured.Unstructured{"applications": {obj}}}
 
 	row, _ := rowNamed(build(t, lister, catalog(argoDescriptor())), "web")
-	if row.Title != "SyncFailed" || row.Severity != api.SeverityFatal {
+	if row.Title != "SyncFailed" || row.Severity != api.SeverityHigh {
 		t.Fatalf("row = %+v, want a fatal sync failure", row)
 	}
 	if row.Change != "1a2b3c4" {
@@ -191,7 +191,7 @@ func TestAnOutOfSyncApplicationIsOnlyAWarning(t *testing.T) {
 	lister := &stubLister{items: map[string][]*unstructured.Unstructured{"applications": {obj}}}
 
 	row, _ := rowNamed(build(t, lister, catalog(argoDescriptor())), "web")
-	if row.Severity != api.SeverityWarning || row.Title != "OutOfSync" {
+	if row.Severity != api.SeverityLow || row.Title != "OutOfSync" {
 		t.Fatalf("row = %+v, want a warning", row)
 	}
 }

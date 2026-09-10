@@ -1,11 +1,9 @@
 import { useState } from 'react';
 import type { ReactNode } from 'react';
-import type { Issue, IssueChild, IssueTally, ObjectRef, Severity } from '../lib/types';
+import type { Issue, IssueChild, IssueTally, ObjectRef } from '../lib/types';
 import {
   foldedLabel,
   hiddenChildren,
-  severityClass,
-  severityLabel,
   tallyCounts,
   tallyScope,
   usePagedIssues,
@@ -13,6 +11,7 @@ import {
   orderLabel,
 } from '../lib/issues';
 import type { IssueOrder } from '../lib/issues';
+import { SEVERITY_ORDER, severityClass, severityLabel } from '../lib/severity';
 import { ago } from '../lib/time';
 import { useNow } from '../lib/useNow';
 import { nameOf, tabOn, useClustersStore, useTabStrip } from '../store/clusters';
@@ -28,8 +27,6 @@ interface IssueQueueProps {
   onSelect?: (ref: ObjectRef) => void;
   onSelectOn?: (cluster: string, ref: ObjectRef) => void;
 }
-
-const SEVERITY_ORDER: Severity[] = ['fatal', 'degraded', 'warning'];
 
 function Tally({
   rows,
@@ -271,7 +268,7 @@ export default function IssueQueue({ active = true, onSelect, onSelectOn }: Issu
       <WorkspaceHeader
         title="Issues"
         scope={issuesScope(fleet, shownCluster)}
-        scale="broken, degraded and warning, by how far the problem reaches"
+        scale="high, medium and low, by how serious it is; reach counts objects"
       />
       <DenseToolbar label="Issue filters">
         {several && (

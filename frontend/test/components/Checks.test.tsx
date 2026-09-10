@@ -1049,3 +1049,59 @@ describe('the configure drawer', () => {
     expect(screen.getByRole('button', { name: 'Configure' })).toHaveFocus();
   });
 });
+
+describe('reading the audit another way', () => {
+  it('picks the format the export is handed over in', async () => {
+    show({ groups: [makeGroup('privileged-containers', { findings: [makeFinding()] })] });
+    await openConfigure();
+
+    await userEvent.selectOptions(screen.getByLabelText('Export format'), 'sarif');
+
+    expect(screen.getByLabelText('Export format')).toHaveValue('sarif');
+    expect(screen.getByRole('button', { name: 'Export' })).toHaveAttribute(
+      'title',
+      'for whatever already reads sarif',
+    );
+  });
+
+  it('swaps between the check list and the framework view', async () => {
+    const report = { groups: [makeGroup('privileged-containers', { findings: [makeFinding()] })] };
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string) => {
+        if (url.startsWith('/api/checks/frameworks')) {
+          return Promise.resolve({
+            ok: true,
+            status: 200,
+            json: () =>
+              Promise.resolve({
+                frameworks: ['CIS Kubernetes Benchmark'],
+                controls: [
+                  {
+                    framework: 'CIS Kubernetes Benchmark',
+                    control: '5.2.2',
+                    title: 'Minimize privileged containers',
+                    scope: 'covered',
+                    failing: 1,
+                  },
+                ],
+              }),
+          });
+        }
+        return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(report) });
+      }),
+    );
+    render(<Checks onOpen={vi.fn()} />);
+    await screen.findByRole('button', { name: /Privileged containers/ });
+
+    await userEvent.click(screen.getByRole('button', { name: 'By framework' }));
+
+    expect(await screen.findByRole('button', { name: 'By check' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Privileged containers/ })).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: 'By check' }));
+    expect(
+      await screen.findByRole('button', { name: /Privileged containers/ }),
+    ).toBeInTheDocument();
+  });
+});

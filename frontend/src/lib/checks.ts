@@ -25,10 +25,9 @@ import type { Polled } from './usePoll';
 import { useChecksFilter, useChecksInterval } from '../store/settings';
 import type { ChecksFilter } from '../store/settings';
 import { SEVERITY_FLOORS } from './settings';
+import { severityRank } from './severity';
 
 const BASELINE_TIMEOUT_MS = SLOW_REQUEST_TIMEOUT_MS;
-
-const SEVERITY_RANK: Record<CheckSeverity, number> = { high: 0, medium: 1, low: 2 };
 
 export const CATEGORY_LABELS: Record<CheckCategory, string> = {
   security: 'Security',
@@ -450,7 +449,12 @@ export async function fetchPosture(framework = ''): Promise<FrameworkPosture> {
   if (!response.ok) {
     throw await failure(response, `framework posture failed with status ${response.status}`);
   }
-  return (await response.json()) as FrameworkPosture;
+  const body = (await response.json()) as Partial<FrameworkPosture>;
+  return {
+    frameworks: body.frameworks ?? [],
+    controls: body.controls ?? [],
+    reason: body.reason,
+  };
 }
 
 export async function ruleFaults(rules: string): Promise<RuleFault[]> {
@@ -488,7 +492,7 @@ export function totalFindings(report: CheckReportView): number {
 
 export function bySeverity(groups: CheckGroupView[]): CheckGroupView[] {
   return [...groups].sort((left, right) => {
-    const rank = SEVERITY_RANK[left.severity] - SEVERITY_RANK[right.severity];
+    const rank = severityRank(left.severity) - severityRank(right.severity);
     if (rank !== 0) {
       return rank;
     }
@@ -498,16 +502,6 @@ export function bySeverity(groups: CheckGroupView[]): CheckGroupView[] {
 
 export function inCategory(groups: CheckGroupView[], category: CheckCategory): CheckGroupView[] {
   return bySeverity(groups.filter((group) => group.category === category));
-}
-
-export function severityClass(severity: CheckSeverity): string {
-  if (severity === 'high') {
-    return 'text-error';
-  }
-  if (severity === 'medium') {
-    return 'text-warn';
-  }
-  return 'text-fg-muted';
 }
 
 export function countLabel(group: CheckGroupView): string {

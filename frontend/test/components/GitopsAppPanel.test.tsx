@@ -200,8 +200,8 @@ describe('the per-application panel', () => {
     serve(
       appWith({
         issues: [
-          { severity: 'degraded', title: 'The last operation failed', detail: 'because' },
-          { severity: 'info', title: 'Something else' },
+          { severity: 'medium', title: 'The last operation failed', detail: 'because' },
+          { severity: 'low', title: 'Something else' },
         ],
       }),
     );

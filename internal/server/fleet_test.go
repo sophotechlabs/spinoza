@@ -64,8 +64,8 @@ func contains(haystack, needle string) bool {
 
 func TestTheFleetQueueHoldsEveryOpenClustersIssues(t *testing.T) {
 	ts := queueServer(t,
-		queueOf(issue("a", api.SeverityWarning)),
-		queueOf(issue("b", api.SeverityWarning)))
+		queueOf(issue("a", api.SeverityLow)),
+		queueOf(issue("b", api.SeverityLow)))
 
 	_, body := doRequest(t, http.MethodGet, ts.URL+"/api/issues/fleet", nil)
 
@@ -77,8 +77,8 @@ func TestTheFleetQueueHoldsEveryOpenClustersIssues(t *testing.T) {
 
 func TestEveryFleetRowSaysWhichClusterItIsOn(t *testing.T) {
 	ts := queueServer(t,
-		queueOf(issue("a", api.SeverityWarning)),
-		queueOf(issue("b", api.SeverityWarning)))
+		queueOf(issue("a", api.SeverityLow)),
+		queueOf(issue("b", api.SeverityLow)))
 
 	_, body := doRequest(t, http.MethodGet, ts.URL+"/api/issues/fleet", nil)
 
@@ -93,8 +93,8 @@ func TestEveryFleetRowSaysWhichClusterItIsOn(t *testing.T) {
 
 func TestTheWorstInTheFleetIsAtTheTopWhicheverClusterItIsOn(t *testing.T) {
 	ts := queueServer(t,
-		queueOf(issue("mild", api.SeverityWarning)),
-		queueOf(issue("broken", api.SeverityFatal)))
+		queueOf(issue("mild", api.SeverityLow)),
+		queueOf(issue("broken", api.SeverityHigh)))
 
 	_, body := doRequest(t, http.MethodGet, ts.URL+"/api/issues/fleet", nil)
 
@@ -106,7 +106,7 @@ func TestTheWorstInTheFleetIsAtTheTopWhicheverClusterItIsOn(t *testing.T) {
 
 func TestAClusterThatCouldNotAnswerIsNamedRatherThanMissed(t *testing.T) {
 	ts := queueServer(t,
-		queueOf(issue("a", api.SeverityWarning)),
+		queueOf(issue("a", api.SeverityLow)),
 		api.IssueQueue{Error: "the cluster is not answering"})
 
 	_, body := doRequest(t, http.MethodGet, ts.URL+"/api/issues/fleet", nil)
@@ -119,8 +119,8 @@ func TestAClusterThatCouldNotAnswerIsNamedRatherThanMissed(t *testing.T) {
 
 func TestWhatEachClusterHeldBackIsCountedTogether(t *testing.T) {
 	ts := queueServer(t,
-		api.IssueQueue{Rows: []api.Issue{issue("a", api.SeverityWarning)}, Dropped: 3},
-		api.IssueQueue{Rows: []api.Issue{issue("b", api.SeverityWarning)}, Dropped: 4})
+		api.IssueQueue{Rows: []api.Issue{issue("a", api.SeverityLow)}, Dropped: 3},
+		api.IssueQueue{Rows: []api.Issue{issue("b", api.SeverityLow)}, Dropped: 4})
 
 	_, body := doRequest(t, http.MethodGet, ts.URL+"/api/issues/fleet", nil)
 
@@ -133,8 +133,8 @@ func TestTheMergedQueueStopsAtTheSameCapOneClusterDoes(t *testing.T) {
 	first := api.IssueQueue{}
 	second := api.IssueQueue{}
 	for at := range issues.MaxRows {
-		first.Rows = append(first.Rows, issue("a"+itoa(at), api.SeverityWarning))
-		second.Rows = append(second.Rows, issue("b"+itoa(at), api.SeverityWarning))
+		first.Rows = append(first.Rows, issue("a"+itoa(at), api.SeverityLow))
+		second.Rows = append(second.Rows, issue("b"+itoa(at), api.SeverityLow))
 	}
 	ts := queueServer(t, first, second)
 
@@ -156,8 +156,8 @@ func TestTheFleetQueueHandsOutOnePageAtATime(t *testing.T) {
 	first := api.IssueQueue{}
 	second := api.IssueQueue{}
 	for at := range issues.Shown {
-		first.Rows = append(first.Rows, issue("a"+itoa(at), api.SeverityWarning))
-		second.Rows = append(second.Rows, issue("b"+itoa(at), api.SeverityWarning))
+		first.Rows = append(first.Rows, issue("a"+itoa(at), api.SeverityLow))
+		second.Rows = append(second.Rows, issue("b"+itoa(at), api.SeverityLow))
 	}
 	ts := queueServer(t, first, second)
 
@@ -193,7 +193,7 @@ func TestTheFleetQueueHandsOutOnePageAtATime(t *testing.T) {
 }
 
 func TestTheFleetQueueRefusesAnInvalidCursor(t *testing.T) {
-	ts := queueServer(t, queueOf(issue("a", api.SeverityWarning)), queueOf())
+	ts := queueServer(t, queueOf(issue("a", api.SeverityLow)), queueOf())
 
 	resp, body := doRequest(t, http.MethodGet, ts.URL+"/api/issues/fleet?after=not-base64!", nil)
 
@@ -203,7 +203,7 @@ func TestTheFleetQueueRefusesAnInvalidCursor(t *testing.T) {
 }
 
 func TestAClusterWithNoBackendIsSkippedRatherThanFatal(t *testing.T) {
-	srv, held := twoClusters(t, &queueBackend{queue: queueOf(issue("a", api.SeverityWarning))}, nil)
+	srv, held := twoClusters(t, &queueBackend{queue: queueOf(issue("a", api.SeverityLow))}, nil)
 	held.backends[mk2] = nil
 	ts := httptest.NewServer(authed(srv.Handler()))
 	t.Cleanup(ts.Close)
@@ -219,7 +219,7 @@ func TestAClusterWithNoBackendIsSkippedRatherThanFatal(t *testing.T) {
 }
 
 func TestOneClustersQueueStillSaysWhichClusterItIsOn(t *testing.T) {
-	ts := queueServer(t, queueOf(issue("a", api.SeverityWarning)), queueOf())
+	ts := queueServer(t, queueOf(issue("a", api.SeverityLow)), queueOf())
 
 	_, body := doRequest(t, http.MethodGet, ts.URL+"/api/issues?cluster="+urlValue(mk1), nil)
 

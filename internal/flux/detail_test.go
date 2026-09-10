@@ -385,8 +385,8 @@ func TestAFailingFluxObjectIsAsFatalAsItIsInTheQueue(t *testing.T) {
 
 	got := Detail(obj, kustomizationDesc())
 
-	if got.Issues[0].Severity != api.SeverityFatal {
-		t.Fatalf("severity = %q, want %q", got.Issues[0].Severity, api.SeverityFatal)
+	if got.Issues[0].Severity != api.SeverityHigh {
+		t.Fatalf("severity = %q, want %q", got.Issues[0].Severity, api.SeverityHigh)
 	}
 }
 

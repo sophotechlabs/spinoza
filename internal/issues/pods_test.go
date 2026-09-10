@@ -26,7 +26,7 @@ func TestACrashLoopIsFatalAndNamesTheExitCode(t *testing.T) {
 	if !ok {
 		t.Fatalf("rows = %+v, want the crashlooping pod", queue.Rows)
 	}
-	if row.Severity != api.SeverityFatal {
+	if row.Severity != api.SeverityHigh {
 		t.Fatalf("severity = %q, want fatal", row.Severity)
 	}
 	if row.Title != "CrashLoopBackOff" {
@@ -59,7 +59,7 @@ func TestAContainerBackedOffWhileTerminatedIsACrashLoop(t *testing.T) {
 	if row.Title != "CrashLoopBackOff" {
 		t.Fatalf("title = %q, want CrashLoopBackOff", row.Title)
 	}
-	if row.Severity != api.SeverityFatal {
+	if row.Severity != api.SeverityHigh {
 		t.Fatalf("severity = %q, want fatal", row.Severity)
 	}
 }
@@ -139,7 +139,7 @@ func TestAnOOMKillIsReported(t *testing.T) {
 	queue := build(t, lister, catalog(podDescriptor()))
 
 	row, _ := rowNamed(queue, "web-4")
-	if row.Title != "OOMKilled" || row.Severity != api.SeverityFatal {
+	if row.Title != "OOMKilled" || row.Severity != api.SeverityHigh {
 		t.Fatalf("row = %+v, want a fatal OOMKilled row", row)
 	}
 }

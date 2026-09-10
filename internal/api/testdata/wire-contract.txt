@@ -511,10 +511,10 @@ IssueQueue.Error error,omitempty string
 IssueQueue.Next next,omitempty string
 IssueQueue.Rows rows []Issue
 IssueQueue.Tally tally,omitempty *IssueTally
-IssueTally.Degraded degraded int
-IssueTally.Fatal fatal int
+IssueTally.High high int
+IssueTally.Low low int
+IssueTally.Medium medium int
 IssueTally.Total total int
-IssueTally.Warning warning int
 KindComparison.Differs differs int
 KindComparison.LeftContext leftContext string
 KindComparison.MatchedByName matchedByName,omitempty bool

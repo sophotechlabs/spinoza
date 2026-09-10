@@ -46,7 +46,7 @@ func terminatingIssue(app *unstructured.Unstructured) []api.GitopsIssue {
 		return nil
 	}
 	return []api.GitopsIssue{{
-		Severity: api.SeverityWarning,
+		Severity: api.SeverityLow,
 		Title:    "This application is being deleted",
 		Detail:   heldBy(app.GetFinalizers()),
 	}}
@@ -82,12 +82,12 @@ func conditionIssues(app *unstructured.Unstructured) []api.GitopsIssue {
 
 func severityOf(kind string) string {
 	if strings.HasSuffix(kind, "Warning") {
-		return api.SeverityWarning
+		return api.SeverityLow
 	}
 	if strings.HasSuffix(kind, "Error") {
-		return api.SeverityDegraded
+		return api.SeverityMedium
 	}
-	return api.SeverityInfo
+	return api.SeverityLow
 }
 
 func adviceFor(kind string) string {
@@ -105,7 +105,7 @@ func operationIssue(app *unstructured.Unstructured) []api.GitopsIssue {
 	}
 	message := unstr.String(app, "status", "operationState", "message")
 	return []api.GitopsIssue{{
-		Severity: api.SeverityFatal,
+		Severity: api.SeverityHigh,
 		Title:    "The last operation " + strings.ToLower(phase),
 		Detail:   detailOf(message),
 		Subject:  "operation",
@@ -126,7 +126,7 @@ func driftIssues(app *unstructured.Unstructured) []api.GitopsIssue {
 	}
 	if !AutoSyncing(app) {
 		return []api.GitopsIssue{{
-			Severity: api.SeverityWarning,
+			Severity: api.SeverityLow,
 			Title:    "Nothing will reconcile this",
 			Detail:   "auto-sync is off; nothing changes until someone syncs",
 			Subject:  "drift",
@@ -136,7 +136,7 @@ func driftIssues(app *unstructured.Unstructured) []api.GitopsIssue {
 		return nil
 	}
 	return []api.GitopsIssue{{
-		Severity: api.SeverityWarning,
+		Severity: api.SeverityLow,
 		Title:    "Synced, and out of sync again",
 		Detail: "the last sync succeeded and auto-sync is on, so something rewrites these fields after every apply: " +
 			"a mutating webhook, a second controller, or a migration",
@@ -172,7 +172,7 @@ func healthIssues(app *unstructured.Unstructured) []api.GitopsIssue {
 
 func healthSeverity(health string) string {
 	if health == degraded {
-		return api.SeverityFatal
+		return api.SeverityHigh
 	}
-	return api.SeverityDegraded
+	return api.SeverityMedium
 }

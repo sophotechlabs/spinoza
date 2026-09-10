@@ -174,7 +174,7 @@ func enrich(
 	}
 	if len(order) > len(read) {
 		app.Issues = append(app.Issues, api.GitopsIssue{
-			Severity: api.SeverityInfo,
+			Severity: api.SeverityLow,
 			Title:    fmt.Sprintf("%d of %d managed resources were read from the cluster", len(read), len(order)),
 			Detail:   "the rest show what the controller reported",
 		})

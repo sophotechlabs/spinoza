@@ -45,7 +45,7 @@ func TestAPodThatWentQuietAfterBindingIsReported(t *testing.T) {
 	if !contains(row.Detail, "10m ago") {
 		t.Fatalf("detail = %q, want the elapsed time in interface units", row.Detail)
 	}
-	if row.Severity != api.SeverityWarning {
+	if row.Severity != api.SeverityLow {
 		t.Fatalf("severity = %q, want warning", row.Severity)
 	}
 }
@@ -212,7 +212,7 @@ func TestAPodTheKubeletComplainedAboutIsReportedInItsOwnWords(t *testing.T) {
 	if !contains(row.Detail, `secret "api" not found`) {
 		t.Fatalf("detail = %q, want the kubelet's own message", row.Detail)
 	}
-	if row.Severity != api.SeverityFatal {
+	if row.Severity != api.SeverityHigh {
 		t.Fatalf("severity = %q, want fatal", row.Severity)
 	}
 	if row.Uncertain {

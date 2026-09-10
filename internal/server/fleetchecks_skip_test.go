@@ -389,7 +389,7 @@ func TestAClusterThatPanickedIsNamedAndTheOthersStillAnswer(t *testing.T) {
 }
 
 func TestAPanicInOneClustersIssuesDoesNotTakeTheProcessDown(t *testing.T) {
-	srv, _ := twoClusters(t, &queueBackend{queue: queueOf(issue("a", api.SeverityWarning))}, &panicking{})
+	srv, _ := twoClusters(t, &queueBackend{queue: queueOf(issue("a", api.SeverityLow))}, &panicking{})
 	ts := httptest.NewServer(authed(srv.Handler()))
 	t.Cleanup(ts.Close)
 

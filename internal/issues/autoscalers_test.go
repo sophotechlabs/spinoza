@@ -43,7 +43,7 @@ func TestAnAutoscalerThatCannotReadMetricsIsDegraded(t *testing.T) {
 	lister := &stubLister{items: autoscalerItems(obj)}
 
 	row, ok := rowNamed(build(t, lister, catalog(autoscalerDescriptor())), "web")
-	if !ok || row.Title != "FailedGetResourceMetric" || row.Severity != api.SeverityDegraded {
+	if !ok || row.Title != "FailedGetResourceMetric" || row.Severity != api.SeverityMedium {
 		t.Fatalf("row = %+v, want a degraded metrics row", row)
 	}
 }
@@ -68,7 +68,7 @@ func TestAnAutoscalerThatCannotScaleIsDegraded(t *testing.T) {
 	lister := &stubLister{items: autoscalerItems(obj)}
 
 	row, _ := rowNamed(build(t, lister, catalog(autoscalerDescriptor())), "web")
-	if row.Title != "FailedGetScale" || row.Severity != api.SeverityDegraded {
+	if row.Title != "FailedGetScale" || row.Severity != api.SeverityMedium {
 		t.Fatalf("row = %+v, want the scale target problem", row)
 	}
 }
@@ -90,7 +90,7 @@ func TestAPinnedAutoscalerIsAWarning(t *testing.T) {
 	lister := &stubLister{items: autoscalerItems(obj)}
 
 	row, _ := rowNamed(build(t, lister, catalog(autoscalerDescriptor())), "web")
-	if row.Title != "Pinned" || row.Severity != api.SeverityWarning {
+	if row.Title != "Pinned" || row.Severity != api.SeverityLow {
 		t.Fatalf("row = %+v, want a pinned warning", row)
 	}
 	if !contains(row.Detail, "both 3") {

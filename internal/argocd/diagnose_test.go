@@ -45,18 +45,18 @@ func TestConditionsBecomeTypedIssues(t *testing.T) {
 	issues := Detail(app).Issues
 
 	comparison, found := issueAbout(issues, "ComparisonError")
-	if !found || comparison.Severity != api.SeverityDegraded {
+	if !found || comparison.Severity != api.SeverityMedium {
 		t.Fatalf("comparison issue = %+v, want it degraded", comparison)
 	}
 	if !strings.Contains(comparison.Detail, "repository credentials") {
 		t.Fatalf("detail = %q, want it to say what to do", comparison.Detail)
 	}
 	orphaned, found := issueAbout(issues, "OrphanedResourceWarning")
-	if !found || orphaned.Severity != api.SeverityWarning {
+	if !found || orphaned.Severity != api.SeverityLow {
 		t.Fatalf("orphan issue = %+v, want a warning", orphaned)
 	}
 	other, found := issueAbout(issues, "SomethingElse")
-	if !found || other.Severity != api.SeverityInfo {
+	if !found || other.Severity != api.SeverityLow {
 		t.Fatalf("unclassified issue = %+v, want info", other)
 	}
 	if other.Detail != "" {
@@ -186,14 +186,14 @@ func TestBrokenResourcesEachGetAnIssue(t *testing.T) {
 	issues := Detail(app).Issues
 
 	broken, found := issueAbout(issues, "Deployment/podinfo")
-	if !found || broken.Severity != api.SeverityFatal {
+	if !found || broken.Severity != api.SeverityHigh {
 		t.Fatalf("degraded issue = %+v, want the same word the issues queue uses", broken)
 	}
 	if broken.Detail != "0/3 ready" {
 		t.Fatalf("detail = %q, want the health message", broken.Detail)
 	}
 	gone, found := issueAbout(issues, "Service/podinfo")
-	if !found || gone.Severity != api.SeverityDegraded {
+	if !found || gone.Severity != api.SeverityMedium {
 		t.Fatalf("missing issue = %+v, want it ranked under a degraded one", gone)
 	}
 }
@@ -274,17 +274,16 @@ func TestAFailedOperationIsAsFatalHereAsItIsInTheQueue(t *testing.T) {
 
 	issue, _ := issueAbout(Detail(app).Issues, "operation")
 
-	if issue.Severity != api.SeverityFatal {
-		t.Fatalf("severity = %q, want %q so one failure reads the same on both surfaces", issue.Severity, api.SeverityFatal)
+	if issue.Severity != api.SeverityHigh {
+		t.Fatalf("severity = %q, want %q so one failure reads the same on both surfaces", issue.Severity, api.SeverityHigh)
 	}
 }
 
 func TestEverySeverityComesFromTheSharedVocabulary(t *testing.T) {
 	known := map[string]bool{
-		api.SeverityFatal:    true,
-		api.SeverityDegraded: true,
-		api.SeverityWarning:  true,
-		api.SeverityInfo:     true,
+		api.SeverityHigh:   true,
+		api.SeverityMedium: true,
+		api.SeverityLow:    true,
 	}
 	app := detailed()
 	_ = unstructured.SetNestedField(app.Object, "Failed", "status", "operationState", "phase")

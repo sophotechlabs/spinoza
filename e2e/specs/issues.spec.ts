@@ -3,10 +3,10 @@ import { openView } from '../harness/app';
 import { kubectl } from '../harness/cluster';
 import { NAMESPACE } from '../harness/paths';
 
-test('the queue ranks a crash loop as broken and names its cause', async ({ page }) => {
+test('the queue ranks a crash loop high and names its cause', async ({ page }) => {
   await openView(page, 'issues');
   const main = page.locator('main');
-  await expect(main).toContainText('broken', { timeout: 60_000 });
+  await expect(main).toContainText('high', { timeout: 60_000 });
   await expect(main).toContainText('crashing');
   await expect(main).toContainText('CrashLoopBackOff');
 });
@@ -48,9 +48,9 @@ test('the queue clears itself once the workload stops failing', async ({ page })
 test('the queue exposes every severity tally even when one is zero', async ({ page }) => {
   await openView(page, 'issues');
   const main = page.locator('main');
-  await expect(main.getByText(/\d+ broken/)).toBeVisible({ timeout: 60_000 });
-  await expect(main.getByText(/\d+ degraded/)).toBeVisible();
-  await expect(main.getByText(/\d+ warning/)).toBeVisible();
+  await expect(main.getByText(/\d+ high/)).toBeVisible({ timeout: 60_000 });
+  await expect(main.getByText(/\d+ medium/)).toBeVisible();
+  await expect(main.getByText(/\d+ low/)).toBeVisible();
 });
 
 test('the issue order picker asks for newest and oldest independently', async ({ page }) => {

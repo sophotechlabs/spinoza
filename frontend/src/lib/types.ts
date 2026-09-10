@@ -827,7 +827,7 @@ export interface ClusterOverview {
   error?: string;
 }
 
-export const SEVERITIES = ['fatal', 'degraded', 'warning', 'info'] as const;
+export const SEVERITIES = ['high', 'medium', 'low'] as const;
 
 export type Severity = (typeof SEVERITIES)[number];
 
@@ -858,9 +858,9 @@ export interface Issue {
 }
 
 export interface IssueTally {
-  fatal: number;
-  degraded: number;
-  warning: number;
+  high: number;
+  medium: number;
+  low: number;
   total: number;
 }
 
@@ -1213,7 +1213,7 @@ export interface MetricHistory {
   memory: MetricPoint[];
 }
 
-export type CheckSeverity = 'high' | 'medium' | 'low';
+export type CheckSeverity = Severity;
 
 export type CheckCategory = 'security' | 'reliability' | 'efficiency';
 

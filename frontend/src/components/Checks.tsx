@@ -29,7 +29,6 @@ import {
   refKeyOf,
   ruleFaults,
   saveBaselineFile,
-  severityClass,
   severityReason,
   shownLabel,
   takeBaseline,
@@ -50,6 +49,7 @@ import { actionClass } from '../lib/actions';
 import { ROW } from '../lib/rows';
 import { useShownCluster } from '../lib/tabs';
 import CapabilityState from './CapabilityState';
+import { severityClass } from '../lib/severity';
 import FrameworkPosture from './FrameworkPosture';
 
 const PAGE_SIZE = 200;
@@ -1559,7 +1559,7 @@ export default function Checks({ onOpen }: ChecksProps) {
       <WorkspaceHeader
         title="Cluster checks"
         scope={shownCluster}
-        scale="high, medium and low, by how serious the rule is"
+        scale="high, medium and low, by how serious it is"
       />
       {data?.error !== undefined && (
         <p role="status" className="border-b border-edge px-3 py-1 text-warn">

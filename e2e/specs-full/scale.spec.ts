@@ -85,7 +85,7 @@ test('the checks payload stays bounded when the cluster is not', async ({ page }
 
 test('the issue queue stays inside its row cap on a busy cluster', async ({ page }) => {
   await openView(page, 'issues');
-  await expect(page.locator('main')).toContainText(/broken|degraded|warning/, { timeout: 240_000 });
+  await expect(page.locator('main')).toContainText(/high|medium|low/, { timeout: 240_000 });
   expect(await page.locator('main tbody tr').count()).toBeLessThan(SCALE_WORKLOADS);
 });
 

@@ -351,7 +351,7 @@ func TestDetailSaysHowManyResourcesItReadLive(t *testing.T) {
 	for _, one := range got.Issues {
 		if strings.Contains(one.Title, "were read from the cluster") {
 			found = true
-			if one.Severity != api.SeverityInfo {
+			if one.Severity != api.SeverityLow {
 				t.Fatalf("severity = %q, want info", one.Severity)
 			}
 		}

@@ -719,7 +719,7 @@ function parseIssueChild(item: Record<string, unknown>): IssueChild {
   return {
     object: parseObjectRef(asRecord(item.object)),
     kind: asString(item.kind),
-    severity: oneOf(item.severity, SEVERITIES, 'warning'),
+    severity: oneOf(item.severity, SEVERITIES, 'low'),
     detail: asString(item.detail),
     since: asString(item.since),
   };
@@ -729,7 +729,7 @@ function parseIssue(item: Record<string, unknown>): Issue {
   return {
     id: asString(item.id),
     cluster: optionalString(item.cluster),
-    severity: oneOf(item.severity, SEVERITIES, 'warning'),
+    severity: oneOf(item.severity, SEVERITIES, 'low'),
     detector: asString(item.detector),
     title: asString(item.title),
     detail: asString(item.detail),
@@ -754,9 +754,9 @@ function parseIssueTally(value: unknown): IssueTally | undefined {
   }
   const item = asRecord(value);
   return {
-    fatal: asNumber(item.fatal),
-    degraded: asNumber(item.degraded),
-    warning: asNumber(item.warning),
+    high: asNumber(item.high),
+    medium: asNumber(item.medium),
+    low: asNumber(item.low),
     total: asNumber(item.total),
   };
 }

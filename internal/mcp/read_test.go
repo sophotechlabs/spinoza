@@ -58,7 +58,7 @@ func TestTheDashboardJoinsHealthCountsIssuesAndTheAudit(t *testing.T) {
 		overview: api.ClusterOverview{Version: "v1.30.0", Nodes: api.NodeSummary{Total: 3, Ready: 3}},
 		counts:   api.ResourceCounts{Failing: map[string]int{"apps/v1/deployments": 2}},
 		queue: api.IssueQueue{Rows: []api.Issue{{
-			Severity: api.SeverityFatal,
+			Severity: api.SeverityHigh,
 			Title:    "CrashLoopBackOff",
 			Object:   api.ObjectRef{Name: "web"},
 		}}},

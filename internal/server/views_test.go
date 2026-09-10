@@ -217,7 +217,7 @@ func TestTheIssuesEndpointServesTheQueueTheBackendBuilt(t *testing.T) {
 	backend := &stubViews{issues: api.IssueQueue{
 		Rows: []api.Issue{{
 			ID:       "pod-startup/uid-web",
-			Severity: api.SeverityFatal,
+			Severity: api.SeverityHigh,
 			Detector: "pod-startup",
 			Title:    "CrashLoopBackOff",
 			Object:   api.ObjectRef{Version: "v1", Resource: "deployments", Namespace: "web", Name: "api"},
@@ -250,7 +250,7 @@ func manyIssues(count int) api.IssueQueue {
 	for at := range count {
 		queue.Rows = append(queue.Rows, api.Issue{
 			ID:       "uid-" + strconv.Itoa(at),
-			Severity: api.SeverityWarning,
+			Severity: api.SeverityLow,
 			Title:    "noisy",
 			Object:   api.ObjectRef{Version: "v1", Resource: "pods", Namespace: "web", Name: "p" + strconv.Itoa(at)},
 			Kind:     "Pod",
@@ -309,8 +309,8 @@ func TestTheIssuesEndpointRefusesInvalidAndWrongOrderCursors(t *testing.T) {
 
 func TestTheQueueTallyCountsTheWholeClusterNotThePage(t *testing.T) {
 	queue := manyIssues(issues.Shown + 3)
-	queue.Rows[0].Severity = api.SeverityFatal
-	queue.Rows[1].Severity = api.SeverityDegraded
+	queue.Rows[0].Severity = api.SeverityHigh
+	queue.Rows[1].Severity = api.SeverityMedium
 	ts := stubbedServer(t, &stubViews{issues: queue})
 
 	var first api.IssueQueue
@@ -320,10 +320,10 @@ func TestTheQueueTallyCountsTheWholeClusterNotThePage(t *testing.T) {
 		t.Fatal("the queue carried no tally, so a header can only count the page it was handed")
 	}
 	want := api.IssueTally{
-		Fatal:    1,
-		Degraded: 1,
-		Warning:  issues.Shown + 1,
-		Total:    issues.Shown + 3,
+		High:   1,
+		Medium: 1,
+		Low:    issues.Shown + 1,
+		Total:  issues.Shown + 3,
 	}
 	if *first.Tally != want {
 		t.Fatalf("tally = %+v, want %+v", *first.Tally, want)

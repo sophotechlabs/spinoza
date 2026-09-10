@@ -34,7 +34,7 @@ const full = {
     policy: 'prune',
   },
   state: { sync: 'Synced', health: 'Healthy', revision: 'abc', syncedAt: 'now', message: 'ok' },
-  issues: [{ severity: 'warning', title: 'Drifting', detail: 'why', subject: 'drift' }],
+  issues: [{ severity: 'low', title: 'Drifting', detail: 'why', subject: 'drift' }],
   resources: [
     {
       group: 'apps',
@@ -121,7 +121,7 @@ describe('reading one application', () => {
       ref,
     );
 
-    expect(app.issues?.[0].severity).toBe('info');
+    expect(app.issues?.[0].severity).toBe('low');
     expect(app.resources?.[0].kind).toBe('');
     expect(app.resources?.[0].drift?.[0].path).toBe('');
     expect(app.history?.[0].id).toBe(0);

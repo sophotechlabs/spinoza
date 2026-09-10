@@ -85,7 +85,7 @@ func TestAFoldNeverLowersSeverity(t *testing.T) {
 	if len(queue.Rows) != 1 {
 		t.Fatalf("rows = %d, want one folded row", len(queue.Rows))
 	}
-	if queue.Rows[0].Severity != api.SeverityFatal {
+	if queue.Rows[0].Severity != api.SeverityHigh {
 		t.Fatalf("severity = %q, want the worst of what it folded", queue.Rows[0].Severity)
 	}
 }
@@ -142,9 +142,9 @@ func TestAnOwnerReferenceThatIsNotTheControllerIsIgnored(t *testing.T) {
 
 func TestFatalRowsSortAboveDegradedOnes(t *testing.T) {
 	rows := []api.Issue{
-		{ID: "one", Severity: api.SeverityWarning, Since: stamp(testNow)},
-		{ID: "two", Severity: api.SeverityFatal, Since: stamp(testNow.Add(-time.Hour))},
-		{ID: "three", Severity: api.SeverityDegraded, Since: stamp(testNow)},
+		{ID: "one", Severity: api.SeverityLow, Since: stamp(testNow)},
+		{ID: "two", Severity: api.SeverityHigh, Since: stamp(testNow.Add(-time.Hour))},
+		{ID: "three", Severity: api.SeverityMedium, Since: stamp(testNow)},
 	}
 
 	rank(rows)
@@ -156,8 +156,8 @@ func TestFatalRowsSortAboveDegradedOnes(t *testing.T) {
 
 func TestTheWiderBlastRadiusSortsFirstWithinASeverity(t *testing.T) {
 	rows := []api.Issue{
-		{ID: "small", Severity: api.SeverityFatal, Folded: 2, Since: stamp(testNow)},
-		{ID: "wide", Severity: api.SeverityFatal, Folded: 30, Since: stamp(testNow.Add(-time.Hour))},
+		{ID: "small", Severity: api.SeverityHigh, Folded: 2, Since: stamp(testNow)},
+		{ID: "wide", Severity: api.SeverityHigh, Folded: 30, Since: stamp(testNow.Add(-time.Hour))},
 	}
 
 	rank(rows)
@@ -169,8 +169,8 @@ func TestTheWiderBlastRadiusSortsFirstWithinASeverity(t *testing.T) {
 
 func TestTheNewestRowSortsFirstWhenNothingElseSeparatesThem(t *testing.T) {
 	rows := []api.Issue{
-		{ID: "old", Severity: api.SeverityFatal, Since: stamp(testNow.Add(-time.Hour))},
-		{ID: "new", Severity: api.SeverityFatal, Since: stamp(testNow)},
+		{ID: "old", Severity: api.SeverityHigh, Since: stamp(testNow.Add(-time.Hour))},
+		{ID: "new", Severity: api.SeverityHigh, Since: stamp(testNow)},
 	}
 
 	rank(rows)
@@ -182,8 +182,8 @@ func TestTheNewestRowSortsFirstWhenNothingElseSeparatesThem(t *testing.T) {
 
 func TestIdenticalRowsSortByTheirIdentity(t *testing.T) {
 	rows := []api.Issue{
-		{ID: "b", Severity: api.SeverityFatal, Since: stamp(testNow)},
-		{ID: "a", Severity: api.SeverityFatal, Since: stamp(testNow)},
+		{ID: "b", Severity: api.SeverityHigh, Since: stamp(testNow)},
+		{ID: "a", Severity: api.SeverityHigh, Since: stamp(testNow)},
 	}
 
 	rank(rows)
@@ -527,7 +527,7 @@ func TestAFoldNeverLowersSeverityWhenAMilderFindingExplainsIt(t *testing.T) {
 	if len(queue.Rows) != 1 {
 		t.Fatalf("rows = %+v, want one folded row", queue.Rows)
 	}
-	if queue.Rows[0].Severity != api.SeverityFatal {
+	if queue.Rows[0].Severity != api.SeverityHigh {
 		t.Fatalf("severity = %q, want fatal; a warning-level guess must not erase the fatal shortfall it sits under",
 			queue.Rows[0].Severity)
 	}
@@ -542,22 +542,22 @@ func TestAFoldTakesTheWorstOfWhateverItHolds(t *testing.T) {
 		{
 			name:  "a fatal among warnings",
 			group: []finding{{severity: severityWarning}, {severity: severityFatal}, {severity: severityWarning}},
-			want:  api.SeverityFatal,
+			want:  api.SeverityHigh,
 		},
 		{
 			name:  "a degraded among warnings",
 			group: []finding{{severity: severityWarning}, {severity: severityDegraded}},
-			want:  api.SeverityDegraded,
+			want:  api.SeverityMedium,
 		},
 		{
 			name:  "warnings alone",
 			group: []finding{{severity: severityWarning}, {severity: severityWarning}},
-			want:  api.SeverityWarning,
+			want:  api.SeverityLow,
 		},
 		{
 			name:  "the worst arriving first",
 			group: []finding{{severity: severityFatal}, {severity: severityWarning}},
-			want:  api.SeverityFatal,
+			want:  api.SeverityHigh,
 		},
 	}
 
@@ -572,11 +572,11 @@ func TestAFoldTakesTheWorstOfWhateverItHolds(t *testing.T) {
 
 func TestTallyCountsEverySeverityAndKeepsTheTotal(t *testing.T) {
 	rows := []api.Issue{
-		{Severity: api.SeverityFatal},
-		{Severity: api.SeverityFatal},
-		{Severity: api.SeverityDegraded},
-		{Severity: api.SeverityWarning},
-		{Severity: api.SeverityInfo},
+		{Severity: api.SeverityHigh},
+		{Severity: api.SeverityHigh},
+		{Severity: api.SeverityMedium},
+		{Severity: api.SeverityLow},
+		{Severity: api.SeverityLow},
 	}
 
 	got := Tally(rows)
@@ -584,8 +584,8 @@ func TestTallyCountsEverySeverityAndKeepsTheTotal(t *testing.T) {
 	if got.Total != 5 {
 		t.Fatalf("total = %d, want 5", got.Total)
 	}
-	if got.Fatal != 2 || got.Degraded != 1 || got.Warning != 1 {
-		t.Fatalf("tally = %+v, want 2 fatal, 1 degraded, and 1 warning", got)
+	if got.High != 2 || got.Medium != 1 || got.Low != 2 {
+		t.Fatalf("tally = %+v, want 2 high, 1 medium, and 2 low", got)
 	}
 }
 

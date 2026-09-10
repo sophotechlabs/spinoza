@@ -12,7 +12,7 @@ function child(name: string) {
   return {
     object: { group: '', version: 'v1', resource: 'pods', namespace: 'web', name },
     kind: 'Pod',
-    severity: 'fatal' as const,
+    severity: 'high' as const,
     detail: `container app in ${name} keeps exiting`,
     since: '2026-08-28T11:00:00Z',
   };
@@ -21,7 +21,7 @@ function child(name: string) {
 function issue(patch: Partial<Issue> = {}): Issue {
   return {
     id: 'pod-startup/uid-web',
-    severity: 'fatal',
+    severity: 'high',
     detector: 'pod-startup',
     title: 'CrashLoopBackOff',
     detail: 'container app keeps exiting with exit code 1',
@@ -196,17 +196,33 @@ describe('IssueQueue', () => {
       queue({
         rows: [
           issue(),
-          issue({ id: 'two', severity: 'degraded' }),
-          issue({ id: 'three', severity: 'warning' }),
+          issue({ id: 'two', severity: 'medium' }),
+          issue({ id: 'three', severity: 'low' }),
         ],
       }),
     );
 
     render(<IssueQueue />);
 
-    expect(await screen.findByText('1 broken')).toBeInTheDocument();
-    expect(screen.getByText('1 degraded')).toBeInTheDocument();
-    expect(screen.getByText('1 warning')).toBeInTheDocument();
+    expect(await screen.findByText('1 high')).toBeInTheDocument();
+    expect(screen.getByText('1 medium')).toBeInTheDocument();
+    expect(screen.getByText('1 low')).toBeInTheDocument();
+  });
+
+  it('counts the objects a row reaches on the control that opens them', async () => {
+    stub(queue({ rows: [issue({ folded: 4, children: [child('api-1')] })] }));
+
+    render(<IssueQueue />);
+
+    expect(await screen.findByText(/4 objects/)).toBeInTheDocument();
+  });
+
+  it('counts one object as one rather than saying nothing', async () => {
+    stub(queue({ rows: [issue({ folded: 1, children: [child('api-1')] })] }));
+
+    render(<IssueQueue />);
+
+    expect(await screen.findByText(/1 object/)).toBeInTheDocument();
   });
 
   it('opens the fold to show what it folded', async () => {

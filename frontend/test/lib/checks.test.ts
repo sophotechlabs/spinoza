@@ -15,7 +15,6 @@ import {
   originLabel,
   partialLabel,
   refLabel,
-  severityClass,
   severityReason,
   shownLabel,
   totalFindings,
@@ -368,12 +367,6 @@ describe('grouping', () => {
 });
 
 describe('labels', () => {
-  it('colours a finding by how bad it is', () => {
-    expect(severityClass('high')).toBe('text-error');
-    expect(severityClass('medium')).toBe('text-warn');
-    expect(severityClass('low')).toBe('text-fg-muted');
-  });
-
   it('counts what the cluster has, not what was sent', () => {
     expect(countLabel(viewGroup('a'))).toBe('clean');
     expect(countLabel(viewGroup('a', { findings: [viewFinding('api')] }))).toBe('1');

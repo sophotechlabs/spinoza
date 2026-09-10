@@ -92,7 +92,7 @@ func TestAPodDecodedTheWayTheInformerDecodesItReadsRight(t *testing.T) {
 		t.Fatalf("rows = %+v, want the crashlooping pod under its replica set", queue.Rows)
 	}
 	row := queue.Rows[0]
-	if row.Severity != api.SeverityFatal || row.Title != "CrashLoopBackOff" {
+	if row.Severity != api.SeverityHigh || row.Title != "CrashLoopBackOff" {
 		t.Fatalf("row = %+v, want a fatal crashloop", row)
 	}
 	if !contains(row.Detail, "exit code 137") {

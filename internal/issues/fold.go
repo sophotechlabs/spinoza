@@ -32,11 +32,11 @@ type finding struct {
 func severityName(level int) string {
 	switch level {
 	case severityFatal:
-		return api.SeverityFatal
+		return api.SeverityHigh
 	case severityDegraded:
-		return api.SeverityDegraded
+		return api.SeverityMedium
 	default:
-		return api.SeverityWarning
+		return api.SeverityLow
 	}
 }
 
@@ -72,12 +72,12 @@ func Tally(rows []api.Issue) *api.IssueTally {
 	out := api.IssueTally{Total: len(rows)}
 	for _, row := range rows {
 		switch row.Severity {
-		case api.SeverityFatal:
-			out.Fatal++
-		case api.SeverityDegraded:
-			out.Degraded++
-		case api.SeverityWarning:
-			out.Warning++
+		case api.SeverityHigh:
+			out.High++
+		case api.SeverityMedium:
+			out.Medium++
+		case api.SeverityLow:
+			out.Low++
 		default:
 		}
 	}
@@ -292,9 +292,9 @@ func rank(rows []api.Issue) {
 
 func severityRank(name string) int {
 	switch name {
-	case api.SeverityFatal:
+	case api.SeverityHigh:
 		return severityFatal
-	case api.SeverityDegraded:
+	case api.SeverityMedium:
 		return severityDegraded
 	default:
 		return severityWarning

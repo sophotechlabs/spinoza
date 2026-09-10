@@ -367,10 +367,9 @@ type FleetOverview struct {
 }
 
 const (
-	SeverityFatal    = "fatal"
-	SeverityDegraded = "degraded"
-	SeverityWarning  = "warning"
-	SeverityInfo     = "info"
+	SeverityHigh   = "high"
+	SeverityMedium = "medium"
+	SeverityLow    = "low"
 )
 
 type IssueChild struct {
@@ -400,10 +399,10 @@ type Issue struct {
 }
 
 type IssueTally struct {
-	Fatal    int `json:"fatal"`
-	Degraded int `json:"degraded"`
-	Warning  int `json:"warning"`
-	Total    int `json:"total"`
+	High   int `json:"high"`
+	Medium int `json:"medium"`
+	Low    int `json:"low"`
+	Total  int `json:"total"`
 }
 
 type IssueQueue struct {

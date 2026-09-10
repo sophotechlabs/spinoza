@@ -188,41 +188,15 @@ export function tallyCounts(
   if (whole === undefined) {
     return countBySeverity(rows);
   }
-  return { fatal: whole.fatal, degraded: whole.degraded, warning: whole.warning, info: 0 };
+  return { high: whole.high, medium: whole.medium, low: whole.low };
 }
 
 export function countBySeverity(rows: Issue[]): Record<Severity, number> {
-  const out: Record<Severity, number> = { fatal: 0, degraded: 0, warning: 0, info: 0 };
+  const out: Record<Severity, number> = { high: 0, medium: 0, low: 0 };
   for (const row of rows) {
     out[row.severity] += 1;
   }
   return out;
-}
-
-export function severityLabel(severity: Severity): string {
-  if (severity === 'fatal') {
-    return 'Broken';
-  }
-  if (severity === 'degraded') {
-    return 'Degraded';
-  }
-  if (severity === 'info') {
-    return 'Note';
-  }
-  return 'Warning';
-}
-
-export function severityClass(severity: Severity): string {
-  if (severity === 'fatal') {
-    return 'text-error';
-  }
-  if (severity === 'degraded') {
-    return 'text-warn';
-  }
-  if (severity === 'info') {
-    return 'text-fg-soft';
-  }
-  return 'text-fg-muted';
 }
 
 export function foldedLabel(row: Issue): string {

@@ -1,14 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { act, renderHook, waitFor } from '@testing-library/react';
 import type { Issue } from '../../src/lib/types';
-import { SEVERITIES } from '../../src/lib/types';
 import {
   countBySeverity,
   fetchIssues,
   foldedLabel,
   hiddenChildren,
-  severityClass,
-  severityLabel,
   tallyCounts,
   tallyScope,
   useIssues,
@@ -21,7 +18,7 @@ import { bumpClusterEpoch } from '../../src/store/cluster';
 function issue(patch: Partial<Issue> = {}): Issue {
   return {
     id: 'pod-startup/uid-web',
-    severity: 'fatal',
+    severity: 'high',
     detector: 'pod-startup',
     title: 'CrashLoopBackOff',
     detail: 'container app keeps exiting with exit code 1',
@@ -44,7 +41,7 @@ const payload = {
   rows: [
     {
       id: 'pod-startup/uid-web',
-      severity: 'fatal',
+      severity: 'high',
       detector: 'pod-startup',
       title: 'CrashLoopBackOff',
       detail: 'container app keeps exiting',
@@ -66,7 +63,7 @@ const payload = {
         {
           object: { group: '', version: 'v1', resource: 'pods', namespace: 'web', name: 'api-1' },
           kind: 'Pod',
-          severity: 'fatal',
+          severity: 'high',
           detail: 'container app keeps exiting',
           since: '2026-08-28T11:00:00Z',
         },
@@ -107,7 +104,7 @@ describe('fetchIssues', () => {
     expect(got.error).toBeUndefined();
   });
 
-  it('falls back to a warning when the severity is not one it knows', async () => {
+  it('falls back to the lowest severity when it is not one it knows', async () => {
     vi.stubGlobal(
       'fetch',
       vi.fn().mockResolvedValue({
@@ -121,8 +118,8 @@ describe('fetchIssues', () => {
 
     const got = await fetchIssues();
 
-    expect(got.rows[0].severity).toBe('warning');
-    expect(got.rows[0].children?.[0].severity).toBe('warning');
+    expect(got.rows[0].severity).toBe('low');
+    expect(got.rows[0].children?.[0].severity).toBe('low');
   });
 
   it('reads the whole-queue tally the server sends', async () => {
@@ -131,13 +128,13 @@ describe('fetchIssues', () => {
       vi.fn().mockResolvedValue({
         ok: true,
         json: () =>
-          Promise.resolve({ rows: [], tally: { fatal: 111, degraded: 2, warning: 3, total: 116 } }),
+          Promise.resolve({ rows: [], tally: { high: 111, medium: 2, low: 3, total: 116 } }),
       }),
     );
 
     const got = await fetchIssues();
 
-    expect(got.tally).toEqual({ fatal: 111, degraded: 2, warning: 3, total: 116 });
+    expect(got.tally).toEqual({ high: 111, medium: 2, low: 3, total: 116 });
   });
 
   it('reads a payload whose tally is absent or null', async () => {
@@ -185,43 +182,19 @@ describe('useIssues', () => {
 });
 
 describe('severity', () => {
-  it('names each level in words', () => {
-    expect(severityLabel('fatal')).toBe('Broken');
-    expect(severityLabel('degraded')).toBe('Degraded');
-    expect(severityLabel('warning')).toBe('Warning');
-  });
-
-  it('colours each level', () => {
-    expect(severityClass('fatal')).toBe('text-error');
-    expect(severityClass('degraded')).toBe('text-warn');
-    expect(severityClass('warning')).toBe('text-fg-muted');
-  });
-
   it('counts the rows at each level', () => {
     const counted = countBySeverity([
       issue(),
-      issue({ severity: 'degraded' }),
-      issue({ severity: 'warning' }),
-      issue({ severity: 'warning' }),
+      issue({ severity: 'medium' }),
+      issue({ severity: 'low' }),
+      issue({ severity: 'low' }),
     ]);
 
-    expect(counted).toEqual({ fatal: 1, degraded: 1, warning: 2, info: 0 });
+    expect(counted).toEqual({ high: 1, medium: 1, low: 2 });
   });
 
-  it('carries an info bucket, because the wire has four levels and Issues use three', () => {
-    const counted = countBySeverity([issue({ severity: 'info' })]);
-
-    expect(counted.info).toBe(1);
-  });
-
-  it('names and colours every level the wire can send', () => {
-    for (const severity of SEVERITIES) {
-      expect(severityLabel(severity)).not.toBe('');
-      expect(severityClass(severity)).not.toBe('');
-    }
-    expect(severityLabel('info')).toBe('Note');
-    expect(severityLabel('info')).not.toBe(severityLabel('warning'));
-    expect(severityClass('info')).not.toBe(severityClass('warning'));
+  it('counts nothing at a level nothing is at', () => {
+    expect(countBySeverity([])).toEqual({ high: 0, medium: 0, low: 0 });
   });
 });
 
@@ -235,16 +208,16 @@ describe('what the tally is counting', () => {
   });
 
   it('counts the whole cluster and says how much of it is on screen', () => {
-    const whole = { fatal: 111, degraded: 0, warning: 0, total: 111 };
+    const whole = { high: 111, medium: 0, low: 0, total: 111 };
 
-    expect(tallyCounts([], whole)).toEqual({ fatal: 111, degraded: 0, warning: 0, info: 0 });
+    expect(tallyCounts([], whole)).toEqual({ high: 111, medium: 0, low: 0 });
     expect(tallyScope(50, true, whole)).toBe('50 of 111 on screen');
   });
 
   it('falls back to the rows it holds when the server sent no tally', () => {
-    const rows = [issue({ severity: 'fatal' }), issue({ severity: 'warning' })];
+    const rows = [issue({ severity: 'high' }), issue({ severity: 'low' })];
 
-    expect(tallyCounts(rows, undefined)).toEqual({ fatal: 1, degraded: 0, warning: 1, info: 0 });
+    expect(tallyCounts(rows, undefined)).toEqual({ high: 1, medium: 0, low: 1 });
   });
 });
 
@@ -268,7 +241,7 @@ describe('the fold', () => {
         {
           object: { group: '', version: 'v1', resource: 'pods', namespace: 'web', name: 'api-1' },
           kind: 'Pod',
-          severity: 'fatal',
+          severity: 'high',
           detail: 'crashing',
           since: '2026-08-28T11:00:00Z',
         },

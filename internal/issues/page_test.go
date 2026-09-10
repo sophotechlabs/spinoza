@@ -12,7 +12,7 @@ import (
 )
 
 func rowsAcrossEveryOrderingField() []api.Issue {
-	severities := []string{api.SeverityWarning, api.SeverityDegraded, api.SeverityFatal, "info"}
+	severities := []string{api.SeverityLow, api.SeverityMedium, api.SeverityHigh, "info"}
 	folded := []int{0, 3, 50}
 	when := []string{
 		"",
@@ -281,8 +281,8 @@ func TestATimeNobodyStampedCountsAsTheOldest(t *testing.T) {
 }
 
 func TestAFoldCountPastTheCeilingStillOutranksASmallOne(t *testing.T) {
-	huge := api.Issue{ID: "huge", Severity: api.SeverityWarning, Folded: foldCeiling + 10}
-	modest := api.Issue{ID: "modest", Severity: api.SeverityWarning, Folded: 1}
+	huge := api.Issue{ID: "huge", Severity: api.SeverityLow, Folded: foldCeiling + 10}
+	modest := api.Issue{ID: "modest", Severity: api.SeverityLow, Folded: 1}
 
 	if issueKey(huge, ByWorst) >= issueKey(modest, ByWorst) {
 		t.Fatalf("a fold count past the ceiling wrapped and sorted below a fold of 1")
@@ -291,8 +291,8 @@ func TestAFoldCountPastTheCeilingStillOutranksASmallOne(t *testing.T) {
 
 func TestNewestFirstOrdersByWhenNotBySeverity(t *testing.T) {
 	rows := []api.Issue{
-		{ID: "old-fatal", Severity: api.SeverityFatal, Since: "2026-08-01T00:00:00Z"},
-		{ID: "new-warning", Severity: api.SeverityWarning, Since: "2026-08-29T00:00:00Z"},
+		{ID: "old-fatal", Severity: api.SeverityHigh, Since: "2026-08-01T00:00:00Z"},
+		{ID: "new-warning", Severity: api.SeverityLow, Since: "2026-08-29T00:00:00Z"},
 	}
 
 	Rank(rows, ByNewest)
@@ -304,8 +304,8 @@ func TestNewestFirstOrdersByWhenNotBySeverity(t *testing.T) {
 
 func TestOldestFirstIsTheOtherWayRound(t *testing.T) {
 	rows := []api.Issue{
-		{ID: "new-warning", Severity: api.SeverityWarning, Since: "2026-08-29T00:00:00Z"},
-		{ID: "old-fatal", Severity: api.SeverityFatal, Since: "2026-08-01T00:00:00Z"},
+		{ID: "new-warning", Severity: api.SeverityLow, Since: "2026-08-29T00:00:00Z"},
+		{ID: "old-fatal", Severity: api.SeverityHigh, Since: "2026-08-01T00:00:00Z"},
 	}
 
 	Rank(rows, ByOldest)

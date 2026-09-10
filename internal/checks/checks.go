@@ -15,9 +15,9 @@ import (
 var ErrNoSuchCheck = errors.New("no check goes by that name")
 
 const (
-	severityHigh   = "high"
-	severityMedium = "medium"
-	severityLow    = "low"
+	severityHigh   = api.SeverityHigh
+	severityMedium = api.SeverityMedium
+	severityLow    = api.SeverityLow
 
 	categorySecurity    = "security"
 	categoryReliability = "reliability"
