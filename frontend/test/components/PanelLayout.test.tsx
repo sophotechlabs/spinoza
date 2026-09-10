@@ -283,6 +283,60 @@ describe('PanelLayout', () => {
     expect(screen.getByRole('tab', { name: 'Metrics' })).toHaveAttribute('aria-disabled', 'true');
   });
 
+  it('offers the revisions of a workload that keeps them', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockImplementation((url: string) => {
+        if (url.startsWith('/api/rollout')) {
+          return Promise.resolve({
+            ok: true,
+            json: () =>
+              Promise.resolve({
+                supported: true,
+                revisions: [
+                  { number: 2, name: 'web-b', current: true },
+                  { number: 1, name: 'web-a' },
+                ],
+              }),
+          });
+        }
+        if (url.startsWith('/api/access')) {
+          return Promise.resolve({ ok: true, json: () => Promise.resolve({ refused: [] }) });
+        }
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ ...detail, kind: 'Deployment', containers: undefined }),
+        });
+      }),
+    );
+    renderLayout({ selection: { ref: podRef, row: null } });
+    await screen.findByText('Metadata');
+
+    const tab = screen.getByRole('tab', { name: 'Revisions' });
+    expect(tab).not.toHaveAttribute('aria-disabled', 'true');
+    await userEvent.click(tab);
+
+    expect(await screen.findByText('#2')).toBeInTheDocument();
+    expect(screen.getByText('#1')).toBeInTheDocument();
+  });
+
+  it('greys out the revisions for a kind that keeps none, and says why', async () => {
+    stubApi();
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({ ...detail, kind: 'ConfigMap', containers: undefined }),
+      }),
+    );
+    renderLayout({ selection: { ref: podRef, row: null } });
+    await screen.findByText('Metadata');
+
+    const tab = screen.getByRole('tab', { name: 'Revisions' });
+    expect(tab).toHaveAttribute('aria-disabled', 'true');
+    expect(tab).toHaveAttribute('title', expect.stringContaining('Deployment'));
+  });
+
   it('offers logs for a workload that owns pods, and metrics only for a pod', async () => {
     stubApi();
     vi.stubGlobal(
@@ -767,6 +821,19 @@ describe('a panel the cluster would refuse', () => {
     await screen.findByText('Metadata');
 
     expect(screen.getByRole('tab', { name: 'YAML' })).not.toHaveAttribute('aria-disabled', 'true');
+  });
+
+  it('puts the cluster\u2019s reason on a dock whose only panel it refuses', async () => {
+    stubRefusing([{ capability: 'logs', reason: 'requires container.pods.getLogs in Cloud IAM' }]);
+    act(() => {
+      usePanelsStore.getState().move('logs', 'left');
+    });
+    renderLayout();
+    await screen.findByText('Metadata');
+
+    await waitFor(() => {
+      expect(screen.getByText('requires container.pods.getLogs in Cloud IAM')).toBeInTheDocument();
+    });
   });
 
   it('keeps a refusal off an object it was not asked about', async () => {

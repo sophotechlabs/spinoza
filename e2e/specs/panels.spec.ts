@@ -7,6 +7,7 @@ import type { Page, Response } from '@playwright/test';
 const DEFAULT_PLACEMENT = JSON.stringify({
   overview: 'right',
   yaml: 'right',
+  revisions: 'right',
   events: 'right',
   logs: 'right',
   metrics: 'right',

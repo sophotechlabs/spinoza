@@ -30,12 +30,14 @@ test.describe('saved views', () => {
     await page.getByLabel('Name for this view').fill(NAME);
     await page.getByRole('button', { name: 'Save', exact: true }).click();
 
-    await expect(page.getByText(new RegExp(`saved "${NAME}"`))).toBeVisible({ timeout: 30_000 });
+    await expect(
+      page.getByLabel('Latest notifications').getByText(new RegExp(`saved "${NAME}"`)),
+    ).toBeVisible({ timeout: 30_000 });
 
     await openPalette(page);
-    await expect(page.getByRole('button', { name: new RegExp(NAME) })).toBeVisible({
-      timeout: 30_000,
-    });
+    await expect(
+      page.getByLabel('Command palette').getByRole('button', { name: new RegExp(NAME) }),
+    ).toBeVisible({ timeout: 30_000 });
   });
 
   test('refuses a view with no name', async ({ page }) => {
@@ -53,11 +55,16 @@ test.describe('saved views', () => {
     await page.getByRole('button', { name: 'Save this view' }).click();
     await page.getByLabel('Name for this view').fill(NAME);
     await page.getByRole('button', { name: 'Save', exact: true }).click();
-    await expect(page.getByText(new RegExp(`saved "${NAME}"`))).toBeVisible({ timeout: 30_000 });
+    await expect(
+      page.getByLabel('Latest notifications').getByText(new RegExp(`saved "${NAME}"`)),
+    ).toBeVisible({ timeout: 30_000 });
 
     await openGrouped(page, '', 'secrets', 'Secret');
     await openPalette(page);
-    await page.getByRole('button', { name: new RegExp(NAME) }).click();
+    await page
+      .getByLabel('Command palette')
+      .getByRole('button', { name: new RegExp(NAME) })
+      .click();
 
     await expect(page.getByRole('heading', { name: /ConfigMap resources/ })).toBeVisible({
       timeout: 60_000,
