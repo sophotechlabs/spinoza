@@ -306,7 +306,7 @@ test('the plus opens the context list clear of the strip', async ({ page }) => {
 
   await contextPicker(page).click();
 
-  const entry = page.getByRole('button', { name: CONTEXT, exact: true }).last();
+  const entry = contextMenu(page).getByRole('button', { name: CONTEXT }).last();
   await expect(entry).toBeVisible();
   const menu = await entry.boundingBox();
   const bar = await strip.boundingBox();
