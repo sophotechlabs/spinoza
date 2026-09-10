@@ -1,3 +1,4 @@
+import { useCallback } from 'react';
 import type { Polled } from './usePoll';
 import type { WasteReport, WasteRow } from './types';
 import { request } from './http';
@@ -21,7 +22,8 @@ async function fetchWaste(namespace: string): Promise<WasteReport> {
 }
 
 export function useWaste(namespace: string): Polled<WasteReport> {
-  return usePoll(() => fetchWaste(namespace), {
+  const read = useCallback(() => fetchWaste(namespace), [namespace]);
+  return usePoll(read, {
     intervalMs: WASTE_POLL_MS,
     fallback: 'reserved-against-used failed',
     resetKey: namespace,
