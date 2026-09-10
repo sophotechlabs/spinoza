@@ -1,5 +1,80 @@
 # Changelog
 
+## [2.0.0](https://github.com/sophotechlabs/spinoza/compare/v1.30.0...v2.0.0) (2026-09-10)
+
+
+### ⚠ BREAKING CHANGES
+
+* **api:** one severity scale, and reach as a count beside it
+
+### Features
+
+* **api:** declare the shapes and routes the next tranche fills ([ec04681](https://github.com/sophotechlabs/spinoza/commit/ec04681f7609b0bec2e60cd39ffb859bd45d7552))
+* **chart:** render the objects an operator looks for before installing ([9bd02ea](https://github.com/sophotechlabs/spinoza/commit/9bd02ea87edf9581b1413403cb43f6b54d598543))
+* **checks:** hand the audit to a machine, and answer for a framework ([829ea3c](https://github.com/sophotechlabs/spinoza/commit/829ea3c8ab79198e8696ef42fb3cb10c5fd4d77a))
+* **checks:** run the audit on a timer and say when posture moved ([dbc7afc](https://github.com/sophotechlabs/spinoza/commit/dbc7afcefc4e8f3be4dd22b7ae7de196828ca003))
+* **cli:** log as json when serving a cluster, and hand the new work its flags ([d578414](https://github.com/sophotechlabs/spinoza/commit/d578414aa80f6582cfbd292e580e4a9f09cfc2c5))
+* **clusters:** the picker says what is already open and shows that tab ([d54830e](https://github.com/sophotechlabs/spinoza/commit/d54830eb462ca6cc79debaf26ba158ca8d714f0f))
+* **exec:** keep a transcript of a terminal, when this deployment asks for one ([f71787f](https://github.com/sophotechlabs/spinoza/commit/f71787f0a985cf15ce00f1f3de0cb4efcfba036d))
+* **history:** let the audit trail leave the pod, and let somebody take it away ([ef25337](https://github.com/sophotechlabs/spinoza/commit/ef25337053f5741ff6e84009893602bc7de6d856))
+* **metrics:** let spinoza report on itself in the format a scrape reads ([c6aa6ef](https://github.com/sophotechlabs/spinoza/commit/c6aa6eff37c329c277f2ee82b46314c8d903fd87))
+* **panels:** a Focused and a Console preset, and the size spinoza is built for ([943ea96](https://github.com/sophotechlabs/spinoza/commit/943ea96aea4bcd92c61433118c1e38786a5b33d0))
+* **rollout:** show what a workload rolled out, and let it go back ([951eb2e](https://github.com/sophotechlabs/spinoza/commit/951eb2e7251d3c022172021fdeddcfb837b5da38))
+* **server:** say when spinoza is ready, and let it stop without cutting anyone off ([25a90f9](https://github.com/sophotechlabs/spinoza/commit/25a90f90a708bca480e55f32eb18364663dab746))
+* **support:** hand over what spinoza knows about itself ([c30e1e9](https://github.com/sophotechlabs/spinoza/commit/c30e1e988450277247b4891ccfa42750aa6d1d52))
+* **ui:** revisions, reserved-against-used, posture, saved views and the support bundle ([5356740](https://github.com/sophotechlabs/spinoza/commit/53567405c8b061ed2e7bacaa4d44106cc1731221))
+* **views:** save a filtered table by name, and let an admin publish one ([7050d1f](https://github.com/sophotechlabs/spinoza/commit/7050d1fb501704f814e5ad633c00d7adc7ca5d60))
+* **waste:** rank what is reserved and never used ([00ee5e6](https://github.com/sophotechlabs/spinoza/commit/00ee5e6dc6f180a561d9a5de2d727878bade0816))
+
+
+### Bug Fixes
+
+* **access:** work a person's scope out once per request ([014953c](https://github.com/sophotechlabs/spinoza/commit/014953c5b47455118b799c84e98ee1bcef5c2a77))
+* **catalog:** file the discovered catalog under the cluster it belongs to ([b089cf4](https://github.com/sophotechlabs/spinoza/commit/b089cf44d8c1ce315c541b24fc96230c34601e3d))
+* **deps:** take the smol-toml fix for GHSA-7w5x-hrqm-74c2 ([e527121](https://github.com/sophotechlabs/spinoza/commit/e527121584b5207133bce4c4d52380fe8978db1f))
+* **history:** carry the audit cursor so an export pages past the first page ([74803ca](https://github.com/sophotechlabs/spinoza/commit/74803ca6b7e0f455797393a0834d180bf9f7d0d6))
+* **install:** wait out a locked binary when replacing it on windows ([319ece3](https://github.com/sophotechlabs/spinoza/commit/319ece328a1d67809dafca71acfe0ecc4be3fc39))
+* **kubeconfigs:** give each dialog its own path field ([9ffb751](https://github.com/sophotechlabs/spinoza/commit/9ffb751fa20e750ecb84ba7f8a9b0cd0006a7f94))
+* **waste:** read the report once rather than once per render ([cce3bbb](https://github.com/sophotechlabs/spinoza/commit/cce3bbb800ce4093a26c3faa7d33257ad21493cc))
+
+
+### Miscellaneous
+
+* **ci:** nightly report for 2026-09-09 ([#48](https://github.com/sophotechlabs/spinoza/issues/48)) ([06df969](https://github.com/sophotechlabs/spinoza/commit/06df969cc9d09f87d5495fe4ccfa031e34857e94))
+
+
+### CI
+
+* declare each workflow cadence and hold the per-commit budget ([95d975a](https://github.com/sophotechlabs/spinoza/commit/95d975adf69b618928c13bb4af4c128d376232b1))
+* **e2e:** give every group a tier and run one browser per commit ([371046b](https://github.com/sophotechlabs/spinoza/commit/371046bf14a77071f772f52cf840c5983f2efc97))
+* **nightly:** run the long tiers nightly, guarded against a dropped cron ([c35e2b1](https://github.com/sophotechlabs/spinoza/commit/c35e2b1fe8ac3955fc892036e8a6ff9afcfc9c29))
+* **release:** validate once at release time instead of on every commit ([cc384ed](https://github.com/sophotechlabs/spinoza/commit/cc384ed6f3ff1f6e44cd52018e407f2bc8936525))
+
+
+### Documentation
+
+* **api:** describe every route, and keep the description from drifting ([d84e4bb](https://github.com/sophotechlabs/spinoza/commit/d84e4bb1a3f74658c2fdd95876f53eb95f1a7577))
+* **cluster-mode:** one replica is a decision, not an open question ([654f2ce](https://github.com/sophotechlabs/spinoza/commit/654f2cefbc6d728dd748e8c82190b3c2e53af541))
+* recapture every screenshot from the 1.30.0 build ([4e675d1](https://github.com/sophotechlabs/spinoza/commit/4e675d19fd8dfe4cfd31b79523a4f44db93d4972))
+
+
+### Refactoring
+
+* **api:** one severity scale, and reach as a count beside it ([d087959](https://github.com/sophotechlabs/spinoza/commit/d0879598dd23e31f2aba16d1d6ae29bd4ceeee86))
+* **app:** work out where a saved view or a waste row opens, separately ([ed80b38](https://github.com/sophotechlabs/spinoza/commit/ed80b3831d361335e190651f6f9805b70c575e5d))
+* **frontend:** one reasonOf for what a failed request said ([84717b7](https://github.com/sophotechlabs/spinoza/commit/84717b75f06c66e4dd49b14d5092440d818262ea))
+
+
+### Tests
+
+* cover the audit schedule, transcripts, runs, telemetry and the flags ([3bdecd6](https://github.com/sophotechlabs/spinoza/commit/3bdecd62c78857c084a0efcc9665f511759a53fb))
+* **e2e:** filter the table, not the sidebar, at scale ([8d32457](https://github.com/sophotechlabs/spinoza/commit/8d32457b3af63491bc31f8c031a174bb686d5552))
+* **e2e:** find the context entry in the picker rather than anywhere on the page ([9228320](https://github.com/sophotechlabs/spinoza/commit/9228320fbac06c3644b4a073e5afb21b27e4d48f))
+* **e2e:** keep the panel placement in step, and scope the saved-view locators ([fbe2221](https://github.com/sophotechlabs/spinoza/commit/fbe22210a35d46629e80ce1355b8118cdb2e4b86))
+* **e2e:** walk the new work against a real cluster ([6320e3d](https://github.com/sophotechlabs/spinoza/commit/6320e3db0c0480f535ccfdcfbd5ceee856e05dd4))
+* **release:** hold the new CI contract instead of the dispatch it replaced ([6810b23](https://github.com/sophotechlabs/spinoza/commit/6810b23f324b02ee2d0f76d8cc035385e96f4324))
+* **shots:** steady the capture with a clear pointer and a workable budget ([61f1fe5](https://github.com/sophotechlabs/spinoza/commit/61f1fe5aef5422c31f7c047a3b14456992cde0c6))
+
 ## [1.30.0](https://github.com/sophotechlabs/spinoza/compare/v1.29.0...v1.30.0) (2026-09-09)
 
 
