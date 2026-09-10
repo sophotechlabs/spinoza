@@ -635,6 +635,50 @@ function stubFetch(pods?: number, catalog: Category[] = categories): void {
   vi.stubGlobal(
     'fetch',
     vi.fn().mockImplementation((url: string) => {
+      if (url.startsWith('/api/views')) {
+        return Promise.resolve({
+          ok: true,
+          json: () =>
+            Promise.resolve({
+              views: [
+                {
+                  id: 'a',
+                  name: 'crashing pods',
+                  view: 'resources',
+                  resource: 'pods',
+                  namespace: 'prod',
+                  filter: 'status:CrashLoopBackOff',
+                },
+                { id: 'b', name: 'nothing here', view: 'checks', resource: 'widgets' },
+              ],
+            }),
+        });
+      }
+      if (url.startsWith('/api/waste')) {
+        return Promise.resolve({
+          ok: true,
+          json: () =>
+            Promise.resolve({
+              namespaces: [],
+              workloads: [
+                {
+                  kind: 'Deployment',
+                  namespace: 'apps',
+                  name: 'api',
+                  pods: 2,
+                  cpuRequested: 500,
+                  cpuUsed: 20,
+                  cpuReclaimable: 480,
+                  memRequested: 512,
+                  memUsed: 64,
+                  memReclaimable: 448,
+                  measured: true,
+                },
+              ],
+              measured: true,
+            }),
+        });
+      }
       if (url.startsWith('/api/resources/counts')) {
         const counts: Record<string, number> = {};
         if (pods !== undefined) {
@@ -764,6 +808,60 @@ describe('a GitOps view whose controller is absent', () => {
 
     expect(await screen.findByText(CLUSTER_ABSENCE.flux)).toBeInTheDocument();
     expect(screen.queryByTestId('gitops-graph')).not.toBeInTheDocument();
+  });
+});
+
+describe('the reserved-against-used workspace', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    useNamespaceStore.getState().choose(ALL);
+  });
+
+  it('opens on its own route', async () => {
+    stubFetch();
+    openAt('#context=kind-dev&view=waste');
+
+    render(<App />);
+
+    expect(
+      await screen.findByRole('heading', { name: 'Reserved against used' }),
+    ).toBeInTheDocument();
+  });
+
+  it('sends a row to the kind and namespace it names', async () => {
+    const user = userEvent.setup();
+    stubFetch();
+    openAt('#context=kind-dev&view=waste');
+    render(<App />);
+    await user.click(await screen.findByRole('button', { name: 'By workload' }));
+
+    await user.click(await screen.findByRole('button', { name: 'apps/api' }));
+
+    await waitFor(() => {
+      expect(feedMocks.subscribe).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({ resource: 'deployments' }),
+        'apps',
+        expect.any(Array),
+      );
+    });
+  });
+
+  it('falls back to the resource workspace when the kind is not one this cluster has', async () => {
+    const user = userEvent.setup();
+    stubFetch(undefined, categories.slice(0, 1));
+    openAt('#context=kind-dev&view=waste');
+    render(<App />);
+    await user.click(await screen.findByRole('button', { name: 'By workload' }));
+
+    await user.click(await screen.findByRole('button', { name: 'apps/api' }));
+
+    await waitFor(() => {
+      expect(namespaceNow()).toBe('apps');
+    });
+    expect(
+      screen.queryByRole('heading', { name: 'Reserved against used' }),
+    ).not.toBeInTheDocument();
   });
 });
 
@@ -1871,6 +1969,32 @@ describe('the command palette and shortcuts', () => {
     expect(screen.getByTestId('inspect-target')).toHaveTextContent(
       'deployments:airbyte/airbyte-server',
     );
+  });
+
+  it('opens a saved view on the kind, namespace and filter it named', async () => {
+    const user = userEvent.setup();
+    render(<App />);
+
+    press('k', { ctrlKey: true });
+    await user.click(await screen.findByRole('button', { name: /crashing pods/ }));
+
+    expect(await screen.findByLabelText('Namespace')).toHaveValue('prod');
+    expect(feedMocks.subscribe).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({ resource: 'pods' }),
+      'prod',
+      expect.any(Array),
+    );
+  });
+
+  it('opens a saved view on its own workspace when the kind is not one this cluster has', async () => {
+    const user = userEvent.setup();
+    render(<App />);
+
+    press('k', { ctrlKey: true });
+    await user.click(await screen.findByRole('button', { name: /nothing here/ }));
+
+    expect(await screen.findByTestId('checks')).toBeInTheDocument();
   });
 
   it('only inspects an object whose kind discovery no longer knows', async () => {
@@ -3204,7 +3328,7 @@ describe('App served to a team', () => {
 
     expect(await screen.findByLabelText('Account')).toHaveTextContent('alice@example.com');
     expect(screen.queryByLabelText('Kubernetes context')).not.toBeInTheDocument();
-    expect(screen.queryByLabelText('Open clusters')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Clusters already open')).not.toBeInTheDocument();
     expect(screen.queryByTitle('Open in the browser, hide this window')).not.toBeInTheDocument();
   });
 

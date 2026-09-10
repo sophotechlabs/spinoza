@@ -47,7 +47,8 @@ import { kindScope } from './lib/catalog';
 import { useCatalogKnown, useCategories, useCounts } from './store/catalog';
 import { useSubLimit } from './store/resources';
 import type { Chip } from './lib/filterChips';
-import { chipsFromText, chipsKey, nameChips } from './lib/filterChips';
+import { chipsKey, nameChips } from './lib/filterChips';
+import { openingKind, openingSaved } from './lib/openSaved';
 import { chipsOf, imposeChips, useChips } from './store/filters';
 import { tableKey } from './lib/tableState';
 import type { PaletteOpen } from './lib/palette';
@@ -461,58 +462,19 @@ export default function App() {
   }
 
   function openSaved(saved: SavedView) {
-    if (saved.namespace !== undefined && saved.namespace !== '') {
-      useNamespaceStore.getState().choose(saved.namespace);
+    const opening = openingSaved(route, saved, categories);
+    if (opening.namespace !== null) {
+      useNamespaceStore.getState().choose(opening.namespace);
     }
-    const wanted = saved.resource ?? '';
-    if (saved.filter !== undefined && wanted !== '') {
-      useFiltersStore.getState().impose(wanted, chipsFromText(saved.filter));
+    if (opening.filter !== null) {
+      useFiltersStore.getState().impose(opening.filter.key, opening.filter.chips);
     }
-    if (wanted === '') {
-      navigate({ ...route, view: saved.view as View, selection: null });
-      return;
-    }
-    const found = categories
-      .flatMap((category) => category.resources)
-      .find((one) => one.resource === wanted);
-    if (found === undefined) {
-      navigate({ ...route, view: saved.view as View, selection: null });
-      return;
-    }
-    navigate({
-      ...route,
-      view: 'resources',
-      resource: {
-        group: found.group,
-        version: found.version,
-        resource: found.resource,
-        kind: found.kind,
-      },
-      selection: null,
-    });
+    navigate(opening.route);
   }
 
   function openScope(namespace: string, kind: string) {
     useNamespaceStore.getState().choose(namespace);
-    const wanted = kind === '' ? 'pods' : kind.toLowerCase() + 's';
-    const found = categories
-      .flatMap((category) => category.resources)
-      .find((one) => one.resource === wanted);
-    if (found === undefined) {
-      navigate({ ...route, view: 'resources' });
-      return;
-    }
-    navigate({
-      ...route,
-      view: 'resources',
-      resource: {
-        group: found.group,
-        version: found.version,
-        resource: found.resource,
-        kind: found.kind,
-      },
-      selection: null,
-    });
+    navigate(openingKind(route, categories, kind));
   }
 
   function remember(ref: ObjectRef | null) {
