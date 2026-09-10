@@ -15,6 +15,12 @@ const listVerb = "list"
 type scopeSlot struct {
 	mu      sync.Mutex
 	entries map[scopeSlotKey]scopeSlotEntry
+	working map[scopeSlotKey]*scopeWork
+}
+
+type scopeWork struct {
+	done  chan struct{}
+	scope api.Scope
 }
 
 type scopeSlotKey struct {
@@ -30,7 +36,11 @@ type scopeSlotEntry struct {
 type scopeKey struct{}
 
 func WithScopeSlot(ctx context.Context) context.Context {
-	return context.WithValue(ctx, scopeKey{}, &scopeSlot{entries: map[scopeSlotKey]scopeSlotEntry{}})
+	slot := &scopeSlot{
+		entries: map[scopeSlotKey]scopeSlotEntry{},
+		working: map[scopeSlotKey]*scopeWork{},
+	}
+	return context.WithValue(ctx, scopeKey{}, slot)
 }
 
 func clusterWide() []Check {
@@ -48,7 +58,7 @@ func within(namespace string) []Check {
 	return out
 }
 
-func (s *Service) Scope(ctx context.Context, everyNamespace func() []string) api.Scope {
+func (s *Service) Scope(ctx context.Context, everyNamespace func() []string) (scope api.Scope) {
 	if s == nil {
 		return api.Scope{Everywhere: true}
 	}
@@ -56,15 +66,29 @@ func (s *Service) Scope(ctx context.Context, everyNamespace func() []string) api
 	if !ok {
 		return s.readScope(ctx, everyNamespace)
 	}
-	asked := asking(ctx)
+	key := scopeSlotKey{service: s, who: asking(ctx)}
 	held.mu.Lock()
-	key := scopeSlotKey{service: s, who: asked}
 	cached, found := held.entries[key]
 	if found && s.now().Sub(cached.at) <= s.ttl {
 		held.mu.Unlock()
 		return cached.scope
 	}
+	running, busy := held.working[key]
+	if busy {
+		held.mu.Unlock()
+		<-running.done
+		return running.scope
+	}
+	running = &scopeWork{done: make(chan struct{})}
+	held.working[key] = running
 	held.mu.Unlock()
+	defer func() {
+		held.mu.Lock()
+		delete(held.working, key)
+		held.mu.Unlock()
+		running.scope = scope
+		close(running.done)
+	}()
 	fresh := s.readScope(ctx, everyNamespace)
 	finished := s.now()
 	held.mu.Lock()

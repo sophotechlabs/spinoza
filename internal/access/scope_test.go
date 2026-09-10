@@ -229,7 +229,7 @@ func TestTheScopeIsWorkedOutOncePerRequest(t *testing.T) {
 	}
 }
 
-func TestConcurrentScopeReadsShareTheAnswerThatFinishesFirst(t *testing.T) {
+func TestConcurrentScopeReadsShareTheAnswerTheFirstWorksOut(t *testing.T) {
 	rules := &namespaceRules{allowed: map[string]bool{"payments": true}}
 	held := scopeService(t, rules)
 	ctx := WithScopeSlot(asAlice(t))
@@ -247,7 +247,6 @@ func TestConcurrentScopeReadsShareTheAnswerThatFinishesFirst(t *testing.T) {
 		}()
 	}
 	<-entered
-	<-entered
 	close(release)
 
 	first := <-results
@@ -258,6 +257,35 @@ func TestConcurrentScopeReadsShareTheAnswerThatFinishesFirst(t *testing.T) {
 	}
 	if !slices.Equal(second.Namespaces, first.Namespaces) {
 		t.Fatalf("concurrent scopes differ: %+v and %+v", first, second)
+	}
+	select {
+	case <-entered:
+		t.Fatal("both readers asked the cluster, so one request can spend another's review budget")
+	default:
+	}
+}
+
+func TestAConcurrentScopeReadNeverDegradesToUndecided(t *testing.T) {
+	rules := &namespaceRules{allowed: map[string]bool{"payments": true}}
+	held := scopeService(t, rules)
+	ctx := WithScopeSlot(asAlice(t))
+	results := make(chan api.Scope, 16)
+	var crowd sync.WaitGroup
+	for range 16 {
+		crowd.Go(func() {
+			results <- held.Scope(ctx, names)
+		})
+	}
+	crowd.Wait()
+	close(results)
+
+	for got := range results {
+		if len(got.Undecided) != 0 {
+			t.Fatalf("scope = %+v, want no namespace left undecided", got)
+		}
+		if !slices.Equal(got.Namespaces, []string{"payments"}) {
+			t.Fatalf("scope = %+v, want payments", got)
+		}
 	}
 }
 
