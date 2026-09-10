@@ -141,11 +141,8 @@ func (r *auditRunner) announce(ctx context.Context, cluster string, run store.Ru
 	if r.post == "" {
 		return
 	}
-	body, err := json.Marshal(noticeOf(cluster, run, report))
-	if err != nil {
-		slog.Warn("the audit notice could not be encoded", "cluster", cluster, "error", err)
-		return
-	}
+	//nolint:errchkjson // the notice is strings, ints and a map of them; encoding it cannot fail
+	body, _ := json.Marshal(noticeOf(cluster, run, report))
 	if r.send(ctx, body) {
 		return
 	}

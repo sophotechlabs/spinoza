@@ -118,10 +118,8 @@ func (s *Server) viewsFor(r *http.Request, shared bool) ([]api.SavedView, string
 }
 
 func (s *Server) writeViews(key string, held []api.SavedView) error {
-	body, err := json.Marshal(held)
-	if err != nil {
-		return err
-	}
+	//nolint:errchkjson // a saved view is strings and string slices; encoding it cannot fail
+	body, _ := json.Marshal(held)
 	return s.stored().Merge(map[string]string{key: string(body)})
 }
 

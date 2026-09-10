@@ -188,3 +188,48 @@ func TestOnceItIsReadyANewInformerDoesNotTakeItOutOfRotation(t *testing.T) {
 		t.Fatalf("waiting = %v, want nothing", got.Waiting)
 	}
 }
+
+func TestAServerWithNoClusterOpenIsNotReady(t *testing.T) {
+	srv := New(&stubBackendCluster{}, testAssets(), testToken)
+	srv.UseClusterAuth(ClusterAuth{})
+	srv.UseHistory(t.Context(), &heldHistory{})
+
+	got := srv.Ready()
+
+	if got.Ready || got.Discovery || got.Informers {
+		t.Fatalf("ready = %+v, want nothing answering while no cluster is open", got)
+	}
+	if !slices.Contains(got.Waiting, readyNoCatalog) || !slices.Contains(got.Waiting, readyNoInformers) {
+		t.Fatalf("waiting = %v, want the catalog and the informers named", got.Waiting)
+	}
+}
+
+func TestACacheStillFillingAtStartupKeepsThePodOutOfRotation(t *testing.T) {
+	backend := &stubCatalog{catalog: api.ResourceCatalog{Categories: readyWorkloads()}, syncing: true}
+	srv := New(&stubBackendCluster{backend: backend}, testAssets(), testToken)
+	srv.UseClusterAuth(ClusterAuth{})
+	srv.UseHistory(t.Context(), &heldHistory{})
+
+	got := srv.Ready()
+
+	if got.Informers || got.Ready {
+		t.Fatalf("ready = %+v, want a filling cache to hold readiness back", got)
+	}
+	if !slices.Contains(got.Waiting, readyNoInformers) {
+		t.Fatalf("waiting = %v, want the informers named", got.Waiting)
+	}
+}
+
+func TestALogStreamStillSubscribingKeepsThePodOutOfRotation(t *testing.T) {
+	srv := readyServerFor(t, readyCase{served: true, catalog: readyWorkloads(), past: &heldHistory{}})
+	srv.track(&wsSession{
+		tables: map[string]*entry{},
+		logs:   map[string]*entry{"main": {gen: 1}},
+	})
+
+	got := srv.Ready()
+
+	if got.Informers || got.Ready {
+		t.Fatalf("ready = %+v, want a log stream that has not synced to hold readiness back", got)
+	}
+}

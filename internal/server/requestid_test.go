@@ -75,3 +75,17 @@ func TestTwoRequestsAreNamedDifferently(t *testing.T) {
 		}
 	}
 }
+
+func TestARequestThatWasNeverNamedReadsAsNoName(t *testing.T) {
+	if got := requestIDOf(t.Context()); got != "" {
+		t.Fatalf("request name = %q, want none on a context that never carried one", got)
+	}
+}
+
+func TestANamedRequestCarriesItsNameOnItsContext(t *testing.T) {
+	req := withRequestID(httptest.NewRequest(http.MethodGet, "/api/version", http.NoBody), "abc")
+
+	if got := requestIDOf(req.Context()); got != "abc" {
+		t.Fatalf("request name = %q, want abc", got)
+	}
+}

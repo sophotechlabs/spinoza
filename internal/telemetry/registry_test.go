@@ -126,7 +126,7 @@ func TestAWriteThatMakesNoSenseForItsKindIsCountedRatherThanStored(t *testing.T)
 	}
 }
 
-func TestTheRegistrysOwnBookkeepingDoesNotReportOnItself(t *testing.T) {
+func TestABookkeepingCounterDoesNotReportOnItself(t *testing.T) {
 	reg := New()
 
 	for at := range seriesLimit + 5 {

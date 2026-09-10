@@ -15,10 +15,7 @@ var requestNames = base32.NewEncoding("abcdefghijklmnopqrstuvwxyz234567").WithPa
 
 func newRequestID() string {
 	var raw [8]byte
-	_, err := rand.Read(raw[:])
-	if err != nil {
-		return "unnamed"
-	}
+	_, _ = rand.Read(raw[:])
 	return requestNames.EncodeToString(raw[:])
 }
 

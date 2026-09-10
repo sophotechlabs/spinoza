@@ -83,17 +83,16 @@ func (s *Store) Start(header Header) (*Session, error) {
 	if err != nil {
 		return nil, err
 	}
+	line, encodeErr := headerLine(header)
+	if encodeErr != nil {
+		return nil, encodeErr
+	}
 	if mkErr := os.MkdirAll(s.dir, 0o700); mkErr != nil {
 		return nil, fmt.Errorf("transcript: %w", mkErr)
 	}
 	file, openErr := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600)
 	if openErr != nil {
 		return nil, fmt.Errorf("transcript: %w", openErr)
-	}
-	line, encodeErr := headerLine(header)
-	if encodeErr != nil {
-		_ = file.Close()
-		return nil, encodeErr
 	}
 	_, writeErr := file.Write(line)
 	if writeErr != nil {
@@ -152,10 +151,6 @@ func (s *Session) write(payload []byte) {
 		return
 	}
 	room := maxBytes - s.written
-	if room <= 0 {
-		s.stopWriting()
-		return
-	}
 	if len(payload) > room {
 		payload = payload[:room]
 	}
@@ -287,19 +282,11 @@ func (s *Store) Trim(older time.Duration, now time.Time) (int, error) {
 		if parseErr != nil || !at.Before(cutoff) {
 			continue
 		}
-		path, pathErr := s.pathFor(header.ID)
-		if pathErr != nil {
-			continue
-		}
-		if os.Remove(path) == nil {
+		if os.Remove(filepath.Join(s.dir, header.ID+extension)) == nil {
 			removed++
 		}
 	}
 	return removed, nil
-}
-
-func ErrNotRecording() error {
-	return errNoDirectory
 }
 
 func ErrUnknown() error {

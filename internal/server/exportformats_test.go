@@ -2,6 +2,7 @@ package server
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strings"
 	"testing"
@@ -107,5 +108,15 @@ func TestAnExportFormatNobodyOffersStillGetsTheSpreadsheet(t *testing.T) {
 				t.Fatalf("the header row was %v", rows[0])
 			}
 		})
+	}
+}
+
+func TestASARIFExportNobodyIsListeningForIsNotFatal(t *testing.T) {
+	writer := &deafWriter{err: errors.New("client disconnected")}
+
+	writeCheckSARIF(writer, api.CheckReport{})
+
+	if writer.Header().Get("Content-Type") != "application/sarif+json" {
+		t.Fatalf("content type = %q", writer.Header().Get("Content-Type"))
 	}
 }

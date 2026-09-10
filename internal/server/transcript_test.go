@@ -4,10 +4,14 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/sophotechlabs/spinoza/internal/api"
+	"github.com/sophotechlabs/spinoza/internal/store"
 	"github.com/sophotechlabs/spinoza/internal/transcript"
 )
 
@@ -105,4 +109,108 @@ func TestStartingATranscriptWithNoStoreGivesNothingToWriteTo(t *testing.T) {
 	}
 	tape.Typed([]byte("still safe"))
 	tape.Close()
+}
+
+func unusableStore(t *testing.T) *Server {
+	t.Helper()
+	blocked := filepath.Join(t.TempDir(), "not-a-directory")
+	if err := os.WriteFile(blocked, []byte("in the way"), 0o600); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	srv := New(&stubBackendCluster{backend: &stubCatalog{}}, testAssets(), testToken)
+	srv.UseTranscripts(transcript.Open(blocked))
+	return srv
+}
+
+func TestReadingASessionSaysSoWhenThisDeploymentRecordsNone(t *testing.T) {
+	srv := New(&stubBackendCluster{backend: &stubCatalog{}}, testAssets(), testToken)
+	srv.UseTranscripts(transcript.Open(""))
+
+	rec := httptest.NewRecorder()
+	srv.readTranscript(rec, httptest.NewRequest(http.MethodGet, "/api/transcripts/text?id=any", http.NoBody))
+
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("status = %d, want 404", rec.Code)
+	}
+	if !strings.Contains(rec.Body.String(), notRecording) {
+		t.Fatalf("body = %s", rec.Body.String())
+	}
+}
+
+func TestASessionThatCannotBeOpenedIsNotRecordedAndSaysNothingToTheCaller(t *testing.T) {
+	srv := unusableStore(t)
+
+	tape := srv.startTranscript(httptest.NewRequest(http.MethodGet, "/api/exec", http.NoBody), "exec", "prod/web")
+
+	if tape != nil {
+		t.Fatal("a transcript was started on a store that cannot hold one")
+	}
+}
+
+func TestAListingThatCannotBeReadSaysWhy(t *testing.T) {
+	srv := unusableStore(t)
+
+	rec := httptest.NewRecorder()
+	srv.listTranscripts(rec, httptest.NewRequest(http.MethodGet, "/api/transcripts", http.NoBody))
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("status = %d, want 500: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestASessionThatCannotBeReadSaysWhyRatherThanClaimingItIsMissing(t *testing.T) {
+	srv := unusableStore(t)
+
+	rec := httptest.NewRecorder()
+	srv.readTranscript(rec, httptest.NewRequest(http.MethodGet, "/api/transcripts/text?id=abc", http.NoBody))
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("status = %d, want 500: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestRecordedSessionsOlderThanTheRetentionAreTrimmed(t *testing.T) {
+	srv, held := transcribingServer(t)
+	srv.now = func() time.Time { return time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC) }
+	tape := srv.startTranscript(httptest.NewRequest(http.MethodGet, "/api/exec", http.NoBody), "exec", "prod/web")
+	if tape == nil {
+		t.Fatal("no transcript was started")
+	}
+	tape.Close()
+	srv.now = func() time.Time { return time.Date(2026, 4, 1, 0, 0, 0, 0, time.UTC) }
+
+	srv.trimTranscripts(store.Retention{Days: 7})
+
+	left, err := held.List(10)
+	if err != nil {
+		t.Fatalf("list: %v", err)
+	}
+	if len(left) != 0 {
+		t.Fatalf("sessions = %d, want the old one gone", len(left))
+	}
+}
+
+func TestATrimThatCannotReadTheSessionsIsNotFatal(t *testing.T) {
+	srv := unusableStore(t)
+
+	srv.trimTranscripts(store.Retention{Days: 7})
+}
+
+func TestNothingIsTrimmedWhenNoRetentionWasSet(t *testing.T) {
+	srv, held := transcribingServer(t)
+	tape := srv.startTranscript(httptest.NewRequest(http.MethodGet, "/api/exec", http.NoBody), "exec", "prod/web")
+	if tape == nil {
+		t.Fatal("no transcript was started")
+	}
+	tape.Close()
+
+	srv.trimTranscripts(store.Retention{})
+
+	left, err := held.List(10)
+	if err != nil {
+		t.Fatalf("list: %v", err)
+	}
+	if len(left) != 1 {
+		t.Fatalf("sessions = %d, want the one that was recorded kept", len(left))
+	}
 }

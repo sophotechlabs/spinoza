@@ -5,11 +5,15 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/sophotechlabs/spinoza/internal/api"
+	"github.com/sophotechlabs/spinoza/internal/checks"
+	"github.com/sophotechlabs/spinoza/internal/safe"
+	settingsstore "github.com/sophotechlabs/spinoza/internal/settings"
 	"github.com/sophotechlabs/spinoza/internal/store"
 )
 
@@ -70,6 +74,7 @@ type countingReceiver struct {
 	refuse  int
 	server  *httptest.Server
 	refused int
+	tried   int
 }
 
 func newReceiver(refuse int) *countingReceiver {
@@ -79,6 +84,7 @@ func newReceiver(refuse int) *countingReceiver {
 		_, _ = r.Body.Read(body)
 		got.mu.Lock()
 		defer got.mu.Unlock()
+		got.tried++
 		if got.refused < got.refuse {
 			got.refused++
 			w.WriteHeader(http.StatusInternalServerError)
@@ -88,6 +94,12 @@ func newReceiver(refuse int) *countingReceiver {
 		w.WriteHeader(http.StatusOK)
 	}))
 	return got
+}
+
+func (c *countingReceiver) tries() int {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.tried
 }
 
 func (c *countingReceiver) posts() [][]byte {
@@ -244,5 +256,267 @@ func TestWithNoRunBeforeItOnlyAnnouncesWhenThereIsSomethingToSay(t *testing.T) {
 
 	if known {
 		t.Fatal("a missing store reported a run before")
+	}
+}
+
+type auditingBackend struct {
+	*stubCatalog
+
+	report api.CheckReport
+}
+
+func (a *auditingBackend) CheckExport(context.Context, checks.Filter) api.CheckReport {
+	return a.report
+}
+
+func scheduledServer(t *testing.T) (*Server, *heldHistory) {
+	t.Helper()
+	backend := &auditingBackend{stubCatalog: &stubCatalog{}, report: sampleReport(1, 0)}
+	srv := New(&stubBackendCluster{backend: backend}, testAssets(), testToken)
+	srv.UseSettings(settingsstore.Memory())
+	srv.UseBaselines(newHeldBaselines())
+	held := &heldHistory{}
+	srv.UseHistory(t.Context(), held)
+	return srv, held
+}
+
+func TestTheSelfMetricsPageCarriesTheExpositionFormat(t *testing.T) {
+	srv := New(&stubBackendCluster{backend: &stubCatalog{}}, testAssets(), testToken)
+
+	rec := httptest.NewRecorder()
+	srv.handleSelfMetrics(rec, httptest.NewRequest(http.MethodGet, "/metrics", http.NoBody))
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d", rec.Code)
+	}
+	if !strings.HasPrefix(rec.Header().Get("Content-Type"), "text/plain") {
+		t.Fatalf("content type = %q", rec.Header().Get("Content-Type"))
+	}
+	body := rec.Body.String()
+	for _, wanted := range []string{
+		"# TYPE spinoza_http_requests_total counter",
+		"spinoza_build_info{version=",
+	} {
+		if !strings.Contains(body, wanted) {
+			t.Fatalf("the page does not carry %q", wanted)
+		}
+	}
+}
+
+func TestAScheduledRunRecordsWhatItFoundAndAnnouncesTheChange(t *testing.T) {
+	got := newReceiver(0)
+	t.Cleanup(got.server.Close)
+	srv, held := scheduledServer(t)
+	runner := &auditRunner{
+		server:     srv,
+		post:       got.server.URL,
+		client:     got.server.Client(),
+		retryAfter: time.Millisecond,
+	}
+
+	runner.once(t.Context())
+
+	if len(held.runs) != 1 {
+		t.Fatalf("recorded %d runs, want 1", len(held.runs))
+	}
+	if held.runsOn[0] == "" {
+		t.Fatal("the run was recorded against no cluster")
+	}
+	if len(got.posts()) != 1 {
+		t.Fatalf("posts = %d, want the first run to be announced", len(got.posts()))
+	}
+}
+
+func TestASecondRunThatFoundNothingNewSaysNothing(t *testing.T) {
+	got := newReceiver(0)
+	t.Cleanup(got.server.Close)
+	srv, held := scheduledServer(t)
+	runner := &auditRunner{
+		server:     srv,
+		post:       got.server.URL,
+		client:     got.server.Client(),
+		retryAfter: time.Millisecond,
+	}
+
+	runner.once(t.Context())
+	runner.once(t.Context())
+
+	if len(held.runs) != 2 {
+		t.Fatalf("recorded %d runs, want both", len(held.runs))
+	}
+	if len(got.posts()) != 1 {
+		t.Fatalf("posts = %d, want only the first", len(got.posts()))
+	}
+}
+
+func TestARunAgainstAClusterThatIsNotThereIsSkipped(t *testing.T) {
+	srv := New(&stubBackendCluster{}, testAssets(), testToken)
+	held := &heldHistory{}
+	srv.UseHistory(t.Context(), held)
+	runner := &auditRunner{server: srv, retryAfter: time.Millisecond}
+
+	runner.runOn(t.Context(), "not-open")
+
+	if len(held.runs) != 0 {
+		t.Fatalf("recorded %d runs for a cluster that is not open", len(held.runs))
+	}
+}
+
+func TestARunIsStillAnnouncedWhenTheStoreCannotKeepIt(t *testing.T) {
+	got := newReceiver(0)
+	t.Cleanup(got.server.Close)
+	srv, held := scheduledServer(t)
+	held.runsErr = errBadLimit
+	runner := &auditRunner{
+		server:     srv,
+		post:       got.server.URL,
+		client:     got.server.Client(),
+		retryAfter: time.Millisecond,
+	}
+
+	runner.once(t.Context())
+
+	if len(got.posts()) != 1 {
+		t.Fatalf("posts = %d; a store that refused the run stopped the notice", len(got.posts()))
+	}
+}
+
+func TestTheTimerStopsWhenTheProcessDoes(t *testing.T) {
+	srv, held := scheduledServer(t)
+	ctx, stop := context.WithCancel(t.Context())
+	srv.UseAuditSchedule(ctx, AuditSchedule{Every: 5 * time.Millisecond})
+
+	waitForRun(t, func() bool { return len(held.recordedRuns()) > 0 })
+	stop()
+	settled := len(held.recordedRuns())
+	time.Sleep(30 * time.Millisecond)
+
+	if grown := len(held.recordedRuns()); grown > settled+1 {
+		t.Fatalf("the timer kept running after the process stopped: %d then %d", settled, grown)
+	}
+}
+
+func waitForRun(t *testing.T, until func() bool) {
+	t.Helper()
+	for range 200 {
+		if until() {
+			return
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	t.Fatal("the timer never ran")
+}
+
+func TestAFirstRunThatFoundNothingSaysNothing(t *testing.T) {
+	got := newReceiver(0)
+	t.Cleanup(got.server.Close)
+	backend := &auditingBackend{stubCatalog: &stubCatalog{}, report: api.CheckReport{Scanned: 4}}
+	srv := New(&stubBackendCluster{backend: backend}, testAssets(), testToken)
+	srv.UseSettings(settingsstore.Memory())
+	srv.UseBaselines(newHeldBaselines())
+	srv.UseHistory(t.Context(), &heldHistory{})
+	runner := &auditRunner{
+		server:     srv,
+		post:       got.server.URL,
+		client:     got.server.Client(),
+		retryAfter: time.Millisecond,
+	}
+
+	runner.once(t.Context())
+
+	if len(got.posts()) != 0 {
+		t.Fatalf("posts = %d, want none for a first clean run", len(got.posts()))
+	}
+}
+
+func TestANoticeThatIsRefusedTwiceIsGivenUpOn(t *testing.T) {
+	got := newReceiver(2)
+	t.Cleanup(got.server.Close)
+	srv, _ := scheduledServer(t)
+	runner := &auditRunner{
+		server:     srv,
+		post:       got.server.URL,
+		client:     got.server.Client(),
+		retryAfter: time.Millisecond,
+	}
+
+	runner.once(t.Context())
+
+	if got.tries() != 2 {
+		t.Fatalf("tries = %d, want the first and one retry", got.tries())
+	}
+	if len(got.posts()) != 0 {
+		t.Fatalf("posts = %d, want none to have landed", len(got.posts()))
+	}
+}
+
+func TestANoticeIsNotRetriedOnceTheProcessIsStopping(t *testing.T) {
+	got := newReceiver(2)
+	t.Cleanup(got.server.Close)
+	srv, _ := scheduledServer(t)
+	ctx, stop := context.WithCancel(t.Context())
+	runner := &auditRunner{
+		server:     srv,
+		post:       got.server.URL,
+		client:     got.server.Client(),
+		retryAfter: time.Minute,
+	}
+	safe.Go("stopping the process while a notice is waiting to retry", func() {
+		waitForPost(got)
+		stop()
+	})
+
+	runner.runOn(ctx, "kind-spinoza")
+
+	if got.tries() != 1 {
+		t.Fatalf("tries = %d, want the retry abandoned", got.tries())
+	}
+}
+
+func waitForPost(got *countingReceiver) {
+	for range 400 {
+		if got.tries() > 0 {
+			return
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+}
+
+func TestANoticeToAnAddressThatIsNotAURLIsNotSent(t *testing.T) {
+	srv, _ := scheduledServer(t)
+	runner := &auditRunner{
+		server:     srv,
+		post:       "http://[::1]:namedport/hook",
+		client:     &http.Client{},
+		retryAfter: time.Millisecond,
+	}
+
+	runner.once(t.Context())
+}
+
+func TestANoticeToAnAddressThatRefusesTheConnectionIsNotFatal(t *testing.T) {
+	dead := newReceiver(0)
+	url := dead.server.URL
+	dead.server.Close()
+	srv, _ := scheduledServer(t)
+	runner := &auditRunner{
+		server:     srv,
+		post:       url,
+		client:     &http.Client{Timeout: 200 * time.Millisecond},
+		retryAfter: time.Millisecond,
+	}
+
+	runner.once(t.Context())
+}
+
+func TestTheRunsPageSaysWhyWhenTheStoreCannotBeRead(t *testing.T) {
+	srv, held := scheduledServer(t)
+	held.runsErr = errBadLimit
+
+	rec := httptest.NewRecorder()
+	srv.handleAuditRuns(rec, httptest.NewRequest(http.MethodGet, "/api/audit/runs", http.NoBody))
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("status = %d, want 500: %s", rec.Code, rec.Body.String())
 	}
 }

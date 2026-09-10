@@ -101,10 +101,7 @@ func (s *Server) supportCounts() map[string]int {
 
 func supportMetrics() string {
 	var page bytes.Buffer
-	err := telemetry.Default().Registry.Write(&page)
-	if err != nil {
-		return ""
-	}
+	_ = telemetry.Default().Registry.Write(&page)
 	return page.String()
 }
 

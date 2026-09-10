@@ -790,3 +790,48 @@ describe('History', () => {
     });
   });
 });
+
+describe('the recorded sessions beside the changes', () => {
+  it('swaps to the sessions and back', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string) => {
+        if (url.startsWith('/api/transcripts')) {
+          return Promise.resolve({
+            ok: true,
+            status: 200,
+            json: () =>
+              Promise.resolve({
+                recording: true,
+                sessions: [
+                  {
+                    id: 'abc',
+                    at: '2026-09-09T12:00:00Z',
+                    actor: 'alice@example.com',
+                    target: 'prod/web',
+                    kind: 'exec',
+                    bytes: 2048,
+                  },
+                ],
+              }),
+          });
+        }
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () => Promise.resolve({ entries: [entry({ verb: 'scale' })] }),
+        });
+      }),
+    );
+
+    render(<History onOpen={vi.fn()} />);
+    await screen.findByText('scale');
+    await userEvent.click(screen.getByRole('button', { name: 'Recorded sessions' }));
+
+    expect(await screen.findByText('prod/web')).toBeInTheDocument();
+    expect(screen.queryByText('scale')).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Changes' }));
+    expect(await screen.findByText('scale')).toBeInTheDocument();
+  });
+});

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -147,7 +148,7 @@ func servedViewServer(t *testing.T) *Server {
 	return srv
 }
 
-func TestOnePersonsViewsAreNotAnothersWhenServingACluster(t *testing.T) {
+func TestOnePersonsViewsAreNotSomebodyElsesWhenServingACluster(t *testing.T) {
 	srv := servedViewServer(t)
 	alice := auth.Identity{User: "alice@example.com", Role: auth.RoleEditor}
 	bob := auth.Identity{User: "bob@example.com", Role: auth.RoleEditor}
@@ -196,5 +197,140 @@ func TestABrokenStoredViewListReadsAsNoneRatherThanBreaking(t *testing.T) {
 
 	if len(page.Views) != 0 {
 		t.Fatalf("views = %d, want none", len(page.Views))
+	}
+}
+
+func forgetOne(t *testing.T, srv *Server, query string, who *auth.Identity) *httptest.ResponseRecorder {
+	t.Helper()
+	req := httptest.NewRequest(http.MethodDelete, "/api/views?"+query, http.NoBody)
+	if who != nil {
+		req = req.WithContext(auth.WithIdentity(req.Context(), *who))
+	}
+	rec := httptest.NewRecorder()
+	srv.forgetView(rec, req)
+	return rec
+}
+
+func TestABodyThatIsNotAViewIsRefused(t *testing.T) {
+	srv := savedViewServer(t)
+
+	req := httptest.NewRequest(http.MethodPut, "/api/views", strings.NewReader("[]"))
+	rec := httptest.NewRecorder()
+	srv.saveView(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestAViewNameLongerThanSpinozaKeepsIsRefused(t *testing.T) {
+	srv := savedViewServer(t)
+
+	rec := saveOne(t, srv, api.SavedView{Name: strings.Repeat("n", maxSavedViewName+1), View: "resources"}, nil)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestSpinozaRefusesToKeepAViewForSomebodyItCannotName(t *testing.T) {
+	srv := servedViewServer(t)
+
+	rec := saveOne(t, srv, api.SavedView{Name: "nobody's", View: "resources"}, nil)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("status = %d, want 500: %s", rec.Code, rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), "does not know who you are") {
+		t.Fatalf("body = %s", rec.Body.String())
+	}
+}
+
+func TestForgettingAViewNeedsSomebodySpinozaCanName(t *testing.T) {
+	srv := servedViewServer(t)
+
+	rec := forgetOne(t, srv, "id=whatever", nil)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("status = %d, want 500: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestOneMoreViewThanSpinozaKeepsIsRefused(t *testing.T) {
+	srv := savedViewServer(t)
+	held := make([]api.SavedView, 0, maxSavedViews+1)
+	for at := range maxSavedViews + 1 {
+		held = append(held, api.SavedView{ID: strconv.Itoa(at), Name: strconv.Itoa(at), View: "resources"})
+	}
+	body, err := json.Marshal(held)
+	if err != nil {
+		t.Fatalf("encode: %v", err)
+	}
+	if mergeErr := srv.stored().Merge(map[string]string{savedViewsKey: string(body)}); mergeErr != nil {
+		t.Fatalf("merge: %v", mergeErr)
+	}
+
+	rec := saveOne(t, srv, api.SavedView{Name: "one too many", View: "resources"}, nil)
+
+	if rec.Code != http.StatusConflict {
+		t.Fatalf("status = %d, want 409: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestAViewSaysSoWhenTheSettingsStoreRefusesTheWrite(t *testing.T) {
+	srv := savedViewServer(t)
+	srv.UseSettings(refusingSettings{})
+
+	rec := saveOne(t, srv, api.SavedView{Name: "unkeepable", View: "resources"}, nil)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("status = %d, want 500: %s", rec.Code, rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), "read-only") {
+		t.Fatalf("body = %s", rec.Body.String())
+	}
+}
+
+func TestForgettingAViewSaysSoWhenTheSettingsStoreRefusesTheWrite(t *testing.T) {
+	srv := savedViewServer(t)
+	srv.UseSettings(refusingSettings{})
+
+	rec := forgetOne(t, srv, "id=anything", nil)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("status = %d, want 500: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestOnlyAnAdminForgetsAPublishedView(t *testing.T) {
+	srv := servedViewServer(t)
+	editor := auth.Identity{User: "editor@example.com", Role: auth.RoleEditor}
+
+	rec := forgetOne(t, srv, "id=whatever&shared=true", &editor)
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("status = %d, want 403: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestAStoredViewWithNoNameOrIdIsSkipped(t *testing.T) {
+	srv := savedViewServer(t)
+	stored := []api.SavedView{
+		{ID: "", Name: "nameless id", View: "resources"},
+		{ID: "kept", Name: "", View: "resources"},
+		{ID: "real", Name: "real", View: "resources"},
+	}
+	body, err := json.Marshal(stored)
+	if err != nil {
+		t.Fatalf("encode: %v", err)
+	}
+	if mergeErr := srv.stored().Merge(map[string]string{savedViewsKey: string(body)}); mergeErr != nil {
+		t.Fatalf("merge: %v", mergeErr)
+	}
+
+	page := listViews(t, srv, nil)
+
+	if len(page.Views) != 1 || page.Views[0].ID != "real" {
+		t.Fatalf("views = %+v, want only the one that is whole", page.Views)
 	}
 }

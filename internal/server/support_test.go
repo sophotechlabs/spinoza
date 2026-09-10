@@ -123,3 +123,50 @@ func TestTheBundleCountsPeopleRatherThanNamingTheirDigests(t *testing.T) {
 		t.Fatal("the bundle dropped a deployment-wide setting")
 	}
 }
+
+func TestAPersonalSettingWithNoNameIsStillDescribedWithoutNamingAnybody(t *testing.T) {
+	srv := New(&stubBackendCluster{backend: &stubCatalog{}}, testAssets(), testToken)
+	srv.UseSettings(settingsstore.Memory())
+	if err := srv.stored().Merge(map[string]string{userSettingsPrefix + "abc123": "borg"}); err != nil {
+		t.Fatalf("merge: %v", err)
+	}
+
+	bundle := srv.supportBundle()
+
+	if bundle.Settings[userSettingsPrefix+"<somebody>"] != "set, under a kilobyte" {
+		t.Fatalf("settings = %+v, want the key described without the digest", bundle.Settings)
+	}
+	for key := range bundle.Settings {
+		if strings.Contains(key, "abc123") {
+			t.Fatalf("the bundle names a person's digest: %q", key)
+		}
+	}
+}
+
+func TestABigSettingIsDescribedBySizeRatherThanCopied(t *testing.T) {
+	srv := New(&stubBackendCluster{backend: &stubCatalog{}}, testAssets(), testToken)
+	srv.UseSettings(settingsstore.Memory())
+	if err := srv.stored().Merge(map[string]string{"spinoza.themes.v1": strings.Repeat("x", 2048)}); err != nil {
+		t.Fatalf("merge: %v", err)
+	}
+
+	bundle := srv.supportBundle()
+
+	if bundle.Settings["spinoza.themes.v1"] != "set, over a kilobyte" {
+		t.Fatalf("themes reads %q", bundle.Settings["spinoza.themes.v1"])
+	}
+}
+
+func TestAnArgumentThatLooksLikeAURLAndIsNotIsRedactedWhole(t *testing.T) {
+	got := redactArgument("--public-url=https://[::1")
+
+	if got != "--public-url="+redacted {
+		t.Fatalf("argument = %q, want it redacted whole rather than half-parsed", got)
+	}
+}
+
+func TestTheBundleCarriesTheMetricsPage(t *testing.T) {
+	if !strings.Contains(supportMetrics(), "spinoza_") {
+		t.Fatal("the bundle carried no metrics at all")
+	}
+}
