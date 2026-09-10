@@ -65,6 +65,7 @@ func (s *Server) exportHistoryJSON(w http.ResponseWriter, r *http.Request, asked
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Content-Disposition", `attachment; filename="spinoza-history.json"`)
 	first := true
+	rows := json.NewEncoder(w)
 	_, _ = w.Write([]byte("["))
 	s.eachHistoryPage(w, r, asked, func(entries []api.HistoryEntry) {
 		for _, one := range entries {
@@ -72,11 +73,7 @@ func (s *Server) exportHistoryJSON(w http.ResponseWriter, r *http.Request, asked
 				_, _ = w.Write([]byte(","))
 			}
 			first = false
-			body, err := json.Marshal(one)
-			if err != nil {
-				continue
-			}
-			_, _ = w.Write(body)
+			_ = rows.Encode(one)
 		}
 	})
 	_, _ = w.Write([]byte("]"))

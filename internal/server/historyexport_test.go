@@ -268,3 +268,45 @@ func TestAnExportHandsOverEveryPageAndNotJustTheFirst(t *testing.T) {
 		t.Fatalf("the export handed over %d rows, want every one of %d", len(rows)-1, exportPageSize+250)
 	}
 }
+
+func manyActions(count int) *heldHistory {
+	held := &heldHistory{}
+	for at := range count {
+		held.page.Entries = append(held.page.Entries, store.Entry{
+			ID:    int64(count - at),
+			At:    time.Date(2026, 9, 9, 12, 0, 0, 0, time.UTC).Add(-time.Duration(at) * time.Second),
+			Verb:  "delete",
+			Actor: "alice@example.com",
+			Name:  "row-" + strconv.Itoa(at),
+			Kind:  "ConfigMap",
+		})
+	}
+	return held
+}
+
+func TestAnExportHandsOverNoMoreRowsThanWereAskedFor(t *testing.T) {
+	held := manyActions(20)
+	held.overDelivers = true
+	ts := pastServer(t, held)
+
+	_, body := doRequest(t, http.MethodGet, ts.URL+"/api/history/export?source=action&limit=5", nil)
+
+	rows := auditExportCSV(t, body)
+	if len(rows) != 6 {
+		t.Fatalf("the export handed over %d rows, want the 5 that were asked for", len(rows)-1)
+	}
+}
+
+func TestAnExportStopsWhenTheStoreKeepsHandingBackTheSamePage(t *testing.T) {
+	held := manyActions(3)
+	held.page.More = true
+	held.stuckCursor = true
+	ts := pastServer(t, held)
+
+	_, body := doRequest(t, http.MethodGet, ts.URL+"/api/history/export?source=action", nil)
+
+	rows := auditExportCSV(t, body)
+	if len(rows) != 7 {
+		t.Fatalf("the export handed over %d rows, want the page twice and then a stop", len(rows)-1)
+	}
+}

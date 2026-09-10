@@ -348,7 +348,12 @@ func (s *Server) readActions(
 		writeAPIError(w, err)
 		return api.History{}, false
 	}
-	return api.History{Entries: entriesOf(page.Entries), More: page.More}, true
+	rows := entriesOf(page.Entries)
+	return api.History{
+		Entries:    rows,
+		More:       page.More,
+		NextAction: lastOf(rows, api.HistoryAction, after),
+	}, true
 }
 
 func historyAfter(r *http.Request) (int64, error) {

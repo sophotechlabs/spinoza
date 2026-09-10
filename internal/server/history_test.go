@@ -59,6 +59,9 @@ type heldHistory struct {
 	runs        []store.Run
 	runsOn      []string
 	runsErr     error
+
+	stuckCursor  bool
+	overDelivers bool
 }
 
 func (h *heldHistory) For(cluster string) store.Recorder {
@@ -112,7 +115,8 @@ func (h *heldHistory) Changed(_ context.Context, query store.Query) (store.Chang
 	if h.changeErr != nil {
 		return store.Changes{}, h.changeErr
 	}
-	return store.Changes{Rows: rowsBelow(h.changePage.Rows, query.After), More: h.changePage.More}, nil
+	rows, more := firstFew(rowsBelow(h.changePage.Rows, query.After), query.Limit)
+	return store.Changes{Rows: rows, More: h.changePage.More || more}, nil
 }
 
 func rowsBelow(rows []store.Change, after int64) []store.Change {
@@ -166,6 +170,12 @@ func (h *heldHistory) Runs(_ context.Context, _ string, _ int) ([]store.Run, err
 	return append([]store.Run{}, h.runs...), nil
 }
 
+func (h *heldHistory) recordedRuns() []store.Run {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	return append([]store.Run{}, h.runs...)
+}
+
 func (h *heldHistory) noted() []store.Change {
 	h.mu.Lock()
 	defer h.mu.Unlock()
@@ -191,7 +201,22 @@ func (h *heldHistory) Recent(_ context.Context, query store.Query) (store.Page, 
 	if h.readErr != nil {
 		return store.Page{}, h.readErr
 	}
-	return store.Page{Entries: below(h.page.Entries, query.AfterAction), More: h.page.More}, nil
+	rows := h.page.Entries
+	if !h.stuckCursor {
+		rows = below(rows, query.AfterAction)
+	}
+	if h.overDelivers {
+		return store.Page{Entries: rows, More: h.page.More}, nil
+	}
+	held, more := firstFew(rows, query.Limit)
+	return store.Page{Entries: held, More: h.page.More || more}, nil
+}
+
+func firstFew[T any](rows []T, limit int) ([]T, bool) {
+	if limit <= 0 || len(rows) <= limit {
+		return rows, false
+	}
+	return rows[:limit], true
 }
 
 func below(entries []store.Entry, after int64) []store.Entry {
@@ -1335,5 +1360,59 @@ func TestHistoryIDOrderingDoesNotOverflow(t *testing.T) {
 	}
 	if newestFirst(oldest, newest) <= 0 {
 		t.Fatal("the smallest id was not ordered last")
+	}
+}
+
+func TestTheAuditIsOnlyTrimmedEveryFewHundredWritesByDefault(t *testing.T) {
+	srv := New(&stubBackendCluster{backend: &writingBackend{}}, testAssets(), testToken)
+	held := &heldHistory{}
+	srv.UseHistory(t.Context(), held)
+	req := httptest.NewRequest(http.MethodPost, "/api/action", http.NoBody)
+	atStartup := len(held.auditTrims())
+
+	for range auditPruneInterval - 1 {
+		srv.record(req, change{verb: verbApply})
+	}
+	if len(held.auditTrims()) != atStartup {
+		t.Fatalf("audit prune calls = %d, want none before the interval is reached", len(held.auditTrims())-atStartup)
+	}
+
+	srv.record(req, change{verb: verbApply})
+
+	if len(held.auditTrims()) != atStartup+1 {
+		t.Fatalf("audit prune calls = %d, want one at the interval", len(held.auditTrims())-atStartup)
+	}
+}
+
+func TestARetentionGivenOnTheCommandLineReplacesTheDefault(t *testing.T) {
+	srv := New(&stubBackendCluster{backend: &writingBackend{}}, testAssets(), testToken)
+	srv.auditPruneEvery = 1
+	srv.UseAuditRetention(store.Retention{Days: 3})
+	held := &heldHistory{}
+	srv.UseHistory(t.Context(), held)
+
+	srv.record(httptest.NewRequest(http.MethodPost, "/api/action", http.NoBody), change{verb: verbApply})
+
+	trims := held.auditTrims()
+	if len(trims) == 0 {
+		t.Fatal("the audit was never trimmed")
+	}
+	if trims[len(trims)-1].Days != 3 {
+		t.Fatalf("audit retention = %+v, want the 3 days it was given", trims[len(trims)-1])
+	}
+}
+
+func TestARunsTrimThatFailsIsNotFatal(t *testing.T) {
+	srv := New(&stubBackendCluster{backend: &writingBackend{}}, testAssets(), testToken)
+	srv.auditPruneEvery = 1
+	held := &heldHistory{runsErr: errors.New("runs table is locked")}
+	srv.UseHistory(t.Context(), held)
+
+	srv.record(httptest.NewRequest(http.MethodPost, "/api/action", http.NoBody), change{verb: verbApply})
+
+	held.mu.Lock()
+	defer held.mu.Unlock()
+	if len(held.prunedRuns) == 0 {
+		t.Fatal("the runs table was never trimmed")
 	}
 }
