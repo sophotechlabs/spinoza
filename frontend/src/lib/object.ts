@@ -32,6 +32,13 @@ export async function failure(response: Response, fallback: string): Promise<Err
   return new Error(fallback);
 }
 
+export function reasonOf(err: unknown, fallback: string): string {
+  if (err instanceof Error) {
+    return err.message;
+  }
+  return fallback;
+}
+
 export async function fetchObject(ref: ObjectRef): Promise<ObjectDetail> {
   const response = await request(`/api/object?${refQuery(ref)}`);
   if (!response.ok) {

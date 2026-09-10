@@ -4,15 +4,9 @@ import { describeView, fetchSavedViews, forgetView } from '../lib/savedViews';
 import { usePoll } from '../lib/usePoll';
 import { notifyError } from '../store/toasts';
 import { CONTROL } from '../lib/controls';
+import { reasonOf } from '../lib/object';
 
 const VIEWS_POLL_MS = 60000;
-
-function errorMessage(err: unknown): string {
-  if (err instanceof Error) {
-    return err.message;
-  }
-  return 'that view was not forgotten';
-}
 
 function ownership(view: SavedView): string {
   if (view.shared === true) {
@@ -62,7 +56,7 @@ export default function SavedViewsList({ active }: SavedViewsListProps) {
                   reload();
                 })
                 .catch((err: unknown) => {
-                  notifyError(errorMessage(err));
+                  notifyError(reasonOf(err, 'that view was not forgotten'));
                 })
                 .finally(() => {
                   setBusy(null);

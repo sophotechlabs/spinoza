@@ -96,4 +96,32 @@ describe('RecordedSessions', () => {
       await screen.findByText('No terminal has been opened since recording was turned on.'),
     ).toBeInTheDocument();
   });
+
+  it('says what stopped the listing rather than an empty page', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => Promise.resolve({ ok: false, status: 500, json: () => Promise.resolve({}) })),
+    );
+
+    render(<RecordedSessions />);
+
+    expect(await screen.findByText(/Recorded sessions/)).toBeInTheDocument();
+  });
+
+  it('says what stopped a read rather than leaving the pane empty', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string) => {
+        if (url.startsWith('/api/transcripts/text')) {
+          return Promise.reject(new Error('the connection went away'));
+        }
+        return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(recorded) });
+      }),
+    );
+
+    render(<RecordedSessions />);
+    await userEvent.click(await screen.findByRole('button', { name: 'Read' }));
+
+    expect(await screen.findByText('the connection went away')).toBeInTheDocument();
+  });
 });

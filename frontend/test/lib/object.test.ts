@@ -4,6 +4,7 @@ import {
   deleteObject,
   fetchEvents,
   fetchObject,
+  reasonOf,
   refQuery,
   sameRef,
 } from '../../src/lib/object';
@@ -180,5 +181,24 @@ describe('object client', () => {
     await expect(fetchEvents('flux-system', 'uid-web')).rejects.toThrow(
       'events request failed with status 500',
     );
+  });
+});
+
+describe('the reason a request failed', () => {
+  it('is the message the error carried', () => {
+    expect(reasonOf(new Error('the cluster said no'), 'nothing happened')).toBe(
+      'the cluster said no',
+    );
+  });
+
+  it('falls back to what the caller would say when the reason is not an error', () => {
+    const thrown: unknown = 'the connection went away';
+
+    expect(reasonOf(thrown, 'that view was not saved')).toBe('that view was not saved');
+  });
+
+  it('falls back when there is no reason at all', () => {
+    expect(reasonOf(null, 'nothing happened')).toBe('nothing happened');
+    expect(reasonOf(undefined, 'nothing happened')).toBe('nothing happened');
   });
 });

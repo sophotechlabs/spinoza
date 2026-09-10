@@ -3,15 +3,9 @@ import { fetchTranscript, fetchTranscripts, sizeText } from '../lib/transcripts'
 import { usePoll } from '../lib/usePoll';
 import CapabilityState from './CapabilityState';
 import { CONTROL } from '../lib/controls';
+import { reasonOf } from '../lib/object';
 
 const SESSIONS_POLL_MS = 30000;
-
-function errorMessage(err: unknown): string {
-  if (err instanceof Error) {
-    return err.message;
-  }
-  return 'that session could not be read';
-}
 
 export default function RecordedSessions() {
   const load = useCallback(() => fetchTranscripts(), []);
@@ -47,7 +41,7 @@ export default function RecordedSessions() {
       })
       .catch((err: unknown) => {
         if (reading.current === token) {
-          setFailed(errorMessage(err));
+          setFailed(reasonOf(err, 'that session could not be read'));
         }
       });
   }

@@ -11,6 +11,7 @@ import ConfirmByName from './ConfirmByName';
 import ActionGroup, { Action, ActionNote } from './ActionGroup';
 import DisabledActionReasons from './DisabledActionReasons';
 import { actionTitle, describedBy } from '../lib/actionAvailability';
+import { reasonOf } from '../lib/object';
 
 const YamlDiff = lazy(() => import('./YamlDiff'));
 
@@ -19,13 +20,6 @@ const REVISIONS_POLL_MS = 15000;
 interface RolloutRevisionsProps {
   target: ObjectRef;
   onDone: () => void;
-}
-
-function errorMessage(err: unknown): string {
-  if (err instanceof Error) {
-    return err.message;
-  }
-  return 'that did not work';
 }
 
 function ageOf(revision: Revision): string {
@@ -83,7 +77,7 @@ export default function RolloutRevisions({ target, onDone }: RolloutRevisionsPro
       .catch((err: unknown) => {
         if (live) {
           setDiff(null);
-          setDiffError(errorMessage(err));
+          setDiffError(reasonOf(err, 'that did not work'));
         }
       });
     return () => {
@@ -100,7 +94,7 @@ export default function RolloutRevisions({ target, onDone }: RolloutRevisionsPro
       reload();
       onDone();
     } catch (err: unknown) {
-      notifyError(`undo ${target.name}: ${errorMessage(err)}`, target);
+      notifyError(`undo ${target.name}: ${reasonOf(err, 'that did not work')}`, target);
     } finally {
       setBusy(false);
     }

@@ -111,4 +111,112 @@ describe('SaveViewButton', () => {
       expect(useToastsStore.getState().toasts.some((one) => one.tone === 'error')).toBe(true);
     });
   });
+
+  it('saves on Enter without reaching for the button', async () => {
+    const calls = stub(false);
+
+    render(<SaveViewButton view="resources" resource="pods" filter="" columns={[]} />);
+    await userEvent.click(screen.getByRole('button', { name: 'Save this view' }));
+    await userEvent.type(screen.getByLabelText('Name for this view'), 'crashing pods{Enter}');
+
+    await waitFor(() => {
+      expect(calls.some((one) => one.init?.method === 'PUT')).toBe(true);
+    });
+  });
+
+  it('does nothing on Enter while the name is still empty', async () => {
+    const calls = stub(false);
+
+    render(<SaveViewButton view="resources" resource="pods" filter="" columns={[]} />);
+    await userEvent.click(screen.getByRole('button', { name: 'Save this view' }));
+    await userEvent.type(screen.getByLabelText('Name for this view'), '{Enter}');
+
+    expect(calls.some((one) => one.init?.method === 'PUT')).toBe(false);
+  });
+
+  it('closes on Escape', async () => {
+    stub(false);
+
+    render(<SaveViewButton view="resources" resource="pods" filter="" columns={[]} />);
+    await userEvent.click(screen.getByRole('button', { name: 'Save this view' }));
+    await userEvent.type(screen.getByLabelText('Name for this view'), '{Escape}');
+
+    expect(await screen.findByRole('button', { name: 'Save this view' })).toBeInTheDocument();
+  });
+
+  it('closes on Cancel', async () => {
+    stub(false);
+
+    render(<SaveViewButton view="resources" resource="pods" filter="" columns={[]} />);
+    await userEvent.click(screen.getByRole('button', { name: 'Save this view' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+
+    expect(await screen.findByRole('button', { name: 'Save this view' })).toBeInTheDocument();
+  });
+
+  it('publishes for everybody once that is ticked', async () => {
+    const calls = stub(true);
+
+    render(<SaveViewButton view="checks" filter="" columns={[]} />);
+    await userEvent.click(screen.getByRole('button', { name: 'Save this view' }));
+    await userEvent.click(await screen.findByRole('checkbox'));
+    await userEvent.type(screen.getByLabelText('Name for this view'), 'posture');
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() => {
+      const put = calls.find((one) => one.init?.method === 'PUT');
+      const sent = typeof put?.init?.body === 'string' ? put.init.body : '';
+      expect(sent).toContain('"shared":true');
+    });
+  });
+
+  it('offers no publishing when it cannot ask whether this person may', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((_url: string, init?: RequestInit) => {
+        if (init?.method === 'PUT') {
+          return Promise.resolve({
+            ok: true,
+            status: 200,
+            json: () => Promise.resolve({ id: 'one', name: 'x' }),
+          });
+        }
+        return Promise.reject(new Error('the connection went away'));
+      }),
+    );
+
+    render(<SaveViewButton view="checks" filter="" columns={[]} />);
+    await userEvent.click(screen.getByRole('button', { name: 'Save this view' }));
+
+    await waitFor(() => {
+      expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
+    });
+  });
+
+  it('says what stopped the save rather than pretending it landed', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((_url: string, init?: RequestInit) => {
+        if (init?.method === 'PUT') {
+          return Promise.reject(new Error('the connection went away'));
+        }
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () => Promise.resolve({ views: [], mayShare: false }),
+        });
+      }),
+    );
+
+    render(<SaveViewButton view="checks" filter="" columns={[]} />);
+    await userEvent.click(screen.getByRole('button', { name: 'Save this view' }));
+    await userEvent.type(screen.getByLabelText('Name for this view'), 'posture');
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() => {
+      expect(
+        useToastsStore.getState().toasts.some((one) => one.message === 'the connection went away'),
+      ).toBe(true);
+    });
+  });
 });

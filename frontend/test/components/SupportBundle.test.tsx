@@ -53,4 +53,22 @@ describe('SupportBundle', () => {
       expect(toasts.some((one) => one.message.includes('this needs admin'))).toBe(true);
     });
   });
+
+  it('says what stopped the download rather than a silent nothing', async () => {
+    useToastsStore.getState().clear();
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => Promise.reject(new Error('the connection went away'))),
+    );
+
+    render(<SupportBundle />);
+    await userEvent.click(screen.getByRole('button', { name: 'Save a support bundle' }));
+
+    await waitFor(() => {
+      expect(
+        useToastsStore.getState().toasts.some((one) => one.message === 'the connection went away'),
+      ).toBe(true);
+    });
+    useToastsStore.getState().clear();
+  });
 });

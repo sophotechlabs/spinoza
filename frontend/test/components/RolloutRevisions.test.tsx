@@ -3,6 +3,8 @@ import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import RolloutRevisions from '../../src/components/RolloutRevisions';
 import type { ObjectRef, RevisionDiff, Revisions } from '../../src/lib/types';
+import { useContextsStore } from '../../src/store/contexts';
+import { useToastsStore } from '../../src/store/toasts';
 
 function noop() {
   return undefined;
@@ -77,9 +79,28 @@ function route(answers: Record<string, unknown>, failures: Record<string, number
   return calls;
 }
 
+function stubDialog() {
+  HTMLDialogElement.prototype.showModal = function showModal(this: HTMLDialogElement) {
+    this.open = true;
+  };
+  HTMLDialogElement.prototype.close = function close(this: HTMLDialogElement) {
+    this.open = false;
+  };
+}
+
+function protectedCluster() {
+  useContextsStore.getState().setList({
+    current: { kubeconfig: '', name: 'p-mk1' },
+    kubeconfigs: [],
+    protection: 'protected',
+  });
+}
+
 afterEach(() => {
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
+  useContextsStore.getState().reset();
+  useToastsStore.getState().clear();
 });
 
 describe('RolloutRevisions', () => {
@@ -189,5 +210,97 @@ describe('RolloutRevisions', () => {
     const after = calls.filter((one) => one.includes('/api/rollout/diff')).length;
     expect(after).toBe(before);
     vi.useRealTimers();
+  });
+
+  it('says so when the revision list itself could not be read', async () => {
+    route({}, { '/api/rollout': 500 });
+
+    render(<RolloutRevisions target={target} onDone={noop} />);
+
+    expect(await screen.findByText('the cluster said no')).toBeInTheDocument();
+  });
+
+  it('says the workload has rolled out nothing it can still read', async () => {
+    route({ '/api/rollout': { supported: true, revisions: [] } });
+
+    render(<RolloutRevisions target={target} onDone={noop} />);
+
+    expect(await screen.findByText(/rolled out nothing/)).toBeInTheDocument();
+  });
+
+  it('calls the age unknown when the cluster never said when', async () => {
+    route({
+      '/api/rollout': {
+        supported: true,
+        revisions: [
+          { number: 3, name: 'web-abc', current: true, images: [] },
+          { number: 2, name: 'web-def', images: [] },
+        ],
+      },
+    });
+
+    render(<RolloutRevisions target={target} onDone={noop} />);
+
+    expect(await screen.findAllByText('unknown')).not.toHaveLength(0);
+  });
+
+  it('asks for the name before going back on a protected cluster', async () => {
+    const calls = route({ '/api/rollout': answer, '/api/action': { message: 'went back to 2' } });
+    protectedCluster();
+    stubDialog();
+
+    render(<RolloutRevisions target={target} onDone={noop} />);
+    await screen.findByText('#2');
+    await userEvent.click(screen.getByRole('button', { name: 'Go back to this' }));
+
+    expect(await screen.findByText(/Put web back to revision 2/)).toBeInTheDocument();
+    expect(calls.some((one) => one.includes('/api/action'))).toBe(false);
+  });
+
+  it('goes back once the name has been typed', async () => {
+    const calls = route({ '/api/rollout': answer, '/api/action': { message: 'went back to 2' } });
+    protectedCluster();
+    stubDialog();
+
+    render(<RolloutRevisions target={target} onDone={noop} />);
+    await screen.findByText('#2');
+    await userEvent.click(screen.getByRole('button', { name: 'Go back to this' }));
+    await userEvent.type(await screen.findByLabelText('Name'), 'web');
+    await userEvent.click(screen.getByRole('button', { name: 'Confirm' }));
+
+    await waitFor(() => {
+      const undo = calls.find((one) => one.includes('/api/action'));
+      expect(undo).toContain('confirm=web');
+    });
+  });
+
+  it('leaves the workload alone when the name is not confirmed', async () => {
+    const calls = route({ '/api/rollout': answer });
+    protectedCluster();
+    stubDialog();
+
+    render(<RolloutRevisions target={target} onDone={noop} />);
+    await screen.findByText('#2');
+    await userEvent.click(screen.getByRole('button', { name: 'Go back to this' }));
+    await userEvent.click(await screen.findByRole('button', { name: 'Cancel' }));
+
+    await waitFor(() => {
+      expect(screen.queryByText(/Put web back to revision 2/)).not.toBeInTheDocument();
+    });
+    expect(calls.some((one) => one.includes('/api/action'))).toBe(false);
+  });
+
+  it('says what stopped the way back rather than a silent nothing', async () => {
+    route({ '/api/rollout': answer }, { '/api/action': 403 });
+
+    render(<RolloutRevisions target={target} onDone={noop} />);
+    await screen.findByText('#2');
+    await userEvent.click(screen.getByRole('button', { name: 'Go back to this' }));
+
+    await waitFor(() => {
+      expect(useToastsStore.getState().toasts.some((one) => one.message.includes('undo web'))).toBe(
+        true,
+      );
+    });
   });
 });

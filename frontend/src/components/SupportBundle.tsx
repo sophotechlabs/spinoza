@@ -1,14 +1,7 @@
 import { useState } from 'react';
 import { request } from '../lib/http';
-import { failure } from '../lib/object';
+import { failure, reasonOf } from '../lib/object';
 import { notifyError } from '../store/toasts';
-
-function errorMessage(err: unknown): string {
-  if (err instanceof Error) {
-    return err.message;
-  }
-  return 'that bundle was not written';
-}
 
 async function download(): Promise<void> {
   const response = await request('/api/support');
@@ -37,7 +30,7 @@ export default function SupportBundle() {
         setBusy(true);
         download()
           .catch((err: unknown) => {
-            notifyError(errorMessage(err));
+            notifyError(reasonOf(err, 'that bundle was not written'));
           })
           .finally(() => {
             setBusy(false);

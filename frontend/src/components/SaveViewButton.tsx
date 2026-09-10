@@ -3,6 +3,7 @@ import type { SavedView } from '../lib/types';
 import { fetchSavedViews, saveView } from '../lib/savedViews';
 import { notifyError, notifyOk } from '../store/toasts';
 import { CONTROL } from '../lib/controls';
+import { reasonOf } from '../lib/object';
 
 interface SaveViewButtonProps {
   view: string;
@@ -10,13 +11,6 @@ interface SaveViewButtonProps {
   namespace?: string;
   filter: string;
   columns: string[];
-}
-
-function errorMessage(err: unknown): string {
-  if (err instanceof Error) {
-    return err.message;
-  }
-  return 'that view was not saved';
 }
 
 export default function SaveViewButton({
@@ -72,7 +66,7 @@ export default function SaveViewButton({
       setName('');
       setShared(false);
     } catch (err: unknown) {
-      notifyError(errorMessage(err));
+      notifyError(reasonOf(err, 'that view was not saved'));
     } finally {
       setBusy(false);
     }
