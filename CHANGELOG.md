@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.0.1](https://github.com/sophotechlabs/spinoza/compare/v2.0.0...v2.0.1) (2026-09-11)
+
+
+### Bug Fixes
+
+* **store:** let an older spinoza read a file a newer one migrated ([94b6f1e](https://github.com/sophotechlabs/spinoza/commit/94b6f1e0ae214b5c4f2cf8369f0887bf814a027f))
+
 ## [2.0.0](https://github.com/sophotechlabs/spinoza/compare/v1.30.0...v2.0.0) (2026-09-10)
 
 
