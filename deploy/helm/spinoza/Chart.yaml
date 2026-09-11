@@ -2,8 +2,8 @@ apiVersion: v2
 name: spinoza
 description: A self-hosted Kubernetes GUI, served to a team from inside the cluster
 type: application
-version: 2.0.0
-appVersion: 2.0.0
+version: 2.0.1
+appVersion: 2.0.1
 home: https://spinoza.tech
 sources:
   - https://github.com/sophotechlabs/spinoza
