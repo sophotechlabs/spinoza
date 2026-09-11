@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 )
 
@@ -124,6 +125,23 @@ SELECT id, context, kubeconfig, seen, color, label, grouping, reopen, timeline
 FROM clusters
 ORDER BY seen ASC, id ASC`
 
+const readableFrom = 7
+
+const progressTable = `
+SELECT count(*) FROM sqlite_master WHERE type = 'table' AND name = 'schema_progress'`
+
+const createProgress = `
+CREATE TABLE IF NOT EXISTS schema_progress (
+	id INTEGER PRIMARY KEY CHECK (id = 1),
+	applied INTEGER NOT NULL
+)`
+
+const selectProgress = `SELECT applied FROM schema_progress WHERE id = 1`
+
+const recordProgress = `
+INSERT INTO schema_progress (id, applied) VALUES (1, ?)
+ON CONFLICT (id) DO UPDATE SET applied = excluded.applied`
+
 var migrations = []string{`
 CREATE TABLE audit (
 	id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -178,7 +196,7 @@ ALTER TABLE changes ADD COLUMN was TEXT NOT NULL DEFAULT '[]';
 `, `
 ALTER TABLE audit ADD COLUMN actor TEXT NOT NULL DEFAULT 'unknown';
 `, `
-CREATE TABLE audit_runs (
+CREATE TABLE IF NOT EXISTS audit_runs (
 	id INTEGER PRIMARY KEY AUTOINCREMENT,
 	cluster TEXT NOT NULL,
 	at INTEGER NOT NULL,
@@ -187,33 +205,70 @@ CREATE TABLE audit_runs (
 	cleared INTEGER NOT NULL,
 	scanned INTEGER NOT NULL
 );
-CREATE INDEX audit_runs_by_time ON audit_runs (cluster, at DESC, id DESC);
+CREATE INDEX IF NOT EXISTS audit_runs_by_time ON audit_runs (cluster, at DESC, id DESC);
 `}
 
 func migrate(ctx context.Context, db *sql.DB) error {
-	applied, err := schemaVersion(ctx, db)
+	floor, err := schemaFloor(ctx, db)
 	if err != nil {
 		return err
+	}
+	applied, tracked, countErr := appliedCount(ctx, db, floor)
+	if countErr != nil {
+		return countErr
 	}
 	for version := applied; version < len(migrations); version++ {
 		stepErr := apply(ctx, db, migrations[version], version+1)
 		if stepErr != nil {
 			return stepErr
 		}
+		applied = version + 1
+		floor = floorFor(applied)
+		tracked = true
 	}
-	return nil
+	if tracked && floor == floorFor(applied) {
+		return nil
+	}
+	return settle(ctx, db, applied)
 }
 
-func schemaVersion(ctx context.Context, db *sql.DB) (int, error) {
-	var version int
-	err := db.QueryRowContext(ctx, "PRAGMA user_version").Scan(&version)
+func floorFor(applied int) int {
+	if applied < readableFrom {
+		return applied
+	}
+	return readableFrom
+}
+
+func schemaFloor(ctx context.Context, db *sql.DB) (int, error) {
+	var floor int
+	err := db.QueryRowContext(ctx, "PRAGMA user_version").Scan(&floor)
 	if err != nil {
 		return 0, fmt.Errorf("%w: %w", errNoSchema, err)
 	}
-	if version > len(migrations) {
-		return 0, fmt.Errorf("%w: it is at version %d and this spinoza knows %d", errFromTheFuture, version, len(migrations))
+	if floor > len(migrations) {
+		return 0, fmt.Errorf("%w: it needs one that knows %d migrations and this one knows %d", errFromTheFuture, floor, len(migrations))
 	}
-	return version, nil
+	return floor, nil
+}
+
+func appliedCount(ctx context.Context, db *sql.DB, floor int) (int, bool, error) {
+	var tables int
+	err := db.QueryRowContext(ctx, progressTable).Scan(&tables)
+	if err != nil {
+		return 0, false, fmt.Errorf("%w: %w", errNoSchema, err)
+	}
+	if tables == 0 {
+		return floor, false, nil
+	}
+	var applied int
+	readErr := db.QueryRowContext(ctx, selectProgress).Scan(&applied)
+	if errors.Is(readErr, sql.ErrNoRows) {
+		return floor, false, nil
+	}
+	if readErr != nil {
+		return 0, false, fmt.Errorf("%w: %w", errNoSchema, readErr)
+	}
+	return applied, true, nil
 }
 
 func apply(ctx context.Context, db *sql.DB, statements string, version int) error {
@@ -226,14 +281,47 @@ func apply(ctx context.Context, db *sql.DB, statements string, version int) erro
 		_ = tx.Rollback()
 		return fmt.Errorf("store: %w", execErr)
 	}
-	_, versionErr := tx.ExecContext(ctx, fmt.Sprintf("PRAGMA user_version = %d", version))
-	if versionErr != nil {
+	stampErr := stamp(ctx, tx, version)
+	if stampErr != nil {
 		_ = tx.Rollback()
-		return fmt.Errorf("store: %w", versionErr)
+		return stampErr
 	}
 	commitErr := tx.Commit()
 	if commitErr != nil {
 		return fmt.Errorf("store: %w", commitErr)
+	}
+	return nil
+}
+
+func settle(ctx context.Context, db *sql.DB, applied int) error {
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("store: %w", err)
+	}
+	stampErr := stamp(ctx, tx, applied)
+	if stampErr != nil {
+		_ = tx.Rollback()
+		return stampErr
+	}
+	commitErr := tx.Commit()
+	if commitErr != nil {
+		return fmt.Errorf("store: %w", commitErr)
+	}
+	return nil
+}
+
+func stamp(ctx context.Context, tx *sql.Tx, applied int) error {
+	_, createErr := tx.ExecContext(ctx, createProgress)
+	if createErr != nil {
+		return fmt.Errorf("store: %w", createErr)
+	}
+	_, recordErr := tx.ExecContext(ctx, recordProgress, applied)
+	if recordErr != nil {
+		return fmt.Errorf("store: %w", recordErr)
+	}
+	_, floorErr := tx.ExecContext(ctx, fmt.Sprintf("PRAGMA user_version = %d", floorFor(applied)))
+	if floorErr != nil {
+		return fmt.Errorf("store: %w", floorErr)
 	}
 	return nil
 }

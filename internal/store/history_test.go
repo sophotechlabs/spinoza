@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"slices"
@@ -13,6 +14,8 @@ import (
 	"testing"
 	"time"
 )
+
+const migrationsInV1 = 7
 
 const p1 = "https://10.0.0.5:6443"
 
@@ -217,6 +220,79 @@ func TestAFileFromANewerSpinozaIsRefusedRatherThanMigrated(t *testing.T) {
 	}
 	if !strings.Contains(reopened.Reason(), "newer spinoza") {
 		t.Fatalf("reason = %q, want it to say the file is from a newer spinoza", reopened.Reason())
+	}
+}
+
+func TestAFileWithAnAdditiveMigrationAheadIsStillOpened(t *testing.T) {
+	path := dbPath(t)
+	store := openHistory(t, path)
+	tabs := store.Tabs()
+	if err := tabs.Remember(t.Context(), Tab{ID: p1, Context: "p-mk1", Seen: noon}); err != nil {
+		t.Fatalf("remember: %v", err)
+	}
+	if err := tabs.Recording(t.Context(), p1, "workloads"); err != nil {
+		t.Fatalf("recording: %v", err)
+	}
+	if err := store.Close(); err != nil {
+		t.Fatalf("close: %v", err)
+	}
+	saved := migrations
+	migrations = slices.Clone(saved[:migrationsInV1])
+	t.Cleanup(func() { migrations = saved })
+
+	reopened, reopenErr := Open(t.Context(), path)
+	t.Cleanup(func() { _ = reopened.Close() })
+
+	if reopenErr != nil {
+		t.Fatalf("error = %v, want v1.30.0 to open a file this spinoza wrote", reopenErr)
+	}
+	if reopened.Reason() != "" {
+		t.Fatalf("reason = %q, want an older spinoza to keep recording", reopened.Reason())
+	}
+	found, readErr := reopened.Tabs().All(t.Context())
+	if readErr != nil {
+		t.Fatalf("all: %v", readErr)
+	}
+	if len(found) != 1 || found[0].Timeline != "workloads" {
+		t.Fatalf("the tab came back as %+v, want what it recorded before the upgrade", found)
+	}
+}
+
+func TestAFileStampedBeforeTheFloorWasKeptIsRepaired(t *testing.T) {
+	path := dbPath(t)
+	store := openHistory(t, path)
+	if _, err := store.writes.ExecContext(t.Context(), "DROP TABLE schema_progress"); err != nil {
+		t.Fatalf("drop: %v", err)
+	}
+	bump := fmt.Sprintf("PRAGMA user_version = %d", len(migrations))
+	if _, err := store.writes.ExecContext(t.Context(), bump); err != nil {
+		t.Fatalf("bump: %v", err)
+	}
+	if err := store.Close(); err != nil {
+		t.Fatalf("close: %v", err)
+	}
+
+	reopened := openHistory(t, path)
+
+	var floor int
+	if err := reopened.writes.QueryRowContext(t.Context(), "PRAGMA user_version").Scan(&floor); err != nil {
+		t.Fatalf("floor: %v", err)
+	}
+	if floor != readableFrom {
+		t.Fatalf("floor = %d, want it lowered to %d so an older spinoza can still read the file", floor, readableFrom)
+	}
+	var applied int
+	if err := reopened.writes.QueryRowContext(t.Context(), selectProgress).Scan(&applied); err != nil {
+		t.Fatalf("progress: %v", err)
+	}
+	if applied != len(migrations) {
+		t.Fatalf("applied = %d, want all %d migrations counted", applied, len(migrations))
+	}
+}
+
+func TestTheReadableFloorNamesAMigrationThatExists(t *testing.T) {
+	if readableFrom < 1 || readableFrom > len(migrations) {
+		t.Fatalf("readableFrom = %d, want it between 1 and %d, or no file will open", readableFrom, len(migrations))
 	}
 }
 
