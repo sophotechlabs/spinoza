@@ -11,7 +11,7 @@ import type {
   HelmSupport,
   ObjectRef,
 } from './types';
-import { request, SLOW_REQUEST_TIMEOUT_MS } from './http';
+import { HELM_TIMEOUT_MS, request, SLOW_REQUEST_TIMEOUT_MS } from './http';
 import { failure } from './object';
 import { useHelmEpoch } from '../store/helm';
 import {
@@ -196,7 +196,7 @@ async function runAction(
   }
   const response = await request(`/api/helm/action?${query.toString()}`, {
     method: 'POST',
-    timeoutMs: SLOW_REQUEST_TIMEOUT_MS,
+    timeoutMs: HELM_TIMEOUT_MS,
   });
   if (!response.ok) {
     throw await failure(response, `the release action failed with status ${response.status}`);
@@ -259,7 +259,7 @@ export async function installRelease(
   const response = await request(`/api/helm/install${actionQuery(dryRun, confirm)}`, {
     method: 'POST',
     body: JSON.stringify(args),
-    timeoutMs: SLOW_REQUEST_TIMEOUT_MS,
+    timeoutMs: HELM_TIMEOUT_MS,
   });
   if (!response.ok) {
     throw await failure(response, `the install failed with status ${response.status}`);
@@ -298,7 +298,7 @@ export async function upgradeRelease(
   const response = await request(`/api/helm/upgrade${actionQuery(dryRun, confirm)}`, {
     method: 'POST',
     body: JSON.stringify(args),
-    timeoutMs: SLOW_REQUEST_TIMEOUT_MS,
+    timeoutMs: HELM_TIMEOUT_MS,
   });
   if (!response.ok) {
     throw await failure(response, `the upgrade failed with status ${response.status}`);

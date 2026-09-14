@@ -2,9 +2,14 @@ import { expireSession } from '../store/session';
 import { onCluster } from './cluster';
 
 export const REQUEST_TIMEOUT_MS = 15000;
+export const MUTATION_TIMEOUT_MS = 45000;
 export const SLOW_REQUEST_TIMEOUT_MS = 120000;
+export const HELM_TIMEOUT_MS = 330000;
 
 export const TIMEOUT_MESSAGE = 'the backend did not answer in time';
+
+export const UNKNOWN_OUTCOME_MESSAGE =
+  'spinoza did not hear back in time; the change may still be applying, so check the object before trying again';
 
 export const UNREACHABLE_MESSAGE = 'spinoza is not answering';
 
@@ -62,12 +67,31 @@ function within(limit: number, asked: AbortSignal | null | undefined): AbortSign
   return AbortSignal.any([budget, asked]);
 }
 
+function mutates(init: RequestInit): boolean {
+  const method = (init.method ?? 'GET').toUpperCase();
+  return method !== 'GET' && method !== 'HEAD';
+}
+
+function budgetFor(init: RequestInit, timeoutMs: number | undefined): number {
+  if (timeoutMs !== undefined) {
+    return timeoutMs;
+  }
+  if (mutates(init)) {
+    return MUTATION_TIMEOUT_MS;
+  }
+  return REQUEST_TIMEOUT_MS;
+}
+
+function timeoutMessageFor(init: RequestInit): string {
+  if (mutates(init)) {
+    return UNKNOWN_OUTCOME_MESSAGE;
+  }
+  return TIMEOUT_MESSAGE;
+}
+
 export async function request(url: string, options: RequestOptions = {}): Promise<Response> {
   const { timeoutMs, ...init } = options;
-  let limit = REQUEST_TIMEOUT_MS;
-  if (timeoutMs !== undefined) {
-    limit = timeoutMs;
-  }
+  const limit = budgetFor(init, timeoutMs);
   try {
     const response = await fetch(onCluster(url), {
       ...withToken(init),
@@ -79,7 +103,7 @@ export async function request(url: string, options: RequestOptions = {}): Promis
     return response;
   } catch (err: unknown) {
     if (timedOut(err)) {
-      throw new Error(TIMEOUT_MESSAGE);
+      throw new Error(timeoutMessageFor(init));
     }
     if (err instanceof TypeError) {
       throw new Error(UNREACHABLE_MESSAGE);

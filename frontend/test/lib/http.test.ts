@@ -1,8 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
+  HELM_TIMEOUT_MS,
+  MUTATION_TIMEOUT_MS,
   REQUEST_TIMEOUT_MS,
   SLOW_REQUEST_TIMEOUT_MS,
   TIMEOUT_MESSAGE,
+  UNKNOWN_OUTCOME_MESSAGE,
   UNREACHABLE_MESSAGE,
   TOKEN_HEADER,
   authToken,
@@ -211,6 +214,50 @@ describe('request', () => {
 
   it('gives slow endpoints a much longer budget than ordinary reads', () => {
     expect(SLOW_REQUEST_TIMEOUT_MS).toBeGreaterThan(REQUEST_TIMEOUT_MS);
+  });
+
+  it('gives a write more time than a read, and helm the most', () => {
+    expect(MUTATION_TIMEOUT_MS).toBeGreaterThan(30_000);
+    expect(HELM_TIMEOUT_MS).toBeGreaterThan(5 * 60_000);
+  });
+
+  it('calls a write that timed out unknown rather than failed', async () => {
+    stubFetch(
+      (_url, init) =>
+        new Promise((_resolve, reject) => {
+          init.signal?.addEventListener('abort', () => {
+            reject(reasonOf(init.signal));
+          });
+        }),
+    );
+
+    for (const method of ['PUT', 'POST', 'DELETE']) {
+      await expect(request('/api/object', { method, timeoutMs: 10 })).rejects.toThrow(
+        UNKNOWN_OUTCOME_MESSAGE,
+      );
+    }
+    await expect(request('/api/object', { method: 'GET', timeoutMs: 10 })).rejects.toThrow(
+      TIMEOUT_MESSAGE,
+    );
+  });
+
+  it('budgets a write by its method when the caller names no timeout', () => {
+    const seen: number[] = [];
+    vi.stubGlobal('AbortSignal', {
+      ...AbortSignal,
+      timeout: (limit: number) => {
+        seen.push(limit);
+        return new AbortController().signal;
+      },
+      any: (signals: AbortSignal[]) => signals[0],
+    });
+    stubFetch(() => Promise.resolve({ ok: true }));
+
+    void request('/api/object', { method: 'DELETE' });
+    void request('/api/object');
+    void request('/api/helm/action', { method: 'POST', timeoutMs: HELM_TIMEOUT_MS });
+
+    expect(seen).toEqual([MUTATION_TIMEOUT_MS, REQUEST_TIMEOUT_MS, HELM_TIMEOUT_MS]);
   });
 
   it('passes any other failure through untouched', async () => {
