@@ -33,6 +33,13 @@ export interface ChartProps {
 
 const SAMPLED_REFRESH_MS = 15000;
 
+function sampledFrom(since: number | undefined): string {
+  if (since === undefined || since <= 0) {
+    return '';
+  }
+  return `: first reading at ${new Date(since).toLocaleTimeString()}`;
+}
+
 function errorMessage(err: unknown): string {
   if (err instanceof Error) {
     return err.message;
@@ -186,15 +193,23 @@ export default function InspectMetrics({ namespace, pod }: InspectMetricsProps) 
           ))}
         </select>
         {history?.source !== undefined && (
-          <span className="ml-auto truncate text-[10px] text-fg-muted">{history.source}</span>
+          <span className="ml-auto truncate text-[10px] text-fg-muted" data-testid="metric-source">
+            Prometheus at <span>{history.source}</span>
+          </span>
+        )}
+        {sampled && (
+          <span className="ml-auto truncate text-[10px] text-fg-muted" data-testid="metric-source">
+            sampled by spinoza
+          </span>
         )}
       </div>
 
       {sampled && (
         <p data-testid="sampled-notice" className="mt-2 text-fg-muted">
           Spinoza is measuring this itself: it found no Prometheus to ask. It reads the cluster
-          every 15 seconds while this window is open, and remembers nothing between runs.
-          {collected !== '' && <> Collected so far: {collected}.</>}
+          every 15 seconds while this window is open, and remembers nothing between runs. The series
+          starts when spinoza first saw this pod, not when the pod started
+          {sampledFrom(history?.since)}.{collected !== '' && <> Collected so far: {collected}.</>}
         </p>
       )}
 

@@ -81,9 +81,28 @@ describe('InspectMetrics', () => {
     stub(history());
     render(<InspectMetrics namespace="monitoring" pod="loki-0" />);
 
-    expect(
-      await screen.findByText('monitoring/prometheus-operated:9090 (https)'),
-    ).toBeInTheDocument();
+    expect(await screen.findByTestId('metric-source')).toHaveTextContent(
+      'Prometheus at monitoring/prometheus-operated:9090 (https)',
+    );
+  });
+
+  it('names spinoza as the source when it sampled the series itself', async () => {
+    stub(history({ source: undefined, sampled: true }));
+    render(<InspectMetrics namespace="monitoring" pod="loki-0" />);
+
+    expect(await screen.findByTestId('metric-source')).toHaveTextContent('sampled by spinoza');
+  });
+
+  it('says when the sampled series began', async () => {
+    const since = new Date(2026, 8, 14, 9, 5, 0).getTime();
+    stub(history({ source: undefined, sampled: true, since }));
+    render(<InspectMetrics namespace="monitoring" pod="loki-0" />);
+
+    const notice = await screen.findByTestId('sampled-notice');
+    expect(notice).toHaveTextContent(
+      'starts when spinoza first saw this pod, not when the pod started',
+    );
+    expect(notice).toHaveTextContent(`first reading at ${new Date(since).toLocaleTimeString()}`);
   });
 
   it('feeds the points into the chart', async () => {
