@@ -13,6 +13,7 @@ const (
 	Added   = "added"
 	Changed = "changed"
 	Removed = "removed"
+	Gap     = "gap"
 )
 
 type Change struct {

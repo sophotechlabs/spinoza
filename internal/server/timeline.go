@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"strconv"
@@ -82,7 +83,16 @@ type recording struct {
 	cancel  context.CancelFunc
 	once    sync.Once
 	dropped atomic.Int64
+	lost    atomic.Int64
 	written int
+	gapMu   sync.Mutex
+	gap     timelineGap
+}
+
+type timelineGap struct {
+	from  time.Time
+	to    time.Time
+	count int
 }
 
 func (t *recording) Note(note resources.Note) {
@@ -90,6 +100,7 @@ func (t *recording) Note(note resources.Note) {
 	case t.queue <- noteOf(note):
 	default:
 		count := t.dropped.Add(1)
+		t.noteLoss(1, note.At, note.At)
 		if count%timelineDropWarn == 0 {
 			slog.Warn("the timeline is behind and is dropping changes", "dropped", count)
 		}
@@ -159,11 +170,80 @@ func (t *recording) fill(first store.Change) []store.Change {
 	return batch
 }
 
+func (t *recording) noteLoss(count int, from, to time.Time) {
+	t.gapMu.Lock()
+	defer t.gapMu.Unlock()
+	if t.gap.count == 0 || from.Before(t.gap.from) {
+		t.gap.from = from
+	}
+	if to.After(t.gap.to) {
+		t.gap.to = to
+	}
+	t.gap.count += count
+}
+
+func (t *recording) closeGap(ctx context.Context) {
+	t.gapMu.Lock()
+	gap := t.gap
+	t.gapMu.Unlock()
+	if gap.count == 0 {
+		return
+	}
+	err := t.into.Note(ctx, []store.Change{gapRow(gap)})
+	if err != nil {
+		return
+	}
+	t.gapMu.Lock()
+	defer t.gapMu.Unlock()
+	t.gap.count -= gap.count
+	if t.gap.count <= 0 {
+		t.gap = timelineGap{}
+		return
+	}
+	t.gap.from = gap.to
+}
+
+func gapRow(gap timelineGap) store.Change {
+	from := gap.from
+	if from.IsZero() {
+		from = time.Now()
+	}
+	to := gap.to
+	if to.Before(from) {
+		to = from
+	}
+	return store.Change{
+		At:   from,
+		Verb: store.Gap,
+		Name: "the timeline",
+		Cells: []string{fmt.Sprintf("%d changes between %s and %s were not written down",
+			gap.count, from.UTC().Format(time.RFC3339), to.UTC().Format(time.RFC3339))},
+	}
+}
+
+func spanOf(batch []store.Change) (time.Time, time.Time) {
+	from := batch[0].At
+	to := batch[0].At
+	for _, one := range batch[1:] {
+		if one.At.Before(from) {
+			from = one.At
+		}
+		if one.At.After(to) {
+			to = one.At
+		}
+	}
+	return from, to
+}
+
 func (t *recording) write(ctx context.Context, batch []store.Change) {
 	writing, cancel := context.WithTimeout(ctx, timelineWrite)
 	defer cancel()
+	t.closeGap(writing)
 	err := t.into.Note(writing, batch)
 	if err != nil {
+		t.lost.Add(int64(len(batch)))
+		from, to := spanOf(batch)
+		t.noteLoss(len(batch), from, to)
 		slog.Warn("what changed on the cluster was not recorded", "changes", len(batch), "error", err)
 		return
 	}
@@ -395,6 +475,7 @@ func (s *Server) readChanges(
 		Entries: rows,
 		More:    page.More,
 		Dropped: s.droppedOn(on),
+		Lost:    s.lostOn(on),
 		Next:    lastOf(rows, api.HistoryChange, after),
 	}, true
 }
@@ -405,6 +486,21 @@ func (s *Server) droppedOn(id string) int {
 		return 0
 	}
 	return int(held.dropped.Load())
+}
+
+func (s *Server) lostOn(id string) int {
+	held := s.recordingOn(id)
+	if held == nil {
+		return 0
+	}
+	return int(held.lost.Load())
+}
+
+func changeOutcome(verb string) string {
+	if verb == store.Gap {
+		return api.HistoryLost
+	}
+	return api.HistoryDone
 }
 
 func changesOf(held []store.Change) []api.HistoryEntry {
@@ -424,7 +520,7 @@ func changesOf(held []store.Change) []api.HistoryEntry {
 			Name:      one.Name,
 			Detail:    strings.Join(one.Cells, " · "),
 			Was:       strings.Join(one.Was, " · "),
-			Outcome:   api.HistoryDone,
+			Outcome:   changeOutcome(one.Verb),
 		})
 	}
 	return out

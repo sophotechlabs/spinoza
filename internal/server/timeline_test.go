@@ -197,6 +197,128 @@ func TestARejectedTimelineWriteIsNotCountedAsStored(t *testing.T) {
 	}
 }
 
+func TestARejectedBatchIsCountedAsLost(t *testing.T) {
+	held := &heldHistory{recordErr: errors.New("the disk is full")}
+	recording := &recording{into: held.Timeline(mk1), prune: func(context.Context) {}}
+	at := time.Date(2026, 9, 14, 12, 0, 0, 0, time.UTC)
+
+	recording.write(t.Context(), []store.Change{{Name: "api-1", At: at}, {Name: "api-2", At: at.Add(time.Second)}})
+
+	if recording.lost.Load() != 2 {
+		t.Fatalf("lost = %d, want the two changes the store refused", recording.lost.Load())
+	}
+	if recording.gap.count != 2 || !recording.gap.from.Equal(at) || !recording.gap.to.Equal(at.Add(time.Second)) {
+		t.Fatalf("gap = %+v, want both changes and their span", recording.gap)
+	}
+}
+
+func TestTheNextSuccessfulWriteRecordsTheGapFirst(t *testing.T) {
+	held := &heldHistory{recordErr: errors.New("the disk is full")}
+	recording := &recording{into: held.Timeline(mk1), prune: func(context.Context) {}}
+	at := time.Date(2026, 9, 14, 12, 0, 0, 0, time.UTC)
+	recording.write(t.Context(), []store.Change{{Name: "api-1", At: at}, {Name: "api-2", At: at.Add(time.Minute)}})
+	held.mu.Lock()
+	held.recordErr = nil
+	held.mu.Unlock()
+
+	recording.write(t.Context(), []store.Change{{Name: "api-3", At: at.Add(2 * time.Minute)}})
+
+	noted := held.noted()
+	if len(noted) != 2 {
+		t.Fatalf("stored = %+v, want the gap and then the change", noted)
+	}
+	gap := noted[0]
+	if gap.Verb != store.Gap || !gap.At.Equal(at) || gap.Name != "the timeline" {
+		t.Fatalf("gap row = %+v, want it dated where the hole starts", gap)
+	}
+	want := "2 changes between 2026-09-14T12:00:00Z and 2026-09-14T12:01:00Z were not written down"
+	if len(gap.Cells) != 1 || gap.Cells[0] != want {
+		t.Fatalf("gap detail = %q, want %q", gap.Cells, want)
+	}
+	if noted[1].Name != "api-3" {
+		t.Fatalf("second row = %+v, want the change that got through", noted[1])
+	}
+	if recording.gap.count != 0 {
+		t.Fatalf("gap = %+v, want it closed once written", recording.gap)
+	}
+}
+
+func TestAnOverflowedChangeIsWrittenDownAsAGapToo(t *testing.T) {
+	held := &heldHistory{}
+	recording := &recording{into: held.Timeline(mk1), prune: func(context.Context) {}, queue: make(chan store.Change, 1)}
+	at := time.Date(2026, 9, 14, 12, 0, 0, 0, time.UTC)
+	recording.Note(resources.Note{Name: "first", At: at})
+	recording.Note(resources.Note{Name: "second", At: at.Add(time.Second)})
+
+	recording.write(t.Context(), recording.fill(<-recording.queue))
+
+	noted := held.noted()
+	if len(noted) != 2 || noted[0].Verb != store.Gap || noted[1].Name != "first" {
+		t.Fatalf("stored = %+v, want a gap for the overflow and then the change that fit", noted)
+	}
+	if noted[0].Cells[0] != "1 changes between 2026-09-14T12:00:01Z and 2026-09-14T12:00:01Z were not written down" {
+		t.Fatalf("gap detail = %q", noted[0].Cells)
+	}
+	if recording.dropped.Load() != 1 || recording.lost.Load() != 0 {
+		t.Fatalf("dropped = %d lost = %d, want the overflow counted as dropped only", recording.dropped.Load(), recording.lost.Load())
+	}
+}
+
+func TestAGapTheStoreStillRefusesIsKeptForNextTime(t *testing.T) {
+	held := &heldHistory{recordErr: errors.New("the disk is full")}
+	recording := &recording{into: held.Timeline(mk1), prune: func(context.Context) {}}
+	at := time.Date(2026, 9, 14, 12, 0, 0, 0, time.UTC)
+	recording.write(t.Context(), []store.Change{{Name: "api-1", At: at}})
+	recording.write(t.Context(), []store.Change{{Name: "api-2", At: at.Add(time.Minute)}})
+	if recording.gap.count != 2 {
+		t.Fatalf("gap = %+v, want both losses folded into one", recording.gap)
+	}
+	held.mu.Lock()
+	held.recordErr = nil
+	held.mu.Unlock()
+
+	recording.write(t.Context(), []store.Change{{Name: "api-3", At: at.Add(2 * time.Minute)}})
+
+	noted := held.noted()
+	if len(noted) != 2 || noted[0].Verb != store.Gap {
+		t.Fatalf("stored = %+v, want one gap row for the whole hole", noted)
+	}
+	if noted[0].Cells[0] != "2 changes between 2026-09-14T12:00:00Z and 2026-09-14T12:01:00Z were not written down" {
+		t.Fatalf("gap detail = %q", noted[0].Cells)
+	}
+}
+
+func TestLostChangesAreReportedForTheClusterRecordingThem(t *testing.T) {
+	srv, _, _ := tapingServer(t, &taped{})
+	held := &recording{}
+	held.lost.Store(5)
+	srv.holdRecording(mk1, held)
+	t.Cleanup(func() {
+		srv.holdRecording(mk1, nil)
+	})
+
+	if got := srv.lostOn(mk1); got != 5 {
+		t.Fatalf("lost = %d, want 5", got)
+	}
+	if got := srv.lostOn(mk2); got != 0 {
+		t.Fatalf("other cluster lost = %d, want 0", got)
+	}
+}
+
+func TestAGapRowReadsAsLostRatherThanDone(t *testing.T) {
+	rows := changesOf([]store.Change{
+		{ID: 1, Verb: store.Gap, Name: "the timeline", Cells: []string{"3 changes were not written down"}},
+		{ID: 2, Verb: store.Added, Name: "web-1"},
+	})
+
+	if rows[0].Outcome != api.HistoryLost || rows[0].Detail != "3 changes were not written down" {
+		t.Fatalf("gap entry = %+v", rows[0])
+	}
+	if rows[1].Outcome != api.HistoryDone {
+		t.Fatalf("ordinary entry = %+v", rows[1])
+	}
+}
+
 func TestEnoughStoredChangesTriggerAnotherRetentionPass(t *testing.T) {
 	held := &heldHistory{}
 	pruned := 0
