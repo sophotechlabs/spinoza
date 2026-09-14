@@ -113,6 +113,41 @@ describe('comparing a whole kind', () => {
     expect(screen.getByText('source-controller')).toBeInTheDocument();
   });
 
+  it('asks for everything when the box is ticked', async () => {
+    const user = userEvent.setup();
+    const fetchMock = stub(answer);
+    renderPanel();
+
+    await user.click(screen.getByLabelText('Show everything'));
+    await compare(user);
+
+    expect(fetchMock.mock.calls[0][0]).toContain('raw=true');
+  });
+
+  it('says when a pair only differs in fields the cluster allocates', async () => {
+    const user = userEvent.setup();
+    stub({
+      ...answer,
+      objects: [
+        {
+          namespace: 'flux-system',
+          name: 'webhook-receiver',
+          verdict: 'same',
+          hiddenDifferences: true,
+        },
+      ],
+      same: 1,
+      differs: 0,
+      onlyHere: 0,
+      onlyThere: 0,
+    });
+    renderPanel();
+    await compare(user);
+    await user.click(screen.getByLabelText('Only what differs'));
+
+    expect(screen.getByText('differs only in fields the cluster allocates')).toBeInTheDocument();
+  });
+
   it('says how far apart a differing pair is', async () => {
     const user = userEvent.setup();
     stub(answer);

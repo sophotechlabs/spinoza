@@ -183,7 +183,35 @@ describe('comparing a whole kind', () => {
     expect(url).toContain('against=p-mk2');
     expect(url).toContain('againstKubeconfig=%2Fwork.yaml');
     expect(url).not.toContain('againstNamespace');
+    expect(url).not.toContain('raw=');
     expect(got.objects[0].lines).toBe(3);
+  });
+
+  it('asks the backend for everything only when told to', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () =>
+        Promise.resolve({
+          resource: 'deployments',
+          leftContext: 'p-mk1',
+          rightContext: 'p-mk2',
+          objects: [],
+          same: 0,
+          differs: 0,
+          onlyHere: 0,
+          onlyThere: 0,
+        }),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    await fetchKindComparison(
+      kind,
+      'flux-system',
+      { kubeconfig: '/work.yaml', name: 'p-mk2', namespace: 'flux-system', object: '' },
+      true,
+    );
+
+    expect(String(fetchMock.mock.calls[0][0])).toContain('raw=true');
   });
 
   it('names the far namespace only when it is a different one', async () => {

@@ -119,8 +119,45 @@ describe('running a comparison', () => {
     await user.selectOptions(screen.getByLabelText('Against'), 'gke-prod');
     await user.click(screen.getByRole('button', { name: 'Compare' }));
 
+    expect(await screen.findByText(/· identical$/)).toBeInTheDocument();
+  });
+
+  it('names the allocated fields it left out of an identical pair', async () => {
+    const user = userEvent.setup();
+    stub({
+      ...answer,
+      right: answer.left,
+      identical: true,
+      stripped: ['spec.clusterIP', 'spec.ports[].nodePort'],
+    });
+    render(<ComparePanel target={target} kind={null} namespace="" onOpen={vi.fn()} />);
+
+    await user.selectOptions(screen.getByLabelText('Against'), 'gke-prod');
+    await user.click(screen.getByRole('button', { name: 'Compare' }));
+
     expect(
-      await screen.findByText(/identical once the per-cluster fields are stripped/),
+      await screen.findByText(
+        /identical; left out because the cluster allocates them: spec.clusterIP, spec.ports\[\].nodePort/,
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it('says when the fields it left out are the ones that differ', async () => {
+    const user = userEvent.setup();
+    stub({
+      ...answer,
+      right: answer.left,
+      identical: true,
+      stripped: ['spec.ports[].nodePort'],
+      hiddenDifferences: true,
+    });
+    render(<ComparePanel target={target} kind={null} namespace="" onOpen={vi.fn()} />);
+
+    await user.selectOptions(screen.getByLabelText('Against'), 'gke-prod');
+    await user.click(screen.getByRole('button', { name: 'Compare' }));
+
+    expect(
+      await screen.findByText(/which do differ: spec.ports\[\].nodePort; tick Show everything/),
     ).toBeInTheDocument();
   });
 
