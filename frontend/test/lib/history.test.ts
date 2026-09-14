@@ -87,6 +87,7 @@ describe('actorLabel', () => {
 describe('outcomeClass', () => {
   it('colours a refusal as a warning and a failure as an error', () => {
     expect(outcomeClass('refused')).toBe('text-warn');
+    expect(outcomeClass('lost')).toBe('text-warn');
     expect(outcomeClass('failed')).toBe('text-error');
     expect(outcomeClass('done')).toBe('text-fg-muted');
   });

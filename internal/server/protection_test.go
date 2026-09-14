@@ -40,7 +40,7 @@ func TestDeletingGoesAheadOnceTheNameMatches(t *testing.T) {
 	ts := inspectServer(t, newPod())
 	protect(t, ts)
 
-	resp, body := doRequest(t, http.MethodDelete, ts.URL+"/api/object"+objectQuery+"&confirm=web", nil)
+	resp, body := doRequest(t, http.MethodDelete, ts.URL+"/api/object"+deleteQuery+"&confirm=web", nil)
 
 	if resp.StatusCode != http.StatusNoContent {
 		t.Fatalf("status = %d, want 204: %s", resp.StatusCode, body)
@@ -61,7 +61,7 @@ func TestTheTypedNameHasToBeTheRightOne(t *testing.T) {
 func TestAnUnprotectedClusterAsksForNothing(t *testing.T) {
 	ts := inspectServer(t, newPod())
 
-	resp, body := doRequest(t, http.MethodDelete, ts.URL+"/api/object"+objectQuery, nil)
+	resp, body := doRequest(t, http.MethodDelete, ts.URL+"/api/object"+deleteQuery, nil)
 
 	if resp.StatusCode != http.StatusNoContent {
 		t.Fatalf("status = %d, want 204: %s", resp.StatusCode, body)

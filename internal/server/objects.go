@@ -178,7 +178,7 @@ func (s *Server) deleteObject(w http.ResponseWriter, r *http.Request, ref api.Ob
 		return
 	}
 	defer stop()
-	err := writer.DeleteObject(kept, ref)
+	err := writer.DeleteObject(kept, ref, r.URL.Query().Get("uid"))
 	s.record(r, change{verb: verbDelete, ref: ref, err: err})
 	if err != nil {
 		writeAPIError(w, err)

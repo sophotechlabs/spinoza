@@ -399,7 +399,7 @@ func (b *writingBackend) ApplyObject(context.Context, api.ObjectRef, []byte) (ap
 	return b.detail, b.err
 }
 
-func (b *writingBackend) DeleteObject(context.Context, api.ObjectRef) error {
+func (b *writingBackend) DeleteObject(context.Context, api.ObjectRef, string) error {
 	return b.err
 }
 

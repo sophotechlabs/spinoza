@@ -138,7 +138,7 @@ type Terminals interface {
 type ObjectWrites interface {
 	Action(ctx context.Context, req actions.Request) (api.ActionResult, error)
 	ApplyObject(ctx context.Context, ref api.ObjectRef, doc []byte) (api.ObjectDetail, error)
-	DeleteObject(ctx context.Context, ref api.ObjectRef) error
+	DeleteObject(ctx context.Context, ref api.ObjectRef, uid string) error
 }
 
 type DeliveryWrites interface {

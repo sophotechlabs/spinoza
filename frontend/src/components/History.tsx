@@ -98,7 +98,11 @@ function Row({
         </td>
       )}
       <td className="truncate px-2 py-1 text-fg-muted">{actorLabel(entry)}</td>
-      <td className="truncate px-2 py-1 text-fg-soft">{verbLabel(entry)}</td>
+      <td
+        className={`truncate px-2 py-1 ${entry.outcome === 'lost' ? 'text-warn' : 'text-fg-soft'}`}
+      >
+        {verbLabel(entry)}
+      </td>
       <td className="truncate px-2 py-1">
         <Target entry={entry} onOpen={onOpen} />
       </td>
@@ -394,6 +398,12 @@ export default function History({ onOpen }: HistoryProps) {
         {(data.dropped ?? 0) > 0 && (
           <span className="text-warn">
             {data.dropped} changes came in faster than they could be written and were not kept
+          </span>
+        )}
+        {(data.lost ?? 0) > 0 && (
+          <span className="text-warn">
+            {data.lost} changes could not be written down since spinoza started; the gaps are marked
+            as not recorded
           </span>
         )}
         <ToolbarEnd>

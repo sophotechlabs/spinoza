@@ -47,7 +47,7 @@ func (b *keptWriter) ApplyObject(ctx context.Context, _ api.ObjectRef, _ []byte)
 	return api.ObjectDetail{}, nil
 }
 
-func (b *keptWriter) DeleteObject(ctx context.Context, _ api.ObjectRef) error {
+func (b *keptWriter) DeleteObject(ctx context.Context, _ api.ObjectRef, _ string) error {
 	b.hold(ctx)
 	return nil
 }

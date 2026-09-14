@@ -45,7 +45,7 @@ func (m *Manager) syncedTypes() map[string]watchedType {
 	defer m.mu.Unlock()
 	out := map[string]watchedType{}
 	for key, st := range m.streams {
-		if !st.informer.HasSynced() {
+		if key.namespace != "" || !st.informer.HasSynced() {
 			continue
 		}
 		out[gvrKey(key.gvr)] = watchedType{kind: st.kind, lister: st.lister}

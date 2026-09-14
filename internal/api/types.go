@@ -137,6 +137,7 @@ type ViewSwitch struct {
 
 const (
 	HistoryDone    = "done"
+	HistoryLost    = "lost"
 	HistoryRefused = "refused"
 	HistoryFailed  = OutcomeFailed
 )
@@ -172,6 +173,7 @@ type History struct {
 	Entries    []HistoryEntry `json:"entries"`
 	More       bool           `json:"more,omitempty"`
 	Dropped    int            `json:"dropped,omitempty"`
+	Lost       int            `json:"lost,omitempty"`
 	Next       int64          `json:"next,omitempty"`
 	NextAction int64          `json:"nextAction,omitempty"`
 	Reason     string         `json:"reason,omitempty"`
@@ -593,12 +595,14 @@ type ObjectDetail struct {
 }
 
 type Comparison struct {
-	Left         string `json:"left"`
-	Right        string `json:"right"`
-	LeftContext  string `json:"leftContext"`
-	RightContext string `json:"rightContext"`
-	Identical    bool   `json:"identical"`
-	Missing      string `json:"missing,omitempty"`
+	Left              string   `json:"left"`
+	Right             string   `json:"right"`
+	LeftContext       string   `json:"leftContext"`
+	RightContext      string   `json:"rightContext"`
+	Identical         bool     `json:"identical"`
+	Missing           string   `json:"missing,omitempty"`
+	Stripped          []string `json:"stripped,omitempty"`
+	HiddenDifferences bool     `json:"hiddenDifferences,omitempty"`
 }
 
 const (
@@ -609,10 +613,11 @@ const (
 )
 
 type KindDiff struct {
-	Namespace string `json:"namespace,omitempty"`
-	Name      string `json:"name"`
-	Verdict   string `json:"verdict"`
-	Lines     int    `json:"lines,omitempty"`
+	Namespace         string `json:"namespace,omitempty"`
+	Name              string `json:"name"`
+	Verdict           string `json:"verdict"`
+	Lines             int    `json:"lines,omitempty"`
+	HiddenDifferences bool   `json:"hiddenDifferences,omitempty"`
 }
 
 type KindComparison struct {

@@ -6,12 +6,14 @@ import (
 	"strings"
 	"testing"
 
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/dynamic/fake"
+	k8stesting "k8s.io/client-go/testing"
 
 	"github.com/sophotechlabs/spinoza/internal/api"
 )
@@ -262,7 +264,7 @@ func TestApplyPropagatesAPIError(t *testing.T) {
 
 func TestDeleteRemovesObject(t *testing.T) {
 	client := newClient(newPod())
-	err := Delete(context.Background(), client, podRef())
+	err := Delete(context.Background(), client, podRef(), "pod-uid")
 	if err != nil {
 		t.Fatalf("delete: %v", err)
 	}
@@ -273,9 +275,61 @@ func TestDeleteRemovesObject(t *testing.T) {
 }
 
 func TestDeleteMissingObject(t *testing.T) {
-	err := Delete(context.Background(), newClient(), podRef())
+	err := Delete(context.Background(), newClient(), podRef(), "pod-uid")
 	if err == nil {
 		t.Fatalf("expected an error deleting a missing object")
+	}
+}
+
+func TestDeleteCarriesTheObservedUIDAsAPrecondition(t *testing.T) {
+	client := newClient(newPod())
+	var sent *metav1.Preconditions
+	client.PrependReactor("delete", "pods", func(action k8stesting.Action) (bool, runtime.Object, error) {
+		deletion, ok := action.(k8stesting.DeleteActionImpl)
+		if !ok {
+			t.Fatalf("action = %T, want a delete", action)
+		}
+		sent = deletion.DeleteOptions.Preconditions
+		return false, nil, nil
+	})
+
+	err := Delete(context.Background(), client, podRef(), "pod-uid")
+	if err != nil {
+		t.Fatalf("delete: %v", err)
+	}
+	if sent == nil || sent.UID == nil || string(*sent.UID) != "pod-uid" {
+		t.Fatalf("preconditions = %+v, want the observed uid", sent)
+	}
+}
+
+func TestDeleteRefusesToRunWithoutTheObservedUID(t *testing.T) {
+	client := newClient(newPod())
+
+	err := Delete(context.Background(), client, podRef(), "")
+
+	if !errors.Is(err, ErrNoUID) {
+		t.Fatalf("error = %v, want ErrNoUID", err)
+	}
+	_, getErr := client.Resource(podGVR).Namespace("flux-system").Get(context.Background(), "web", metav1.GetOptions{})
+	if getErr != nil {
+		t.Fatalf("the object was deleted without a uid: %v", getErr)
+	}
+}
+
+func TestDeleteOfAReplacedObjectSaysToInspectItAgain(t *testing.T) {
+	client := newClient(newPod())
+	client.PrependReactor("delete", "pods", func(k8stesting.Action) (bool, runtime.Object, error) {
+		return true, nil, apierrors.NewConflict(podGVR.GroupResource(), "web", errors.New("the UID in the precondition does not match the UID in record"))
+	})
+
+	err := Delete(context.Background(), client, podRef(), "stale-uid")
+
+	if !errors.Is(err, ErrReplaced) {
+		t.Fatalf("error = %v, want ErrReplaced", err)
+	}
+	want := "this object was replaced since you inspected it; inspect it again before deleting: web"
+	if err.Error() != want {
+		t.Fatalf("error = %q, want %q", err.Error(), want)
 	}
 }
 

@@ -86,7 +86,7 @@ func TestManagerApplyObject(t *testing.T) {
 func TestManagerDeleteObject(t *testing.T) {
 	mgr := inspectManager(t, newDeployment("flux-system", "web"))
 
-	err := mgr.DeleteObject(context.Background(), deploymentRef())
+	err := mgr.DeleteObject(context.Background(), deploymentRef(), "uid-web")
 	if err != nil {
 		t.Fatalf("delete: %v", err)
 	}

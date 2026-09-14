@@ -65,7 +65,7 @@ func newDeleteBackend() *deleteBackend {
 	}
 }
 
-func (b *deleteBackend) DeleteObject(ctx context.Context, _ api.ObjectRef) error {
+func (b *deleteBackend) DeleteObject(ctx context.Context, _ api.ObjectRef, _ string) error {
 	b.started <- struct{}{}
 	<-b.release
 	b.seen <- ctx.Err()

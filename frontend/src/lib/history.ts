@@ -185,6 +185,9 @@ export function verbLabel(entry: HistoryEntry): string {
   if (entry.verb === 'removed') {
     return 'went';
   }
+  if (entry.verb === 'gap') {
+    return 'not recorded';
+  }
   return 'changed';
 }
 
@@ -216,7 +219,7 @@ export function outcomeLabel(outcome: string): string {
 }
 
 export function outcomeClass(outcome: string): string {
-  if (outcome === 'refused') {
+  if (outcome === 'refused' || outcome === 'lost') {
     return 'text-warn';
   }
   if (outcome === 'failed') {

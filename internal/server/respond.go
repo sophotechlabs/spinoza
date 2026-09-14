@@ -96,6 +96,7 @@ func askedForSomethingWrong(err error) bool {
 	for _, sentinel := range []error{
 		checks.ErrNoSuchCheck,
 		inspect.ErrInvalidUID,
+		inspect.ErrNoUID,
 		inspect.ErrNoResourceVersion,
 		gitops.ErrNotAnApplier,
 	} {
@@ -130,7 +131,11 @@ func applicationStatusFor(err error) (int, bool) {
 		return http.StatusNotFound, true
 	case errors.Is(err, helm.ErrFluxManaged):
 		return http.StatusConflict, true
+	case errors.Is(err, inspect.ErrReplaced):
+		return http.StatusConflict, true
 	case errors.Is(err, resources.ErrOutOfScope):
+		return http.StatusForbidden, true
+	case errors.Is(err, resources.ErrNamespaceNeeded):
 		return http.StatusForbidden, true
 	case errors.Is(err, access.ErrDenied):
 		return http.StatusForbidden, true

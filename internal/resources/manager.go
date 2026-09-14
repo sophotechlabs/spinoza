@@ -531,8 +531,8 @@ func (m *Manager) kindFor(ref api.ObjectRef) string {
 	return desc.Kind
 }
 
-func (m *Manager) DeleteObject(ctx context.Context, ref api.ObjectRef) error {
-	return inspect.Delete(ctx, m.dyn, ref)
+func (m *Manager) DeleteObject(ctx context.Context, ref api.ObjectRef, uid string) error {
+	return inspect.Delete(ctx, m.dyn, ref, uid)
 }
 
 func (m *Manager) ListKind(ctx context.Context, ref api.ObjectRef) ([]*unstructured.Unstructured, error) {
@@ -762,7 +762,8 @@ func splitAPIVersion(apiVersion string) (group, version string) {
 }
 
 type streamKey struct {
-	gvr schema.GroupVersionResource
+	gvr       schema.GroupVersionResource
+	namespace string
 }
 
 type subscriber struct {
@@ -852,6 +853,15 @@ func (m *Manager) Subscribe(
 	key := streamKey{gvr: gvr}
 
 	st, entry, err := m.attach(ctx, key, desc, effNs, limitFor(desc.Kind, limit), seen)
+	if err != nil && apierrors.IsForbidden(err) {
+		if effNs == "" && desc.Namespaced {
+			return nil, fmt.Errorf("%w: %s: %w", ErrNamespaceNeeded, desc.Kind, err)
+		}
+		if effNs != "" {
+			key = streamKey{gvr: gvr, namespace: effNs}
+			st, entry, err = m.attach(ctx, key, desc, effNs, limitFor(desc.Kind, limit), seen)
+		}
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -1201,7 +1211,7 @@ func (m *Manager) releaseGate(key streamKey) {
 
 func (m *Manager) newStream(ctx context.Context, key streamKey, desc api.ResourceDescriptor) (*stream, error) {
 	streamCtx, cancel := context.WithCancel(m.rootCtx)
-	factory := dynamicinformer.NewFilteredDynamicSharedInformerFactory(m.dyn, 0, metav1.NamespaceAll, nil)
+	factory := dynamicinformer.NewFilteredDynamicSharedInformerFactory(m.dyn, 0, key.namespace, nil)
 	gi := factory.ForResource(key.gvr)
 	informer := gi.Informer()
 
@@ -1447,12 +1457,28 @@ func newestFirst(kind string, held []*unstructured.Unstructured, limit int) []*u
 		return held
 	}
 	slices.SortStableFunc(held, func(left, right *unstructured.Unstructured) int {
-		return strings.Compare(sortKey(kind, right), sortKey(kind, left))
+		return newerFirst(kind, left, right)
 	})
 	if len(held) <= limit {
 		return held
 	}
 	return held[:limit]
+}
+
+func newerFirst(kind string, left, right *unstructured.Unstructured) int {
+	byTime := strings.Compare(sortKey(kind, right), sortKey(kind, left))
+	if byTime != 0 {
+		return byTime
+	}
+	byNamespace := strings.Compare(left.GetNamespace(), right.GetNamespace())
+	if byNamespace != 0 {
+		return byNamespace
+	}
+	byName := strings.Compare(left.GetName(), right.GetName())
+	if byName != 0 {
+		return byName
+	}
+	return strings.Compare(string(left.GetUID()), string(right.GetUID()))
 }
 
 func sortKey(kind string, obj *unstructured.Unstructured) string {

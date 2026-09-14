@@ -17,6 +17,8 @@ var ErrOutOfScope = errors.New("your account cannot read that namespace")
 
 var ErrClusterWide = errors.New("your account reads named namespaces only, and this kind belongs to no namespace")
 
+var ErrNamespaceNeeded = errors.New("your account cannot read this kind across every namespace; pick one namespace")
+
 type nsFilter struct {
 	all   bool
 	names map[string]bool

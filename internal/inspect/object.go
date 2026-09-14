@@ -10,9 +10,11 @@ import (
 	"time"
 	"unicode/utf8"
 
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/dynamic"
 	"sigs.k8s.io/yaml"
 
@@ -39,6 +41,12 @@ var ErrNoResourceVersion = errors.New(
 	"this document names no resourceVersion, so applying it would overwrite whatever is on the server now; " +
 		"Revert to load the current object, then make the change again",
 )
+
+var ErrNoUID = errors.New(
+	"a delete names the uid of the object you inspected, so a replacement that reuses the name is left alone",
+)
+
+var ErrReplaced = errors.New("this object was replaced since you inspected it; inspect it again before deleting")
 
 var readTimeout = 15 * time.Second
 
@@ -77,8 +85,17 @@ func Apply(ctx context.Context, dyn dynamic.Interface, ref api.ObjectRef, kind s
 	return detailOf(updated)
 }
 
-func Delete(ctx context.Context, dyn dynamic.Interface, ref api.ObjectRef) error {
-	return resourceFor(dyn, ref).Delete(ctx, ref.Name, metav1.DeleteOptions{})
+func Delete(ctx context.Context, dyn dynamic.Interface, ref api.ObjectRef, uid string) error {
+	if uid == "" {
+		return ErrNoUID
+	}
+	observed := types.UID(uid)
+	options := metav1.DeleteOptions{Preconditions: &metav1.Preconditions{UID: &observed}}
+	err := resourceFor(dyn, ref).Delete(ctx, ref.Name, options)
+	if apierrors.IsConflict(err) {
+		return fmt.Errorf("%w: %s", ErrReplaced, ref.Name)
+	}
+	return err
 }
 
 const fieldManager = "spinoza"

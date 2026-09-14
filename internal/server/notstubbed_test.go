@@ -114,7 +114,7 @@ func (n notStubbed) DebugSupport(_ context.Context, _, _ string) (r0 api.DebugSu
 	return r0
 }
 
-func (n notStubbed) DeleteObject(_ context.Context, _ api.ObjectRef) (r0 error) {
+func (n notStubbed) DeleteObject(_ context.Context, _ api.ObjectRef, _ string) (r0 error) {
 	n.missing("DeleteObject")
 	return r0
 }

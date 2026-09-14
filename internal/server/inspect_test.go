@@ -21,6 +21,7 @@ import (
 	"k8s.io/client-go/kubernetes"
 	k8sfake "k8s.io/client-go/kubernetes/fake"
 	"k8s.io/client-go/rest"
+	k8stesting "k8s.io/client-go/testing"
 
 	"github.com/sophotechlabs/spinoza/internal/api"
 	"github.com/sophotechlabs/spinoza/internal/discovery"
@@ -32,6 +33,7 @@ var (
 	podGVR      = schema.GroupVersionResource{Group: "", Version: "v1", Resource: "pods"}
 	eventsGVR   = schema.GroupVersionResource{Group: "", Version: "v1", Resource: "events"}
 	objectQuery = "?version=v1&resource=pods&namespace=flux-system&name=web"
+	deleteQuery = objectQuery + "&uid=6f1c0d3e-4a2b-4c8d-9e10-2b7f5a6c1d84"
 )
 
 func podDesc() api.ResourceDescriptor {
@@ -84,11 +86,19 @@ func inspectServer(t *testing.T, objs ...runtime.Object) *httptest.Server {
 
 func inspectServerWith(t *testing.T, cs kubernetes.Interface, objs ...runtime.Object) *httptest.Server {
 	t.Helper()
+	return inspectServerOn(t, cs, inspectClient(objs...))
+}
+
+func inspectClient(objs ...runtime.Object) *fake.FakeDynamicClient {
 	listKinds := map[schema.GroupVersionResource]string{
 		podGVR:    "PodList",
 		eventsGVR: "EventList",
 	}
-	dyn := fake.NewSimpleDynamicClientWithCustomListKinds(runtime.NewScheme(), listKinds, objs...)
+	return fake.NewSimpleDynamicClientWithCustomListKinds(runtime.NewScheme(), listKinds, objs...)
+}
+
+func inspectServerOn(t *testing.T, cs kubernetes.Interface, dyn *fake.FakeDynamicClient) *httptest.Server {
+	t.Helper()
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
 	descs := map[string]api.ResourceDescriptor{
@@ -212,7 +222,7 @@ func TestPutObjectRejectsMismatch(t *testing.T) {
 func TestDeleteObject(t *testing.T) {
 	ts := inspectServer(t, newPod())
 
-	resp, body := doRequest(t, http.MethodDelete, ts.URL+"/api/object"+objectQuery, nil)
+	resp, body := doRequest(t, http.MethodDelete, ts.URL+"/api/object"+deleteQuery, nil)
 
 	if resp.StatusCode != http.StatusNoContent {
 		t.Fatalf("status = %d, want 204: %s", resp.StatusCode, body)
@@ -227,10 +237,44 @@ func TestDeleteObject(t *testing.T) {
 func TestDeleteObjectNotFound(t *testing.T) {
 	ts := inspectServer(t)
 
-	resp, _ := doRequest(t, http.MethodDelete, ts.URL+"/api/object"+objectQuery, nil)
+	resp, _ := doRequest(t, http.MethodDelete, ts.URL+"/api/object"+deleteQuery, nil)
 
 	if resp.StatusCode != http.StatusNotFound {
 		t.Fatalf("status = %d, want 404", resp.StatusCode)
+	}
+}
+
+func TestDeleteWithoutTheObservedUIDIsRefused(t *testing.T) {
+	ts := inspectServer(t, newPod())
+
+	resp, body := doRequest(t, http.MethodDelete, ts.URL+"/api/object"+objectQuery, nil)
+
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400: %s", resp.StatusCode, body)
+	}
+	if !strings.Contains(string(body), "uid of the object you inspected") {
+		t.Fatalf("body = %s, want it to say the uid is missing", body)
+	}
+	survived, _ := doRequest(t, http.MethodGet, ts.URL+"/api/object"+objectQuery, nil)
+	if survived.StatusCode != http.StatusOK {
+		t.Fatalf("the object was deleted without a uid, status = %d", survived.StatusCode)
+	}
+}
+
+func TestDeletingAReplacedObjectIsRefused(t *testing.T) {
+	dyn := inspectClient(newPod())
+	dyn.PrependReactor("delete", "pods", func(k8stesting.Action) (bool, runtime.Object, error) {
+		return true, nil, apierrors.NewConflict(podGVR.GroupResource(), "web", errors.New("the UID in the precondition does not match the UID in record"))
+	})
+	ts := inspectServerOn(t, k8sfake.NewClientset(), dyn)
+
+	resp, body := doRequest(t, http.MethodDelete, ts.URL+"/api/object"+objectQuery+"&uid=stale", nil)
+
+	if resp.StatusCode != http.StatusConflict {
+		t.Fatalf("status = %d, want 409: %s", resp.StatusCode, body)
+	}
+	if !strings.Contains(string(body), "inspect it again before deleting") {
+		t.Fatalf("body = %s, want it to say the object was replaced", body)
 	}
 }
 

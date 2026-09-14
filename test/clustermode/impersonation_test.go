@@ -124,6 +124,8 @@ func TestEveryWayOfReachingTheClusterActsAsThePersonWhoAsked(t *testing.T) {
 		kubectl(t, "-n", "default", "create", "configmap", name, "--from-literal=message=before")
 		allowedResourceVersion := strings.TrimSpace(kubectl(t, "-n", "payments", "get", "configmap", name,
 			"-o", "jsonpath={.metadata.resourceVersion}"))
+		allowedUID := strings.TrimSpace(kubectl(t, "-n", "payments", "get", "configmap", name,
+			"-o", "jsonpath={.metadata.uid}"))
 		deniedResourceVersion := strings.TrimSpace(kubectl(t, "-n", "default", "get", "configmap", name,
 			"-o", "jsonpath={.metadata.resourceVersion}"))
 		bob := signIn(t, "bob")
@@ -136,7 +138,7 @@ func TestEveryWayOfReachingTheClusterActsAsThePersonWhoAsked(t *testing.T) {
 		if stored != "from-bob" {
 			t.Fatalf("stored message = %q, want from-bob", stored)
 		}
-		status, message = delete(t, bob, objectPath("payments", name))
+		status, message = delete(t, bob, objectPath("payments", name)+"&uid="+url.QueryEscape(allowedUID))
 		if status != http.StatusNoContent {
 			t.Fatalf("deleting in its own namespace gave %d: %s", status, message)
 		}

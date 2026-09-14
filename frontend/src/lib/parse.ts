@@ -197,6 +197,8 @@ export function parseComparison(body: unknown): Comparison {
     rightContext: asString(item.rightContext),
     identical: asBoolean(item.identical),
     missing: optionalString(item.missing),
+    stripped: optionalStringList(item.stripped),
+    hiddenDifferences: optionalBoolean(item.hiddenDifferences),
   };
 }
 
@@ -215,6 +217,7 @@ function parseKindDiff(item: Record<string, unknown>): KindDiff {
     name: asString(item.name),
     verdict: parseVerdict(item.verdict),
     lines: optionalNumber(item.lines),
+    hiddenDifferences: optionalBoolean(item.hiddenDifferences),
   };
 }
 
@@ -997,6 +1000,7 @@ export function parseHistory(body: unknown): History {
     entries: listOf(item.entries, parseHistoryEntry),
     more: optionalBoolean(item.more),
     dropped: optionalNumber(item.dropped),
+    lost: optionalNumber(item.lost),
     next: optionalNumber(item.next),
     nextAction: optionalNumber(item.nextAction),
     reason: optionalString(item.reason),

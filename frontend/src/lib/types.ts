@@ -101,6 +101,8 @@ export interface Comparison {
   rightContext: string;
   identical: boolean;
   missing?: string;
+  stripped?: string[];
+  hiddenDifferences?: boolean;
 }
 
 export const VERDICTS = ['same', 'differs', 'onlyHere', 'onlyThere'] as const;
@@ -112,6 +114,7 @@ export interface KindDiff {
   name: string;
   verdict: Verdict;
   lines?: number;
+  hiddenDifferences?: boolean;
 }
 
 export interface KindComparison {
@@ -636,6 +639,7 @@ export interface History {
   entries: HistoryEntry[];
   more?: boolean;
   dropped?: number;
+  lost?: number;
   next?: number;
   nextAction?: number;
   reason?: string;

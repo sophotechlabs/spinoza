@@ -131,12 +131,14 @@ ClusterOverview.WarningCount warningCount int
 ClusterOverview.Warnings warnings []OverviewEvent
 Column.Name name string
 Column.Render render,omitempty string
+Comparison.HiddenDifferences hiddenDifferences,omitempty bool
 Comparison.Identical identical bool
 Comparison.Left left string
 Comparison.LeftContext leftContext string
 Comparison.Missing missing,omitempty string
 Comparison.Right right string
 Comparison.RightContext rightContext string
+Comparison.Stripped stripped,omitempty []string
 Condition.Message message,omitempty string
 Condition.Reason reason,omitempty string
 Condition.Status status string
@@ -466,6 +468,7 @@ HelmSupport.Binary binary string
 HelmSupport.Reason reason,omitempty string
 History.Dropped dropped,omitempty int
 History.Entries entries []HistoryEntry
+History.Lost lost,omitempty int
 History.More more,omitempty bool
 History.Next next,omitempty int64
 History.NextAction nextAction,omitempty int64
@@ -525,6 +528,7 @@ KindComparison.OnlyThere onlyThere int
 KindComparison.Resource resource string
 KindComparison.RightContext rightContext string
 KindComparison.Same same int
+KindDiff.HiddenDifferences hiddenDifferences,omitempty bool
 KindDiff.Lines lines,omitempty int
 KindDiff.Name name string
 KindDiff.Namespace namespace,omitempty string
