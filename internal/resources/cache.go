@@ -49,6 +49,21 @@ func (r *recent[T]) store(value T, at time.Time, keep bool) {
 	}
 }
 
+func buildOnce[T any](
+	ctx context.Context,
+	store *recent[T],
+	now func() time.Time,
+	build func(context.Context) (T, bool),
+) T {
+	var built T
+	keep := false
+	defer func() {
+		store.store(built, now(), keep)
+	}()
+	built, keep = build(ctx)
+	return built
+}
+
 func shared[T any](
 	ctx context.Context,
 	store *recent[T],
@@ -62,9 +77,7 @@ func shared[T any](
 			return value, true
 		}
 		if waiting.mine {
-			built, keep := build(auth.AsServer(ctx))
-			store.store(built, now(), keep)
-			return built, true
+			return buildOnce(auth.AsServer(ctx), store, now, build), true
 		}
 		select {
 		case <-waiting.done:
