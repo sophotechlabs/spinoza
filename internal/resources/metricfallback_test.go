@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	authv1 "k8s.io/api/authorization/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -13,7 +14,9 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/dynamic/fake"
 	k8sfake "k8s.io/client-go/kubernetes/fake"
+	k8stesting "k8s.io/client-go/testing"
 
+	"github.com/sophotechlabs/spinoza/internal/access"
 	"github.com/sophotechlabs/spinoza/internal/auth"
 	"github.com/sophotechlabs/spinoza/internal/prom"
 )
@@ -81,6 +84,115 @@ func TestAskingForAChartIsWhatTakesTheFirstReading(t *testing.T) {
 	}
 	if len(history.CPU) == 0 {
 		t.Fatal("nothing was measured, so nobody else had asked for metrics first")
+	}
+}
+
+func metricsDeniedTo(t *testing.T) *k8sfake.Clientset {
+	t.Helper()
+	cs := k8sfake.NewClientset()
+	cs.PrependReactor("create", "selfsubjectaccessreviews", func(action k8stesting.Action) (bool, runtime.Object, error) {
+		create, ok := action.(k8stesting.CreateAction)
+		if !ok {
+			return false, nil, nil
+		}
+		review, ok := create.GetObject().(*authv1.SelfSubjectAccessReview)
+		if !ok {
+			return false, nil, nil
+		}
+		attributes := review.Spec.ResourceAttributes
+		review.Status.Allowed = attributes.Group != "metrics.k8s.io"
+		if !review.Status.Allowed {
+			review.Status.Reason = "no metrics for you"
+		}
+		return true, review, nil
+	})
+	return cs
+}
+
+func TestAReaderDeniedMetricsIsNotServedSomebodyElsesSamples(t *testing.T) {
+	dyn := measuredCluster(t)
+	mgr := NewManager(t.Context(), Deps{Dynamic: dyn, Clientset: metricsDeniedTo(t)})
+	primed, err := mgr.MetricHistory(t.Context(), "prod", "web", time.Hour)
+	if err != nil || len(primed.CPU) != 1 {
+		t.Fatalf("priming as the server: history = %+v, error = %v", primed, err)
+	}
+	reader := auth.WithIdentity(t.Context(), auth.Identity{User: "reader", Role: auth.RoleViewer})
+
+	after, err := mgr.MetricHistory(reader, "prod", "web", time.Hour)
+
+	if !errors.Is(err, access.ErrDenied) {
+		t.Fatalf("error = %v, want the reader's own denial", err)
+	}
+	if err.Error() != "kubernetes authorization denied: no metrics for you" {
+		t.Fatalf("error = %q", err.Error())
+	}
+	if len(after.CPU) != 0 {
+		t.Fatalf("the denied reader still received %d cached samples", len(after.CPU))
+	}
+}
+
+func TestAReaderAllowedMetricsStillGetsTheSampledHistory(t *testing.T) {
+	dyn := measuredCluster(t)
+	cs := k8sfake.NewClientset()
+	cs.PrependReactor("create", "selfsubjectaccessreviews", func(action k8stesting.Action) (bool, runtime.Object, error) {
+		create, ok := action.(k8stesting.CreateAction)
+		if !ok {
+			return false, nil, nil
+		}
+		review, ok := create.GetObject().(*authv1.SelfSubjectAccessReview)
+		if !ok {
+			return false, nil, nil
+		}
+		review.Status.Allowed = true
+		return true, review, nil
+	})
+	mgr := NewManager(t.Context(), Deps{Dynamic: dyn, Clientset: cs})
+	if _, err := mgr.MetricHistory(t.Context(), "prod", "web", time.Hour); err != nil {
+		t.Fatalf("priming as the server: %v", err)
+	}
+	reader := auth.WithIdentity(t.Context(), auth.Identity{User: "reader", Role: auth.RoleViewer})
+
+	history, err := mgr.MetricHistory(reader, "prod", "web", time.Hour)
+	if err != nil {
+		t.Fatalf("history: %v", err)
+	}
+	if !history.Sampled || len(history.CPU) != 1 {
+		t.Fatalf("history = %+v, want the sampled series an authorized reader may see", history)
+	}
+}
+
+func TestTheMetricsGateAsksAboutTheNamespaceThatWasRequested(t *testing.T) {
+	var asked []authv1.ResourceAttributes
+	cs := k8sfake.NewClientset()
+	cs.PrependReactor("create", "selfsubjectaccessreviews", func(action k8stesting.Action) (bool, runtime.Object, error) {
+		create, ok := action.(k8stesting.CreateAction)
+		if !ok {
+			return false, nil, nil
+		}
+		review, ok := create.GetObject().(*authv1.SelfSubjectAccessReview)
+		if !ok {
+			return false, nil, nil
+		}
+		asked = append(asked, *review.Spec.ResourceAttributes)
+		review.Status.Allowed = true
+		return true, review, nil
+	})
+	mgr := NewManager(t.Context(), Deps{Dynamic: measuredCluster(t), Clientset: cs})
+	reader := auth.WithIdentity(t.Context(), auth.Identity{User: "reader", Role: auth.RoleViewer})
+
+	if _, err := mgr.MetricHistory(reader, "prod", "web", time.Hour); err != nil {
+		t.Fatalf("history: %v", err)
+	}
+
+	want := authv1.ResourceAttributes{Namespace: "prod", Verb: "list", Group: "metrics.k8s.io", Resource: "pods"}
+	found := false
+	for _, one := range asked {
+		if one == want {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("questions = %+v, want %+v among them", asked, want)
 	}
 }
 

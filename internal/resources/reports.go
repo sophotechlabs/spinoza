@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/sophotechlabs/spinoza/internal/access"
 	"github.com/sophotechlabs/spinoza/internal/api"
 	"github.com/sophotechlabs/spinoza/internal/auth"
 	"github.com/sophotechlabs/spinoza/internal/checks"
@@ -21,6 +22,10 @@ func (m *Manager) MetricHistory(ctx context.Context, namespace, pod string, span
 	if !m.filter(ctx).allows(namespace) {
 		return api.MetricHistory{}, fmt.Errorf("%w: %s", ErrOutOfScope, namespace)
 	}
+	readErr := m.perms.Require(ctx, metricsRead(namespace))
+	if readErr != nil {
+		return api.MetricHistory{}, readErr
+	}
 	if m.prom != nil {
 		history, err := m.prom.PodHistory(ctx, namespace, pod, span, time.Now())
 		if err == nil {
@@ -35,6 +40,10 @@ func (m *Manager) MetricHistory(ctx context.Context, namespace, pod string, span
 	}
 	m.Metrics(ctx)
 	return m.samples.History(namespace, pod, span, m.now()), nil
+}
+
+func metricsRead(namespace string) access.Check {
+	return access.Check{Verb: "list", Group: "metrics.k8s.io", Resource: "pods", Namespace: namespace}
 }
 
 func (m *Manager) CheckPage(
