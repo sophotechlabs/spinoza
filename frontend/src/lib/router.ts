@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ObjectRef, ReleaseRef, ResourceDescriptor, View } from './types';
 import { VIEWS } from './types';
+import { mayDiscard } from './unsaved';
 
 export interface RouteResource {
   group: string;
@@ -204,10 +205,24 @@ function urlFor(hash: string): string {
 
 export function useRouter(): Router {
   const [route, setRoute] = useState<Route>(() => decodeRoute(currentHash()));
+  const held = useRef(route);
+
+  const commit = useCallback((next: Route) => {
+    held.current = next;
+    setRoute(next);
+  }, []);
 
   useEffect(() => {
     function sync() {
-      setRoute(decodeRoute(currentHash()));
+      const arrived = decodeRoute(currentHash());
+      if (encodeRoute(arrived) === encodeRoute(held.current)) {
+        return;
+      }
+      if (!mayDiscard()) {
+        window.history.pushState(null, '', urlFor(encodeRoute(held.current)));
+        return;
+      }
+      commit(arrived);
     }
     window.addEventListener('popstate', sync);
     window.addEventListener('hashchange', sync);
@@ -215,25 +230,31 @@ export function useRouter(): Router {
       window.removeEventListener('popstate', sync);
       window.removeEventListener('hashchange', sync);
     };
-  }, []);
+  }, [commit]);
 
-  const navigate = useCallback((next: Route) => {
-    setRoute(next);
-    const hash = encodeRoute(next);
-    if (hash === currentHash()) {
-      return;
-    }
-    window.history.pushState(null, '', urlFor(hash));
-  }, []);
+  const navigate = useCallback(
+    (next: Route) => {
+      commit(next);
+      const hash = encodeRoute(next);
+      if (hash === currentHash()) {
+        return;
+      }
+      window.history.pushState(null, '', urlFor(hash));
+    },
+    [commit],
+  );
 
-  const replace = useCallback((next: Route) => {
-    setRoute(next);
-    const hash = encodeRoute(next);
-    if (hash === currentHash()) {
-      return;
-    }
-    window.history.replaceState(null, '', urlFor(hash));
-  }, []);
+  const replace = useCallback(
+    (next: Route) => {
+      commit(next);
+      const hash = encodeRoute(next);
+      if (hash === currentHash()) {
+        return;
+      }
+      window.history.replaceState(null, '', urlFor(hash));
+    },
+    [commit],
+  );
 
   return { route, navigate, replace };
 }

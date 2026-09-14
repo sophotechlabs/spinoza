@@ -175,6 +175,43 @@ function createEdited(): void {
   kubectl(['-n', NAMESPACE, 'create', 'configmap', EDITED, '--from-literal=before=yes']);
 }
 
+test('browser back keeps an unsaved YAML draft until the draft is given up', async ({ page }) => {
+  createEdited();
+  try {
+    await openYaml(page, EDITED);
+    const draft = documentFor(EDITED, liveVersion(EDITED), { before: 'yes', after: 'not-yet' });
+    await replaceEditor(page, draft);
+    await expect(page.getByRole('button', { name: 'Apply', exact: true })).toBeEnabled();
+    const editing = page.url();
+    const giveUp = [false, true];
+    let asked = 0;
+    page.on('dialog', (dialog) => {
+      asked += 1;
+      if (giveUp.shift() === true) {
+        void dialog.accept();
+        return;
+      }
+      void dialog.dismiss();
+    });
+
+    await page.evaluate(() => {
+      window.history.back();
+    });
+    await expect.poll(() => asked, { timeout: 10_000 }).toBe(1);
+    await expect(page).toHaveURL(editing);
+    expect((await editorText(page)).trim()).toBe(draft.trim());
+
+    await page.evaluate(() => {
+      window.history.back();
+    });
+    await expect.poll(() => asked, { timeout: 10_000 }).toBe(2);
+    await expect(page).not.toHaveURL(editing);
+    await expect(page.getByText('Select a row to inspect it')).toBeVisible();
+  } finally {
+    kubectl(['-n', NAMESPACE, 'delete', 'configmap', EDITED, '--ignore-not-found']);
+  }
+});
+
 test('an apply that names no resourceVersion is refused, and the object is left alone', async ({
   page,
 }) => {

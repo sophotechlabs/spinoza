@@ -1,7 +1,8 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, renderHook } from '@testing-library/react';
 import type { Route } from '../../src/lib/router';
 import { VIEWS } from '../../src/lib/types';
+import { setUnsaved } from '../../src/lib/unsaved';
 import {
   EMPTY_ROUTE,
   decodeRoute,
@@ -256,6 +257,8 @@ describe('useRouter', () => {
 
   afterEach(() => {
     goTo('');
+    setUnsaved(false);
+    vi.unstubAllGlobals();
   });
 
   it('starts from the hash the page was opened with', () => {
@@ -338,6 +341,57 @@ describe('useRouter', () => {
     });
 
     expect(result.current.route.resource).toBeNull();
+  });
+
+  it('asks before the back button discards an unsaved draft, and stays put when told no', () => {
+    const confirm = vi.fn().mockReturnValue(false);
+    vi.stubGlobal('confirm', confirm);
+    const { result } = renderHook(() => useRouter());
+    act(() => {
+      result.current.navigate(route({ view: 'resources', resource: pods }));
+    });
+    setUnsaved(true);
+
+    act(() => {
+      goTo('');
+      window.dispatchEvent(new PopStateEvent('popstate'));
+      window.dispatchEvent(new HashChangeEvent('hashchange'));
+    });
+
+    expect(confirm).toHaveBeenCalledTimes(1);
+    expect(result.current.route.resource).toEqual(pods);
+    expect(window.location.hash).toBe('#version=v1&resource=pods&kind=Pod');
+  });
+
+  it('lets the back button through once the draft is given up', () => {
+    vi.stubGlobal('confirm', vi.fn().mockReturnValue(true));
+    const { result } = renderHook(() => useRouter());
+    act(() => {
+      result.current.navigate(route({ view: 'resources', resource: pods }));
+    });
+    setUnsaved(true);
+
+    act(() => {
+      goTo('');
+      window.dispatchEvent(new PopStateEvent('popstate'));
+    });
+
+    expect(result.current.route.resource).toBeNull();
+    expect(window.location.hash).toBe('');
+  });
+
+  it('does not ask when the address bar already matches the route', () => {
+    const confirm = vi.fn().mockReturnValue(false);
+    vi.stubGlobal('confirm', confirm);
+    goTo('#view=gitops');
+    renderHook(() => useRouter());
+    setUnsaved(true);
+
+    act(() => {
+      window.dispatchEvent(new HashChangeEvent('hashchange'));
+    });
+
+    expect(confirm).not.toHaveBeenCalled();
   });
 
   it('follows a hash typed straight into the address bar', () => {
