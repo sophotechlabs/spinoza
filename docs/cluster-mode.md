@@ -144,8 +144,10 @@ provider should do without the hint.
 `https://spinoza.example.com/auth/backchannel-logout` at the provider. Disabling
 somebody there then ends their spinoza session at once instead of at cookie
 expiry. It needs a `sid` in the logout token, which Keycloak, Okta, Auth0 and
-Entra all send. Revocations live in memory, so they are lost on restart and are
-not shared between replicas.
+Entra all send. A revocation is written to the state store as well as held in
+memory, so it survives a restart when `persistence.enabled` is on; if the store
+cannot be written the revocation holds for the running pod only and the log says
+so. Revocations are still per pod, not shared between replicas.
 
 ### `proxy`
 
@@ -381,8 +383,13 @@ and recorded changes resume after a pod replacement when `persistence.enabled`
 is on, and `persistence.existingClaim` uses a volume you made yourself.
 Otherwise the state volume is an `emptyDir` and they go with the pod.
 
-`audit.retention` decides how long recorded changes, audit runs and session
-transcripts are kept. Empty keeps them.
+`audit.retention` decides how long the audit trail, audit runs and session
+transcripts are kept. Empty means 90 days or 50,000 rows, whichever comes
+first. The timeline of recorded changes has its own window: 7 days by default,
+at most 90, set in Settings, and never more than 200,000 rows. A batch of
+changes the store refuses is not retried; the next batch that lands writes a
+row marked "not recorded" that says how many changes went missing and when, so
+a hole in the timeline is visible after the fact and after a restart.
 
 ## The audit trail, and where it goes
 
@@ -473,8 +480,9 @@ are worth naming because they are the whole of it:
 - **The state store has one writer.** Settings, mutes, baselines, the timeline
   and the audit trail live in one sqlite file on one volume. Two pods cannot
   share it.
-- **Back-channel revocations live in memory** (`internal/auth/revoke.go`). A
-  logout the provider announces to one pod does not reach the other.
+- **Back-channel revocations are per pod.** They are written to the state
+  store so a restart keeps them, but a logout the provider announces to one
+  pod does not reach the other.
 - **Live sessions belong to a process.** A feed, a terminal and a port-forward
   registry are held by whichever pod accepted them.
 

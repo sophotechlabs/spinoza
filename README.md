@@ -141,7 +141,7 @@ Selecting a release docks its detail as a panel. Drag it to any side, resize it,
 
 ## Inspect and edit
 
-Metadata, conditions, events and live YAML in Monaco. Schema-aware completion from the cluster's own OpenAPI, server-side apply and delete. An edited draft survives a background reload.
+Metadata, conditions, events and live YAML in Monaco. Schema-aware completion from the cluster's own OpenAPI. Apply sends the object back with the resourceVersion you read, so a draft built on a read the cluster has moved past is refused rather than written over it. Delete names the object you inspected by its UID, so a replacement that reuses the name is left alone. An edited draft survives a background reload, and the browser's Back button asks before it discards one.
 
 ![Spinoza deployments table with the inspect drawer open on live YAML in Monaco, with apply, revert and delete](docs/images/inspect-yaml.png)
 
@@ -183,7 +183,7 @@ Scale, rollout restart, undo, cordon, uncordon, drain. Drain shows its eviction 
 - **Kubeconfigs** added by path, referenced in place, never copied or merged. Contexts grouped per file, listed in `kubeconfigs.json`. `--kubeconfig PATH` replaces the default lookup for one run.
 - **MCP server**: `spinoza-mcp`, a separate binary giving an agent 21 tools and 3 resources over one cluster.
 - **Node shell**: a root shell in the node's own namespaces, off until you turn it on. It asks the apiserver whether you may create the pod first, and the pod carries a two-hour deadline.
-- **Secrets** arrive masked. Reveal one key at a time; the reveal drops the moment you select something else.
+- **Secrets** are masked on screen, one key revealed at a time, and the reveal drops the moment you select something else. The values are in the response the browser received, so anyone allowed to read a Secret can also read it from the developer tools.
 - **Traffic**: a workload graph from Cilium Hubble flow metrics, read through Prometheus.
 - **Nine themes**, Borg by default, contrast-gated in CI, plus your own as JSON. Screenshots here are Borg.
 - **Window size**: built for 1280×720 and up, checked in CI at 1280×720 and 1440×900 and at 200% browser zoom. Narrower than 1280 the workspace scrolls sideways rather than reflowing, and a phone is out of scope. A fresh profile opens the Focused preset — one workspace, side and bottom docks closed; Console opens every dock, and Settings → Panels switches between them. A layout you arranged yourself is never overwritten.
@@ -225,6 +225,7 @@ be recorded when a deployment asks for that. The checks can run on a timer and
 post a summary when posture moves.
 
 Full guide, including what changes when it runs this way: [docs/cluster-mode.md](docs/cluster-mode.md).
+Which account acts in each mode, what a greyed-out feature is waiting for, and the next step: [docs/modes.md](docs/modes.md).
 
 ## Security
 
@@ -234,7 +235,7 @@ Outbound: your apiserver, the chart repos you configured, and one request per ru
 
 ## Develop
 
-Toolchain pinned in `mise.toml` (Go 1.26, Node 24); `mise install` gets them.
+Toolchain pinned in `mise.toml` (Go 1.27, Node 24); `mise install` gets them. The container image builds with the same Go.
 
 ```sh
 just deps      # frontend dependencies, once

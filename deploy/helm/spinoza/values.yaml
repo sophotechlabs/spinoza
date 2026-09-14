@@ -55,7 +55,8 @@ audit:
   interval: ""
   # Posts a json summary when a run's findings differ from the baseline.
   webhookURL: ""
-  # How long recorded changes and audit runs are kept. Empty keeps them.
+  # How long the audit trail, audit runs and transcripts are kept. Empty means
+  # 90 days or 50,000 rows. The change timeline has its own window in Settings.
   retention: ""
 
 auth:
