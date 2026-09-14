@@ -18,7 +18,9 @@ import (
 )
 
 func TestTheProviderCanEndASessionFromItsOwnSide(t *testing.T) {
-	deploy(t, oidcValues())
+	values := oidcValues()
+	values["persistence.enabled"] = "true"
+	deploy(t, values)
 	endProviderSessions(t, "bob")
 	bob := signIn(t, "bob")
 	if !whoami(t, bob).Authenticated {
@@ -28,13 +30,30 @@ func TestTheProviderCanEndASessionFromItsOwnSide(t *testing.T) {
 	endProviderSessions(t, "bob")
 
 	deadline := time.Now().Add(2 * time.Minute)
+	ended := false
 	for time.Now().Before(deadline) {
 		if !whoami(t, bob).Authenticated {
-			return
+			ended = true
+			break
 		}
 		time.Sleep(time.Second)
 	}
-	t.Fatal("the session the provider ended still worked")
+	if !ended {
+		t.Fatal("the session the provider ended still worked")
+	}
+
+	kubectl(t, "-n", namespace, "rollout", "restart", "deployment/"+release)
+	kubectl(t, "-n", namespace, "rollout", "status", "deployment/"+release, "--timeout="+deployWait)
+	waitEndpoints(t)
+	waitReachable(t)
+	waitServing(t, "oidc")
+
+	if whoami(t, bob).Authenticated {
+		t.Fatal("the session the provider ended worked again after spinoza restarted")
+	}
+	if !whoami(t, signIn(t, "bob")).Authenticated {
+		t.Fatal("bob could not sign in again after the restart")
+	}
 }
 
 func TestALogoutTokenNamingNoSessionLeavesTheCookieAlone(t *testing.T) {

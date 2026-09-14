@@ -167,7 +167,7 @@ type modeServer interface {
 
 func wireMode(ctx context.Context, srv modeServer, opts settings, past *store.Store) error {
 	if opts.serve.on {
-		teamErr := serveTeam(ctx, srv, opts)
+		teamErr := serveTeam(ctx, srv, opts, past)
 		if teamErr != nil {
 			return teamErr
 		}

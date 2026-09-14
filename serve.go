@@ -11,6 +11,7 @@ import (
 	"github.com/sophotechlabs/spinoza/internal/auth"
 	"github.com/sophotechlabs/spinoza/internal/kube"
 	"github.com/sophotechlabs/spinoza/internal/server"
+	"github.com/sophotechlabs/spinoza/internal/store"
 )
 
 const providerWait = 30 * time.Second
@@ -48,10 +49,14 @@ func toolKubeconfigFrom(
 	return path
 }
 
-func serveTeam(ctx context.Context, srv teamServer, opts settings) error {
+func serveTeam(ctx context.Context, srv teamServer, opts settings, past *store.Store) error {
 	building, cancel := context.WithTimeout(ctx, providerWait)
 	defer cancel()
-	authn, err := auth.New(building, opts.serve.auth)
+	cfg := opts.serve.auth
+	if past != nil {
+		cfg.Revocations = past
+	}
+	authn, err := auth.New(building, cfg)
 	if err != nil {
 		return err
 	}

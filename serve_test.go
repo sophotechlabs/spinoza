@@ -257,7 +257,7 @@ func servedOpts(change func(*settings)) settings {
 func TestServingTurnsTheServerIntoOneThatAsksWhoYouAre(t *testing.T) {
 	srv := server.New(nil, nil, "")
 
-	err := serveTeam(t.Context(), srv, servedOpts(nil))
+	err := serveTeam(t.Context(), srv, servedOpts(nil), nil)
 	if err != nil {
 		t.Fatalf("setting up cluster mode: %v", err)
 	}
@@ -286,7 +286,7 @@ func TestServingWithExplicitAnonymousAdminAccessStarts(t *testing.T) {
 		opts.serve.impersonate = false
 	})
 
-	if err := serveTeam(t.Context(), server.New(nil, nil, ""), opts); err != nil {
+	if err := serveTeam(t.Context(), server.New(nil, nil, ""), opts, nil); err != nil {
 		t.Fatalf("setting up cluster mode: %v", err)
 	}
 }
@@ -296,7 +296,7 @@ func TestAnAuthConfigThatCannotWorkStopsTheServerStarting(t *testing.T) {
 		opts.serve.auth.Mode = "ldap"
 	})
 
-	err := serveTeam(t.Context(), server.New(nil, nil, ""), opts)
+	err := serveTeam(t.Context(), server.New(nil, nil, ""), opts, nil)
 	if err == nil {
 		t.Fatal("cluster mode started with an auth mode nobody implements")
 	}
