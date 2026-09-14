@@ -9,7 +9,7 @@ ARG SPINOZA_VERSION=dev
 ENV SPINOZA_VERSION=${SPINOZA_VERSION}
 RUN npm run build
 
-FROM golang:1.26.6-alpine AS build
+FROM golang:1.27.1-alpine AS build
 WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download
@@ -27,7 +27,7 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH} go build \
 FROM alpine:3.22 AS tools
 ARG TARGETARCH
 ARG HELM_VERSION=4.2.2
-ARG KUBECTL_VERSION=1.34.1
+ARG KUBECTL_VERSION=1.36.4
 RUN apk add --no-cache ca-certificates curl tar
 WORKDIR /tools
 RUN curl -fsSLO "https://get.helm.sh/helm-v${HELM_VERSION}-linux-${TARGETARCH}.tar.gz" \

@@ -244,6 +244,9 @@ test-be name='' pkgs=go_pkgs: stub-assets
     go test -race -shuffle=on -covermode=atomic -coverprofile=coverage.out {{ pkgs }}
     go tool cover -func=coverage.out
 
+bench-be name pkgs=go_pkgs: stub-assets
+    go test -run '^$' -bench {{ quote(name) }} -benchmem -count 5 -timeout 60m {{ pkgs }}
+
 kind-config tier:
     #!/usr/bin/env bash
     set -euo pipefail
@@ -1223,7 +1226,8 @@ nightly-report dir sha url trigger coverage='':
 hygiene:
     typos
     just editorconfig
-    shellcheck install.sh scripts/check-mutation-report.sh scripts/check-mutation-total.sh scripts/create-kind-cluster.sh \
+    scripts/check-kubectl-skew.sh .
+    shellcheck install.sh scripts/check-kubectl-skew.sh scripts/check-mutation-report.sh scripts/check-mutation-total.sh scripts/create-kind-cluster.sh \
         scripts/nightly-credential-helper.sh scripts/nightly-due.sh scripts/nightly-publish.sh \
         scripts/release-commit.sh scripts/release-pending.sh \
         test/release-commit.sh test/release-pending.sh test/install/container.sh \
@@ -1278,6 +1282,16 @@ handoff-gate: stub-assets
         packages=$(printf '%s\n' "$changed" | grep -E '\.go$' | xargs -n1 dirname | sort -u)
         existing=()
         for package in $packages; do
+            case "$package" in
+                test/integration*)
+                    go vet -tags integration "./$package"
+                    continue
+                    ;;
+                test/clustermode*)
+                    go vet -tags clustermode "./$package"
+                    continue
+                    ;;
+            esac
             if [ -d "$package" ]; then
                 existing+=("./$package")
             fi
