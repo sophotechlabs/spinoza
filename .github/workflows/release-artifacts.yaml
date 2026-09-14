@@ -158,9 +158,7 @@ jobs:
           context: .
           platforms: linux/amd64,linux/arm64
           push: true
-          tags: |
-            ghcr.io/${{ github.repository }}:${{ needs.version.outputs.version }}
-            ghcr.io/${{ github.repository }}:latest
+          tags: ghcr.io/${{ github.repository }}:${{ needs.version.outputs.version }}
           labels: org.opencontainers.image.source=https://github.com/${{ github.repository }}
           build-args: SPINOZA_VERSION=${{ needs.version.outputs.tag }}
           cache-from: type=gha
@@ -351,6 +349,7 @@ jobs:
       cancel-in-progress: false
     permissions:
       contents: write
+      packages: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
@@ -359,6 +358,17 @@ jobs:
       - uses: jdx/mise-action@3c2e0cf82a5b2e5249f0d3635a4d83d0ae861518
         with:
           install_args: just
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f
+      - uses: docker/login-action@5e57cd118135c172c3672efd75eb46360885c0ef
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Move the latest image tag onto the release that passed the lifecycle gate
+        run: docker buildx imagetools create --tag "ghcr.io/${REPOSITORY}:latest" "ghcr.io/${REPOSITORY}:${VERSION}"
+        env:
+          REPOSITORY: ${{ github.repository }}
+          VERSION: ${{ needs.version.outputs.version }}
       - run: |
           mkdir -p dist/release
           gh release download "$TAG" --pattern checksums.txt --output dist/release/checksums.txt --clobber
