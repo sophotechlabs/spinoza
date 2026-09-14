@@ -71,6 +71,7 @@ export async function fetchKindComparison(
   kind: ResourceDescriptor,
   namespace: string,
   target: CompareTarget,
+  raw = false,
 ): Promise<KindComparison> {
   const params = new URLSearchParams({
     group: kind.group,
@@ -82,6 +83,9 @@ export async function fetchKindComparison(
   });
   if (target.namespace !== '' && target.namespace !== namespace) {
     params.set('againstNamespace', target.namespace);
+  }
+  if (raw) {
+    params.set('raw', 'true');
   }
   const response = await request(`/api/compare/kind?${params.toString()}`, {
     timeoutMs: SLOW_REQUEST_TIMEOUT_MS,

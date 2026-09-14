@@ -22,7 +22,7 @@ func (s *Server) compare(w http.ResponseWriter, r *http.Request, ref api.ObjectR
 		writeAPIError(w, err)
 		return
 	}
-	left, leftErr := compare.Rendered(here.YAML, keep)
+	left, leftErr := compare.Render(here.YAML, keep)
 	if leftErr != nil {
 		writeAPIError(w, leftErr)
 		return
@@ -30,9 +30,9 @@ func (s *Server) compare(w http.ResponseWriter, r *http.Request, ref api.ObjectR
 	writeJSON(w, s.against(r, ref, against, left, keep))
 }
 
-func (s *Server) against(r *http.Request, ref api.ObjectRef, against api.ContextRef, left string, keep bool) api.Comparison {
+func (s *Server) against(r *http.Request, ref api.ObjectRef, against api.ContextRef, left compare.Rendering, keep bool) api.Comparison {
 	result := api.Comparison{
-		Left:         left,
+		Left:         left.Text,
 		LeftContext:  s.cluster.Contexts().Current.Name,
 		RightContext: against.Name,
 	}
@@ -41,13 +41,15 @@ func (s *Server) against(r *http.Request, ref api.ObjectRef, against api.Context
 		result.Missing = missingReason(err)
 		return result
 	}
-	right, renderErr := compare.Rendered(raw, keep)
+	right, renderErr := compare.Render(raw, keep)
 	if renderErr != nil {
 		result.Missing = renderErr.Error()
 		return result
 	}
-	result.Right = right
-	result.Identical = left == right
+	result.Right = right.Text
+	result.Identical = left.Text == right.Text
+	result.Stripped = compare.Union(left.Stripped, right.Stripped)
+	result.HiddenDifferences = result.Identical && left.Authored != right.Authored
 	return result
 }
 
@@ -75,7 +77,7 @@ func (s *Server) compareKind(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	byName := ref.Namespace != "" && far.Namespace != ref.Namespace
-	objects := compare.Kinds(here, there, byName)
+	objects := compare.Kinds(here, there, byName, query.Get("raw") == queryTrue)
 	same, differs, onlyHere, onlyThere := compare.Tally(objects)
 	writeJSON(w, api.KindComparison{
 		Resource:      ref.Resource,

@@ -43,7 +43,7 @@ func TestObjectsOnBothSidesAreComparedNotJustCounted(t *testing.T) {
 		deploy("prod", "api", 13),
 	}
 
-	found := Kinds(left, right, false)
+	found := Kinds(left, right, false, false)
 
 	got := verdicts(found)
 	if got["prod/web"] != api.VerdictSame {
@@ -62,7 +62,7 @@ func TestTheServerSideFieldsDoNotCountAsDrift(t *testing.T) {
 	there.SetCreationTimestamp(metav1.NewTime(time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC)))
 	_ = unstructured.SetNestedField(there.Object, int64(7), "status", "readyReplicas")
 
-	found := Kinds([]*unstructured.Unstructured{here}, []*unstructured.Unstructured{there}, false)
+	found := Kinds([]*unstructured.Unstructured{here}, []*unstructured.Unstructured{there}, false, false)
 
 	if found[0].Verdict != api.VerdictSame {
 		t.Fatalf("verdict = %q, want same: only what a person wrote should count", found[0].Verdict)
@@ -73,7 +73,7 @@ func TestAnObjectOnlyOneSideHasIsNamedAsSuch(t *testing.T) {
 	left := []*unstructured.Unstructured{deploy("prod", "web", 2), deploy("prod", "here-only", 1)}
 	right := []*unstructured.Unstructured{deploy("prod", "web", 2), deploy("prod", "there-only", 1)}
 
-	found := Kinds(left, right, false)
+	found := Kinds(left, right, false, false)
 
 	got := verdicts(found)
 	if got["prod/here-only"] != api.VerdictOnlyHere {
@@ -91,7 +91,7 @@ func TestTheSameNameInTwoNamespacesIsTwoObjects(t *testing.T) {
 	left := []*unstructured.Unstructured{deploy("prod", "web", 2)}
 	right := []*unstructured.Unstructured{deploy("staging", "web", 2)}
 
-	found := Kinds(left, right, false)
+	found := Kinds(left, right, false, false)
 
 	if len(found) != 2 {
 		t.Fatalf("objects = %+v, want the namespace to keep them apart", found)
@@ -102,7 +102,7 @@ func TestNamespacesOfTheirOwnAreMatchedByNameAlone(t *testing.T) {
 	left := []*unstructured.Unstructured{deploy("prod", "web", 2)}
 	right := []*unstructured.Unstructured{deploy("staging", "web", 2)}
 
-	found := Kinds(left, right, true)
+	found := Kinds(left, right, true, false)
 
 	if len(found) != 1 {
 		t.Fatalf("objects = %+v, want one pair", found)
@@ -119,7 +119,7 @@ func TestTheLineCountMatchesWhatChanged(t *testing.T) {
 	left := []*unstructured.Unstructured{deploy("prod", "web", 2)}
 	right := []*unstructured.Unstructured{deploy("prod", "web", 3)}
 
-	found := Kinds(left, right, false)
+	found := Kinds(left, right, false, false)
 
 	if found[0].Lines != 2 {
 		t.Fatalf("lines = %d, want the replicas line on each side", found[0].Lines)
@@ -133,7 +133,7 @@ func TestObjectsComeBackInAStableOrder(t *testing.T) {
 		deploy("apps", "alpha", 1),
 	}
 
-	found := Kinds(left, nil, false)
+	found := Kinds(left, nil, false, false)
 
 	order := make([]string, 0, len(found))
 	for _, object := range found {
@@ -148,7 +148,7 @@ func TestObjectsComeBackInAStableOrder(t *testing.T) {
 }
 
 func TestTwoEmptySidesCompareToNothing(t *testing.T) {
-	found := Kinds(nil, nil, false)
+	found := Kinds(nil, nil, false, false)
 
 	if len(found) != 0 {
 		t.Fatalf("objects = %+v, want none", found)
@@ -185,7 +185,7 @@ func TestClusterScopedObjectsCompareWithoutANamespace(t *testing.T) {
 	}}
 	there := here.DeepCopy()
 
-	found := Kinds([]*unstructured.Unstructured{here}, []*unstructured.Unstructured{there}, false)
+	found := Kinds([]*unstructured.Unstructured{here}, []*unstructured.Unstructured{there}, false, false)
 
 	if len(found) != 1 || found[0].Verdict != api.VerdictSame {
 		t.Fatalf("found = %+v, want one identical cluster-scoped object", found)

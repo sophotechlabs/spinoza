@@ -34,6 +34,9 @@ function verdictColor(verdict: Verdict): string {
 }
 
 function detail(object: KindDiff): string {
+  if (object.verdict === 'same' && object.hiddenDifferences === true) {
+    return 'differs only in fields the cluster allocates';
+  }
   if (object.verdict !== 'differs') {
     return '';
   }
@@ -64,6 +67,7 @@ export default function KindCompare({ kind, namespace, target, onOpen }: KindCom
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [driftOnly, setDriftOnly] = useState(true);
+  const [raw, setRaw] = useState(false);
   const [heldScope, setHeldScope] = useState(scope);
 
   if (scope !== heldScope) {
@@ -78,7 +82,7 @@ export default function KindCompare({ kind, namespace, target, onOpen }: KindCom
     setBusy(true);
     setError(null);
     try {
-      const next = await fetchKindComparison(kind, namespace, target);
+      const next = await fetchKindComparison(kind, namespace, target, raw);
       if (latestScope.current === startedOn) {
         setResult(next);
       }
@@ -118,6 +122,18 @@ export default function KindCompare({ kind, namespace, target, onOpen }: KindCom
             }}
           />
           Only what differs
+        </label>
+        <label className="flex items-center gap-1 text-fg-muted">
+          <input
+            type="checkbox"
+            checked={raw}
+            onChange={(event) => {
+              setResult(null);
+              setError(null);
+              setRaw(event.target.checked);
+            }}
+          />
+          Show everything
         </label>
         {busy && <span className="text-fg-muted">reading both clusters</span>}
       </div>

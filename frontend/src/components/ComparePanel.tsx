@@ -26,7 +26,7 @@ const SIDE_BY_SIDE_FROM = 900;
 
 function summary(result: Comparison): string {
   if (result.identical) {
-    return 'identical once the per-cluster fields are stripped';
+    return identicalSummary(result);
   }
   const lines = differingLines(result.left, result.right);
   const sections = changedSections(result.left, result.right);
@@ -34,6 +34,17 @@ function summary(result: Comparison): string {
     return `${String(lines)} lines differ`;
   }
   return `${String(lines)} lines differ · ${sections.join(', ')}`;
+}
+
+function identicalSummary(result: Comparison): string {
+  const stripped = result.stripped ?? [];
+  if (stripped.length === 0) {
+    return 'identical';
+  }
+  if (result.hiddenDifferences === true) {
+    return `identical apart from fields the cluster allocates, which do differ: ${stripped.join(', ')}; tick Show everything to see them`;
+  }
+  return `identical; left out because the cluster allocates them: ${stripped.join(', ')}`;
 }
 
 function reason(err: unknown): string {

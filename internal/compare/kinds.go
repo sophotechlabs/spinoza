@@ -9,7 +9,7 @@ import (
 	"github.com/sophotechlabs/spinoza/internal/api"
 )
 
-func Kinds(left, right []*unstructured.Unstructured, byName bool) []api.KindDiff {
+func Kinds(left, right []*unstructured.Unstructured, byName, keep bool) []api.KindDiff {
 	here := index(left, byName)
 	there := index(right, byName)
 
@@ -20,7 +20,7 @@ func Kinds(left, right []*unstructured.Unstructured, byName bool) []api.KindDiff
 			out = append(out, verdictFor(object, api.VerdictOnlyHere, 0))
 			continue
 		}
-		out = append(out, compared(object, counterpart))
+		out = append(out, compared(object, counterpart, keep))
 	}
 	for key, object := range there {
 		_, paired := here[key]
@@ -33,9 +33,26 @@ func Kinds(left, right []*unstructured.Unstructured, byName bool) []api.KindDiff
 	return out
 }
 
-func compared(here, there *unstructured.Unstructured) api.KindDiff {
+func compared(here, there *unstructured.Unstructured, keep bool) api.KindDiff {
+	if keep {
+		return comparedRaw(here, there)
+	}
 	left, leftErr := YAML(Normalise(here))
 	right, rightErr := YAML(Normalise(there))
+	if leftErr != nil || rightErr != nil {
+		return verdictFor(here, api.VerdictDiffers, 0)
+	}
+	if left != right {
+		return verdictFor(here, api.VerdictDiffers, changedLines(left, right))
+	}
+	same := verdictFor(here, api.VerdictSame, 0)
+	same.HiddenDifferences = allocationsDiffer(here, there)
+	return same
+}
+
+func comparedRaw(here, there *unstructured.Unstructured) api.KindDiff {
+	left, leftErr := YAML(here)
+	right, rightErr := YAML(there)
 	if leftErr != nil || rightErr != nil {
 		return verdictFor(here, api.VerdictDiffers, 0)
 	}
@@ -43,6 +60,15 @@ func compared(here, there *unstructured.Unstructured) api.KindDiff {
 		return verdictFor(here, api.VerdictSame, 0)
 	}
 	return verdictFor(here, api.VerdictDiffers, changedLines(left, right))
+}
+
+func allocationsDiffer(here, there *unstructured.Unstructured) bool {
+	left, leftErr := YAML(authored(here))
+	right, rightErr := YAML(authored(there))
+	if leftErr != nil || rightErr != nil {
+		return false
+	}
+	return left != right
 }
 
 func verdictFor(object *unstructured.Unstructured, verdict string, lines int) api.KindDiff {
