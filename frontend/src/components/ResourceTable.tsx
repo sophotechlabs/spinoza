@@ -19,14 +19,7 @@ import type {
   VisibilityState,
 } from '@tanstack/react-table';
 import { useVirtualizer } from '@tanstack/react-virtual';
-import type {
-  Column,
-  Metrics,
-  ObjectRef,
-  ResourceDescriptor,
-  ResourceUsage,
-  Row,
-} from '../lib/types';
+import type { Column, Metrics, ResourceDescriptor, ResourceUsage, Row } from '../lib/types';
 import {
   useSubColumns,
   useSubError,
@@ -65,6 +58,7 @@ import WorkspaceHeader from './WorkspaceHeader';
 import ContainerSquares from './ContainerSquares';
 import UsageBar from './UsageBar';
 import BulkBar from './BulkBar';
+import type { BulkTarget } from './BulkBar';
 import CopyButton from './CopyButton';
 import ColumnResizeHandle from './ColumnResizeHandle';
 import CapabilityState from './CapabilityState';
@@ -684,7 +678,7 @@ export default function ResourceTable({
 
   const hideable = table.getAllLeafColumns().filter((column) => column.getCanHide());
   const chosen = table.getSelectedRowModel().rows;
-  let targets: ObjectRef[] = [];
+  let targets: BulkTarget[] = [];
   if (active !== null) {
     targets = chosen.map((row) => ({
       group: active.group,
@@ -692,6 +686,7 @@ export default function ResourceTable({
       resource: active.resource,
       namespace: row.original.namespace,
       name: row.original.name,
+      uid: row.original.uid,
     }));
   }
 

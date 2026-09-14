@@ -67,8 +67,9 @@ export async function applyObject(
   return parseObjectDetail(await response.json());
 }
 
-export async function deleteObject(ref: ObjectRef, confirm?: string): Promise<void> {
+export async function deleteObject(ref: ObjectRef, uid: string, confirm?: string): Promise<void> {
   const params = new URLSearchParams(refQuery(ref));
+  params.set('uid', uid);
   if (confirm !== undefined) {
     params.set('confirm', confirm);
   }

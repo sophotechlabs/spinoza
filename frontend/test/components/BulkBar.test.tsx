@@ -2,20 +2,34 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import BulkBar from '../../src/components/BulkBar';
-import type { ObjectRef } from '../../src/lib/types';
+import type { BulkTarget } from '../../src/components/BulkBar';
 import { useToastsStore } from '../../src/store/toasts';
 import { useContextsStore } from '../../src/store/contexts';
 import { bumpClusterEpoch, useClusterStore } from '../../src/store/cluster';
 
-function podRef(name: string): ObjectRef {
-  return { group: '', version: 'v1', resource: 'pods', namespace: 'prod', name };
+function podRef(name: string): BulkTarget {
+  return {
+    group: '',
+    version: 'v1',
+    resource: 'pods',
+    namespace: 'prod',
+    name,
+    uid: `uid-${name}`,
+  };
 }
 
-function deploymentRef(name: string): ObjectRef {
-  return { group: 'apps', version: 'v1', resource: 'deployments', namespace: 'prod', name };
+function deploymentRef(name: string): BulkTarget {
+  return {
+    group: 'apps',
+    version: 'v1',
+    resource: 'deployments',
+    namespace: 'prod',
+    name,
+    uid: `uid-${name}`,
+  };
 }
 
-function renderBar(targets: ObjectRef[], kind = 'Pod') {
+function renderBar(targets: BulkTarget[], kind = 'Pod') {
   const onDone = vi.fn();
   const onClear = vi.fn();
   const view = render(<BulkBar kind={kind} targets={targets} onDone={onDone} onClear={onClear} />);
@@ -150,6 +164,8 @@ describe('BulkBar', () => {
     await user.click(await screen.findByRole('button', { name: 'Confirm' }));
 
     expect(objectCalls(fetchMock)).toHaveLength(2);
+    expect(objectCalls(fetchMock)[0]).toContain('name=web-0&uid=uid-web-0');
+    expect(objectCalls(fetchMock)[1]).toContain('name=web-1&uid=uid-web-1');
     expect(useToastsStore.getState().toasts).toEqual([
       expect.objectContaining({ tone: 'ok', message: 'Deleted 2' }),
     ]);

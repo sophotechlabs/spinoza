@@ -134,8 +134,8 @@ describe('object client', () => {
   it('deletes an object', async () => {
     const mock = stubFetch(() => Promise.resolve({ ok: true, json: () => Promise.resolve({}) }));
 
-    await expect(deleteObject(ref)).resolves.toBeUndefined();
-    expect(mock).toHaveBeenCalledWith(`/api/object?${refQuery(ref)}`, {
+    await expect(deleteObject(ref, 'uid-web')).resolves.toBeUndefined();
+    expect(mock).toHaveBeenCalledWith(`/api/object?${refQuery(ref)}&uid=uid-web`, {
       method: 'DELETE',
       signal: anySignal(),
     });
@@ -144,15 +144,16 @@ describe('object client', () => {
   it('carries the typed confirmation on a protected cluster', async () => {
     const mock = stubFetch(() => Promise.resolve({ ok: true, json: () => Promise.resolve({}) }));
 
-    await deleteObject(ref, 'web');
+    await deleteObject(ref, 'uid-web', 'web');
 
     expect(String(mock.mock.calls[0][0])).toContain('confirm=web');
+    expect(String(mock.mock.calls[0][0])).toContain('uid=uid-web');
   });
 
   it('reports a delete failure', async () => {
     stubFetch(() => failWithoutBody(403));
 
-    await expect(deleteObject(ref)).rejects.toThrow('delete failed with status 403');
+    await expect(deleteObject(ref, 'uid-web')).rejects.toThrow('delete failed with status 403');
   });
 
   it('fetches events for an object', async () => {

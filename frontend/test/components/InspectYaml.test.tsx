@@ -260,6 +260,11 @@ describe('InspectYaml', () => {
     await user.click(screen.getByRole('button', { name: 'Confirm' }));
 
     expect(onDeleted).toHaveBeenCalledTimes(1);
+    const sent = vi
+      .mocked(fetch)
+      .mock.calls.map((call) => call[0])
+      .filter((url): url is string => typeof url === 'string');
+    expect(sent.find((url) => url.startsWith('/api/object'))).toContain('uid=uid-web');
     expect(useToastsStore.getState().toasts).toEqual([
       expect.objectContaining({ tone: 'ok', message: 'Deleted Deployment web' }),
     ]);

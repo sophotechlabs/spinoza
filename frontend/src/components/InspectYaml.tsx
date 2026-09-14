@@ -192,7 +192,7 @@ export default function InspectYaml({ target, detail, onApplied, onDeleted }: In
     setError(null);
     setNotice(null);
     try {
-      await deleteObject(target, confirmName(protectedCluster, target.name));
+      await deleteObject(target, detail.uid, confirmName(protectedCluster, target.name));
       if (operation.current !== token) {
         return;
       }

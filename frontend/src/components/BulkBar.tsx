@@ -10,9 +10,13 @@ import ConfirmByName from './ConfirmByName';
 import { Action } from './ActionGroup';
 import { actionClass } from '../lib/actions';
 
+export interface BulkTarget extends ObjectRef {
+  uid: string;
+}
+
 interface BulkBarProps {
   kind: string;
-  targets: ObjectRef[];
+  targets: BulkTarget[];
   onDone: () => void;
   onClear: () => void;
 }
@@ -162,7 +166,7 @@ export default function BulkBar({ kind, targets, onDone, onClear }: BulkBarProps
     void check(pending, targets);
   }
 
-  async function runAll(each: (ref: ObjectRef) => Promise<unknown>, verb: string) {
+  async function runAll(each: (ref: BulkTarget) => Promise<unknown>, verb: string) {
     setBusy(true);
     setConfirming(null);
     let done = 0;
@@ -186,10 +190,10 @@ export default function BulkBar({ kind, targets, onDone, onClear }: BulkBarProps
 
   function confirmDelete() {
     if (protectedCluster) {
-      void runAll((ref) => deleteObject(ref, ref.name), 'Deleted');
+      void runAll((ref) => deleteObject(ref, ref.uid, ref.name), 'Deleted');
       return;
     }
-    void runAll((ref) => deleteObject(ref), 'Deleted');
+    void runAll((ref) => deleteObject(ref, ref.uid), 'Deleted');
   }
 
   function confirmRestart() {
