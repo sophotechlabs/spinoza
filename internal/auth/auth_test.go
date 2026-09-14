@@ -202,7 +202,7 @@ func TestARevokedSessionIsNotStillValid(t *testing.T) {
 		t.Fatal("a current session was not valid")
 	}
 
-	held.revoked.revoke(who.Session)
+	held.revoked.revoke(t.Context(), who.Session)
 	if held.StillValid(req, who) {
 		t.Fatal("a revoked session stayed valid")
 	}

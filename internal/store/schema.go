@@ -206,6 +206,11 @@ CREATE TABLE IF NOT EXISTS audit_runs (
 	scanned INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS audit_runs_by_time ON audit_runs (cluster, at DESC, id DESC);
+`, `
+CREATE TABLE IF NOT EXISTS revoked_sessions (
+	session TEXT PRIMARY KEY,
+	until INTEGER NOT NULL
+);
 `}
 
 func migrate(ctx context.Context, db *sql.DB) error {

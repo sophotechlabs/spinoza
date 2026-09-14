@@ -74,6 +74,7 @@ type Config struct {
 	ViewerGroups   []string
 	Proxy          ProxyConfig
 	OIDC           OIDCConfig
+	Revocations    RevocationStore
 }
 
 func (cfg Config) withDefaults() Config {

@@ -65,6 +65,12 @@ func newAuthenticator(ctx context.Context, cfg Config, entropy io.Reader) (*Auth
 		exchanges: newExchangeBudget(8, 4),
 		logouts:   newLogoutVerificationBudget(time.Now),
 	}
+	if cfg.Revocations != nil {
+		keepErr := auth.revoked.keep(ctx, cfg.Revocations)
+		if keepErr != nil {
+			slog.Warn("sessions revoked before this restart could not be read back, so a revoked cookie may work again until it expires", "error", keepErr)
+		}
+	}
 	if cfg.Mode != ModeOIDC {
 		return auth, nil
 	}
@@ -304,7 +310,7 @@ func (a *Authenticator) identityFrom(claims claimSet) (Identity, error) {
 func (a *Authenticator) Logout(w http.ResponseWriter, r *http.Request) {
 	who, held := a.Identify(w, r)
 	if held && a.oidc != nil {
-		a.revoked.revoke(who.Session)
+		a.revoked.revoke(r.Context(), who.Session)
 	}
 	a.sessions.drop(w, SessionCookie)
 	http.Redirect(w, r, a.afterLogout(), http.StatusFound)
@@ -367,7 +373,7 @@ func (a *Authenticator) BackchannelLogout(w http.ResponseWriter, r *http.Request
 		w.WriteHeader(http.StatusOK)
 		return
 	}
-	a.revoked.revoke(claims.SID)
+	a.revoked.revoke(r.Context(), claims.SID)
 	slog.Info("a session was ended by the identity provider", "session", claims.SID)
 	w.Header().Set("Cache-Control", "no-store")
 	w.WriteHeader(http.StatusOK)
