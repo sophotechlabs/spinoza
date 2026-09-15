@@ -1133,7 +1133,7 @@ vulns: vulnerability-exceptions
         exit 1
     fi
     bash test/trivy-helm-coverage.sh "$report"
-    osv-scanner scan source --recursive .
+    osv-scanner scan source --recursive --no-call-analysis=go .
 
 vulnerability-exceptions: stub-assets
     #!/usr/bin/env bash
