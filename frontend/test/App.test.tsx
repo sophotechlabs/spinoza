@@ -1615,7 +1615,7 @@ describe('the address bar', () => {
       expect(posted).toHaveBeenCalledTimes(1);
     });
 
-    goBackTo('#context=other-cluster&version=v1&resource=pods&kind=Pod&namespace=prod');
+    goBackTo('#context=other-cluster&group=apps&version=v1&resource=deployments&kind=Deployment');
 
     expect(posted).toHaveBeenCalledTimes(1);
     act(() => {

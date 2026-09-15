@@ -331,6 +331,12 @@ describe('what a row is called', () => {
     expect(verbLabel(entry({ source: 'change', verb: 'removed' }))).toBe('went');
     expect(verbLabel(entry({ source: 'change', verb: 'changed' }))).toBe('changed');
   });
+
+  it('marks a hole in the timeline as not recorded', () => {
+    expect(verbLabel(entry({ source: 'change', verb: 'gap', outcome: 'lost' }))).toBe(
+      'not recorded',
+    );
+  });
 });
 
 describe('forgetHistory', () => {
