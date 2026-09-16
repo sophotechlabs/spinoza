@@ -363,6 +363,32 @@ describe('useRouter', () => {
     expect(window.location.hash).toBe('#version=v1&resource=pods&kind=Pod');
   });
 
+  it('asks once when the browser delivers hashchange while the question is open', () => {
+    let delivered = false;
+    const confirm = vi.fn().mockImplementation(() => {
+      if (!delivered) {
+        delivered = true;
+        window.dispatchEvent(new HashChangeEvent('hashchange'));
+      }
+      return false;
+    });
+    vi.stubGlobal('confirm', confirm);
+    const { result } = renderHook(() => useRouter());
+    act(() => {
+      result.current.navigate(route({ view: 'resources', resource: pods }));
+    });
+    setUnsaved(true);
+
+    act(() => {
+      goTo('');
+      window.dispatchEvent(new PopStateEvent('popstate'));
+    });
+
+    expect(confirm).toHaveBeenCalledTimes(1);
+    expect(result.current.route.resource).toEqual(pods);
+    expect(window.location.hash).toBe('#version=v1&resource=pods&kind=Pod');
+  });
+
   it('lets the back button through once the draft is given up', () => {
     vi.stubGlobal('confirm', vi.fn().mockReturnValue(true));
     const { result } = renderHook(() => useRouter());

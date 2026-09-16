@@ -213,12 +213,23 @@ export function useRouter(): Router {
   }, []);
 
   useEffect(() => {
+    let asking = false;
     function sync() {
+      if (asking) {
+        return;
+      }
       const arrived = decodeRoute(currentHash());
       if (encodeRoute(arrived) === encodeRoute(held.current)) {
         return;
       }
-      if (!mayDiscard()) {
+      asking = true;
+      let allowed = false;
+      try {
+        allowed = mayDiscard();
+      } finally {
+        asking = false;
+      }
+      if (!allowed) {
         window.history.pushState(null, '', urlFor(encodeRoute(held.current)));
         return;
       }
