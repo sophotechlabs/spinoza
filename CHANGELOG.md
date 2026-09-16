@@ -1,5 +1,54 @@
 # Changelog
 
+## [2.1.0](https://github.com/sophotechlabs/spinoza/compare/v2.0.0...v2.1.0) (2026-09-16)
+
+
+### Features
+
+* **compare:** say which fields the comparison ignored ([6f977b9](https://github.com/sophotechlabs/spinoza/commit/6f977b976fd650d3c2a041ad06e90968378cb180))
+* **compare:** say which fields the comparison ignored ([5ae40e6](https://github.com/sophotechlabs/spinoza/commit/5ae40e6cabca14b9cf4f9d00f18a19330fce54ca))
+* **metrics:** label where a series came from and when sampling began ([6e44445](https://github.com/sophotechlabs/spinoza/commit/6e4444571fb84ffdde6f96b1ee8a0d264e723542))
+
+
+### Bug Fixes
+
+* **auth:** keep back-channel revocations across a restart ([57927a9](https://github.com/sophotechlabs/spinoza/commit/57927a9dc3d10ba3f35caf99092b9c4e3fbf5a93))
+* **auth:** keep back-channel revocations across a restart ([58fb9e4](https://github.com/sophotechlabs/spinoza/commit/58fb9e44ffa5da8d4ae37385bbb1b6322ad0e220))
+* **http:** report a timed-out write as unknown rather than failed ([194fc68](https://github.com/sophotechlabs/spinoza/commit/194fc68611b9a4a2a08815b37f93b23365201ee2))
+* **resources:** honor namespace-only credentials, stable windows and uid-bound deletes ([ecff4a1](https://github.com/sophotechlabs/spinoza/commit/ecff4a127f40c79f82c923dcf4da12245316755f))
+* **resources:** refuse cached metrics history the reader cannot read fresh ([1fb054d](https://github.com/sophotechlabs/spinoza/commit/1fb054dd14984cffb27344f8881a66f6011a7475))
+* **resources:** release the cache build gate when a builder panics ([b6f306e](https://github.com/sophotechlabs/spinoza/commit/b6f306edcd9a896eea98dbc7d1221a15f17d4ab1))
+* **router:** ask before browser history discards an unsaved draft ([4094f65](https://github.com/sophotechlabs/spinoza/commit/4094f656850f416353c4af45c7046fdfbbcae40f))
+* **timeline:** record a durable gap when a batch could not be written ([f29e981](https://github.com/sophotechlabs/spinoza/commit/f29e981a95f9ec4c11bc0bc47a91b1a88bdcfe28))
+* **timeline:** record a durable gap when a batch could not be written ([93d03db](https://github.com/sophotechlabs/spinoza/commit/93d03db5f5af229309d152cdd9c0522eb3aac4f5))
+
+
+### Miscellaneous
+
+* **ci:** nightly report for 2026-09-16 ([#50](https://github.com/sophotechlabs/spinoza/issues/50)) ([169f2c8](https://github.com/sophotechlabs/spinoza/commit/169f2c80faa30e058dc71c58e7da06afd7cb0517))
+
+
+### CI
+
+* **release:** promote the latest image tag only after the lifecycle gate ([89051ce](https://github.com/sophotechlabs/spinoza/commit/89051ce7bcda667f73c1c8f19dab99e3f46c9073))
+
+
+### Documentation
+
+* match the docs to the update, masking, retention and toolchain contracts ([c567bb2](https://github.com/sophotechlabs/spinoza/commit/c567bb2db844df9ac79911e47493751eac9c13e8))
+
+
+### Tests
+
+* **clustermode:** keep the fixtures ahead of the ingress webhook and the provider ([58627d3](https://github.com/sophotechlabs/spinoza/commit/58627d3edebd017a15a52e8fbc0bedf15fa294d5))
+* **frontend:** cover the in-flight adoption guard and the timeline gap label ([c5f94bb](https://github.com/sophotechlabs/spinoza/commit/c5f94bbcadfe974c1d79f6d5a02eccf6cc9ba871))
+
+
+### Build
+
+* pin kubectl 1.36.4 and build on Go 1.27.1 ([2e27bd7](https://github.com/sophotechlabs/spinoza/commit/2e27bd733bce1eaff33c29d05998868fbacf8bd4))
+* **vulns:** skip the Go call analysis osv-scanner cannot run on a 1.27 tree ([496023f](https://github.com/sophotechlabs/spinoza/commit/496023f4c79297611a8ca3391907ec73b01f816b))
+
 ## [2.0.0](https://github.com/sophotechlabs/spinoza/compare/v1.30.0...v2.0.0) (2026-09-10)
 
 
