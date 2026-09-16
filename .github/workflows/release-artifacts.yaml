@@ -16,6 +16,7 @@ concurrency:
 jobs:
   version:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     permissions:
       contents: write
     outputs:
@@ -41,43 +42,12 @@ jobs:
             echo "version=$version"
           } >> "$GITHUB_OUTPUT"
 
-  validate-e2e:
-    if: needs.version.outputs.pending == 'true'
-    needs: version
-    permissions:
-      contents: read
-    uses: ./.github/workflows/e2e.yaml
-    with:
-      tier: nightly
-      ref: ${{ needs.version.outputs.sha }}
-
-  validate-mutation:
-    if: needs.version.outputs.pending == 'true'
-    needs: version
-    permissions:
-      contents: read
-    uses: ./.github/workflows/go-mutation.yaml
-    with:
-      ref: ${{ needs.version.outputs.sha }}
-
-  validate-fuzz:
-    if: needs.version.outputs.pending == 'true'
-    needs: version
-    permissions:
-      contents: read
-    uses: ./.github/workflows/go-fuzz.yaml
-    with:
-      duration: 10m
-      ref: ${{ needs.version.outputs.sha }}
-
   dist:
     if: needs.version.outputs.pending == 'true'
     needs:
       - version
-      - validate-e2e
-      - validate-mutation
-      - validate-fuzz
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     permissions:
       contents: write
       id-token: write
@@ -131,10 +101,8 @@ jobs:
     if: needs.version.outputs.pending == 'true'
     needs:
       - version
-      - validate-e2e
-      - validate-mutation
-      - validate-fuzz
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     permissions:
       contents: read
       packages: write
@@ -176,6 +144,7 @@ jobs:
       - dist
       - image
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     concurrency:
       group: release-checksums
       cancel-in-progress: false
@@ -217,6 +186,7 @@ jobs:
       - version
       - dist
     runs-on: macos-latest
+    timeout-minutes: 45
     concurrency:
       group: release-checksums
       cancel-in-progress: false
@@ -252,6 +222,7 @@ jobs:
       - dist
       - desktop
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     concurrency:
       group: release-checksums
       cancel-in-progress: false
@@ -283,57 +254,6 @@ jobs:
           GH_REPO: ${{ github.repository }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-  cluster-mode-release:
-    if: needs.version.outputs.pending == 'true'
-    needs:
-      - version
-      - chart
-    runs-on: ubuntu-latest
-    timeout-minutes: 90
-    permissions:
-      contents: read
-      packages: read
-    env:
-      SPINOZA_KIND_CLUSTER: release-cluster-mode
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-        with:
-          persist-credentials: false
-          ref: ${{ needs.version.outputs.sha }}
-      - uses: jdx/mise-action@3c2e0cf82a5b2e5249f0d3635a4d83d0ae861518
-        with:
-          cache: false
-          install_args: just go kind kubectl helm
-      - id: previous
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          tag=$(gh api "repos/${GITHUB_REPOSITORY}/releases/latest" --jq .tag_name)
-          version=${tag#v}
-          if [ -z "$version" ]; then
-            echo "the repository has no previous stable release"
-            exit 1
-          fi
-          echo "version=$version" >> "$GITHUB_OUTPUT"
-      - run: printf '%s' "$GH_TOKEN" | helm registry login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      - run: just test-cluster-mode-release "$PREVIOUS" "$CURRENT"
-        env:
-          PREVIOUS: ${{ steps.previous.outputs.version }}
-          CURRENT: ${{ needs.version.outputs.version }}
-      - run: just cluster-mode-diagnostics
-        if: failure()
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
-        if: failure()
-        with:
-          name: cluster-mode-release
-          path: .tmp/cm/diagnostics
-          if-no-files-found: ignore
-          retention-days: 14
-      - run: just cluster-mode-down
-        if: always()
-
   publish:
     if: needs.version.outputs.pending == 'true'
     needs:
@@ -342,8 +262,8 @@ jobs:
       - desktop
       - desktop-linux
       - chart
-      - cluster-mode-release
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     concurrency:
       group: release-checksums
       cancel-in-progress: false
@@ -364,7 +284,7 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Move the latest image tag onto the release that passed the lifecycle gate
+      - name: Move the latest image tag onto the release being published
         run: docker buildx imagetools create --tag "ghcr.io/${REPOSITORY}:latest" "ghcr.io/${REPOSITORY}:${VERSION}"
         env:
           REPOSITORY: ${{ github.repository }}
@@ -388,12 +308,3 @@ jobs:
           TAG: ${{ needs.version.outputs.tag }}
           GH_REPO: ${{ github.repository }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-  install:
-    if: needs.version.outputs.pending == 'true'
-    needs:
-      - version
-      - publish
-    uses: ./.github/workflows/install.yaml
-    with:
-      version: ${{ needs.version.outputs.tag }}

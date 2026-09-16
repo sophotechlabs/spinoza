@@ -64,6 +64,85 @@ jobs:
     with:
       duration: 10m
 
+  published:
+    needs: guard
+    if: needs.guard.outputs.run == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      current: ${{ steps.releases.outputs.current }}
+      previous: ${{ steps.releases.outputs.previous }}
+      tag: ${{ steps.releases.outputs.tag }}
+    steps:
+      - id: releases
+        env:
+          GH_REPO: ${{ github.repository }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          releases="$RUNNER_TEMP/releases.json"
+          gh release list --exclude-drafts --exclude-pre-releases --limit 20 --json tagName,isLatest > "$releases"
+          current=$(jq -r '[.[] | select(.isLatest)] | .[0].tagName // ""' "$releases")
+          previous=$(jq -r --arg current "$current" '[.[] | select(.tagName != $current)] | .[0].tagName // ""' "$releases")
+          if [ -z "$current" ] || [ -z "$previous" ]; then
+            echo "the lifecycle check needs two published releases"
+            exit 1
+          fi
+          {
+            echo "current=${current#v}"
+            echo "previous=${previous#v}"
+            echo "tag=$current"
+          } >> "$GITHUB_OUTPUT"
+
+  cluster-mode-release:
+    needs:
+      - guard
+      - published
+    if: needs.guard.outputs.run == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    permissions:
+      contents: read
+      packages: read
+    env:
+      SPINOZA_KIND_CLUSTER: nightly-cluster-mode
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: jdx/mise-action@3c2e0cf82a5b2e5249f0d3635a4d83d0ae861518
+        with:
+          cache: false
+          install_args: just go kind kubectl helm
+      - run: printf '%s' "$GH_TOKEN" | helm registry login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - run: just test-cluster-mode-release "$PREVIOUS" "$CURRENT"
+        env:
+          PREVIOUS: ${{ needs.published.outputs.previous }}
+          CURRENT: ${{ needs.published.outputs.current }}
+      - run: just cluster-mode-diagnostics
+        if: failure()
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        if: failure()
+        with:
+          name: cluster-mode-release
+          path: .tmp/cm/diagnostics
+          if-no-files-found: ignore
+          retention-days: 14
+      - run: just cluster-mode-down
+        if: always()
+
+  install:
+    needs:
+      - guard
+      - published
+    if: needs.guard.outputs.run == 'true'
+    permissions:
+      contents: read
+    uses: ./.github/workflows/install.yaml
+    with:
+      version: ${{ needs.published.outputs.tag }}
+
   repeat:
     needs: guard
     if: needs.guard.outputs.run == 'true'
@@ -92,6 +171,8 @@ jobs:
       - mutation
       - fuzz
       - repeat
+      - cluster-mode-release
+      - install
     if: ${{ always() && needs.guard.outputs.run == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
