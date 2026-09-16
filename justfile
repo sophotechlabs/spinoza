@@ -852,7 +852,25 @@ cluster-mode-up:
     kubectl --context {{ cm_context }} -n keycloak create configmap spinoza-realm \
         --from-file=realm.json={{ cm_dir }}/realm.json --dry-run=client -o yaml \
         | kubectl --context {{ cm_context }} apply -f -
-    kubectl --context {{ cm_context }} apply -f {{ cm_dir }}/keycloak.yaml
+    admitted() {
+        local file="$1"
+        local attempt
+        local out
+        for attempt in $(seq 1 30); do
+            if out=$(kubectl --context {{ cm_context }} apply -f "$file" 2>&1); then
+                printf '%s\n' "$out"
+                return 0
+            fi
+            if ! grep -q 'validate.nginx.ingress.kubernetes.io' <<< "$out"; then
+                printf '%s\n' "$out" >&2
+                return 1
+            fi
+            sleep 2
+        done
+        printf '%s\n' "$out" >&2
+        return 1
+    }
+    admitted {{ cm_dir }}/keycloak.yaml
     kubectl --context {{ cm_context }} apply -f {{ cm_dir }}/shim.yaml
     kubectl --context {{ cm_context }} apply -f {{ cm_dir }}/workloads.yaml
     realm=$(shasum -a 256 {{ cm_dir }}/realm.json | cut -d' ' -f1)

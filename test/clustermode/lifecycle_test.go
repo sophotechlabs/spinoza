@@ -54,11 +54,13 @@ func TestTheProviderCanEndASessionFromItsOwnSide(t *testing.T) {
 	if !whoami(t, signIn(t, "bob")).Authenticated {
 		t.Fatal("bob could not sign in again after the restart")
 	}
+	endProviderSessions(t, "bob")
 }
 
 func TestALogoutTokenNamingNoSessionLeavesTheCookieAlone(t *testing.T) {
 	values := oidcValues()
 	values["auth.oidc.clientID"] = "spinoza-nosid"
+	endProviderSessions(t, "bob")
 	deploy(t, values)
 	bob := signIn(t, "bob")
 	if !whoami(t, bob).Authenticated {
@@ -67,14 +69,32 @@ func TestALogoutTokenNamingNoSessionLeavesTheCookieAlone(t *testing.T) {
 
 	endProviderSessions(t, "bob")
 
-	time.Sleep(5 * time.Second)
+	awaitLogLine(t, "spinoza cannot map to one session")
 	if !whoami(t, bob).Authenticated {
 		t.Fatal("a logout naming only a subject ended a session spinoza could not identify")
 	}
-	logs := kubectl(t, "-n", namespace, "logs", "deployment/"+release, "--tail=200")
-	if !strings.Contains(logs, "spinoza cannot map to one session") {
-		t.Fatalf("spinoza did not say it could not act on the logout:\n%s", truncate(logs))
+}
+
+func awaitLogLine(t *testing.T, want string) {
+	t.Helper()
+	deadline := time.Now().Add(2 * time.Minute)
+	last := ""
+	for time.Now().Before(deadline) {
+		last = kubectl(t, "-n", namespace, "logs", "-l", "app.kubernetes.io/name="+release, "--tail=-1")
+		if strings.Contains(last, want) {
+			return
+		}
+		time.Sleep(time.Second)
 	}
+	t.Fatalf("spinoza never logged %q; the log ends with:\n%s", want, lastLines(last, 40))
+}
+
+func lastLines(text string, keep int) string {
+	lines := strings.Split(strings.TrimRight(text, "\n"), "\n")
+	if len(lines) > keep {
+		lines = lines[len(lines)-keep:]
+	}
+	return strings.Join(lines, "\n")
 }
 
 func TestEachPersonsSettingsSurviveThePodBeingReplaced(t *testing.T) {
