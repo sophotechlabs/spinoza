@@ -1,5 +1,18 @@
 # Changelog
 
+## [2.1.1](https://github.com/sophotechlabs/spinoza/compare/v2.1.0...v2.1.1) (2026-09-16)
+
+
+### Bug Fixes
+
+* **router:** ask once when one back press arrives as two events ([1a5e794](https://github.com/sophotechlabs/spinoza/commit/1a5e79450efd8fc50791c71b8331862cfb2407c6))
+
+
+### CI
+
+* **release:** build and publish artifacts without waiting on the test estate ([2554997](https://github.com/sophotechlabs/spinoza/commit/2554997ce6658c1fa441560e44a3b9b5d29d5738))
+* **release:** build and publish artifacts without waiting on the test estate ([5e00be4](https://github.com/sophotechlabs/spinoza/commit/5e00be4e587c4ae8d4f996810c953d5826b406bc))
+
 ## [2.1.0](https://github.com/sophotechlabs/spinoza/compare/v2.0.0...v2.1.0) (2026-09-16)
 
 
