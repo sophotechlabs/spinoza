@@ -15,6 +15,7 @@ const INFRASTRUCTURE = new Set([
   "suite-contract",
   "e2e-coverage",
   "guard",
+  "published",
   "report",
 ]);
 

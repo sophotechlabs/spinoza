@@ -40,7 +40,7 @@ func TestReleaseArtifactVersionContract(t *testing.T) {
 
 func TestReleaseArtifactBuildsAreGatedOnPendingWork(t *testing.T) {
 	workflow := readYAML[workflowFile](t, ".github/workflows/release-artifacts.yaml")
-	jobs := []string{"dist", "image", "chart", "desktop", "desktop-linux", "cluster-mode-release", "publish", "install"}
+	jobs := []string{"dist", "image", "chart", "desktop", "desktop-linux", "publish"}
 	for _, name := range jobs {
 		job := requireJob(t, workflow, name)
 		if !strings.Contains(job.If, "pending") {
@@ -49,36 +49,39 @@ func TestReleaseArtifactBuildsAreGatedOnPendingWork(t *testing.T) {
 	}
 }
 
-func TestPublishedClusterModeCanUpgradeAndRollBackBeforeRelease(t *testing.T) {
-	workflow := readYAML[workflowFile](t, ".github/workflows/release-artifacts.yaml")
+func TestPublishedClusterModeCanUpgradeAndRollBackEveryNight(t *testing.T) {
+	workflow := readYAML[workflowFile](t, ".github/workflows/nightly.yaml")
 	clusterMode := requireJob(t, workflow, "cluster-mode-release")
-	if !contains(clusterMode.Needs, "chart") {
-		t.Fatal("cluster-mode release validation does not wait for the published chart")
+	if !contains(clusterMode.Needs, "published") {
+		t.Fatal("the cluster-mode lifecycle check does not read the published releases")
 	}
 	if clusterMode.Permissions["packages"] != "read" {
-		t.Fatal("cluster-mode release validation cannot pull the published packages")
-	}
-	previous := requireStep(t, clusterMode, "previous")
-	if !strings.Contains(previous.Run, "releases/latest") {
-		t.Fatal("cluster-mode release validation does not resolve the previous stable release")
+		t.Fatal("the cluster-mode lifecycle check cannot pull the published packages")
 	}
 	if !containsRun(clusterMode.Steps, "helm registry login") {
-		t.Fatal("cluster-mode release validation does not authenticate to the chart registry")
-	}
-	if !containsRun(clusterMode.Steps, "test-cluster-mode-release") {
-		t.Fatal("cluster-mode release validation does not run the lifecycle test")
+		t.Fatal("the cluster-mode lifecycle check does not authenticate to the chart registry")
 	}
 	lifecycle := requireRunStep(t, clusterMode, "test-cluster-mode-release")
-	if lifecycle.Env["PREVIOUS"] != "${{ steps.previous.outputs.version }}" {
+	if lifecycle.Env["PREVIOUS"] != "${{ needs.published.outputs.previous }}" {
 		t.Fatalf("previous release = %q", lifecycle.Env["PREVIOUS"])
 	}
-	if lifecycle.Env["CURRENT"] != "${{ needs.version.outputs.version }}" {
+	if lifecycle.Env["CURRENT"] != "${{ needs.published.outputs.current }}" {
 		t.Fatalf("current release = %q", lifecycle.Env["CURRENT"])
 	}
 	requireClusterModeFailureHandling(t, clusterMode)
-	publish := requireJob(t, workflow, "publish")
-	if !contains(publish.Needs, "cluster-mode-release") {
-		t.Fatal("release publication does not wait for cluster-mode lifecycle validation")
+	published := requireJob(t, workflow, "published")
+	releases := requireStep(t, published, "releases")
+	if !strings.Contains(releases.Run, "--exclude-drafts") {
+		t.Fatal("the published releases step would compare against a draft")
+	}
+	for _, output := range []string{"current", "previous", "tag"} {
+		if published.Outputs[output] == "" {
+			t.Errorf("published job has no %s output", output)
+		}
+	}
+	report := requireJob(t, workflow, "report")
+	if !contains(report.Needs, "cluster-mode-release") {
+		t.Fatal("the nightly report does not wait for the cluster-mode lifecycle check")
 	}
 }
 
@@ -126,6 +129,24 @@ func TestClusterModeBrowsersRunEveryEngine(t *testing.T) {
 	requireClusterModeFailureHandling(t, browser)
 	auth := requireJob(t, workflow, "cluster-mode-auth")
 	requireClusterModeFailureHandling(t, auth)
+}
+
+func TestTheReleaseEndsPublished(t *testing.T) {
+	workflow := readYAML[workflowFile](t, ".github/workflows/release-artifacts.yaml")
+	dist := requireJob(t, workflow, "dist")
+	if !containsRun(dist.Steps, "gh release upload") {
+		t.Fatal("the dist job builds artifacts without uploading them to the release")
+	}
+	publish := requireJob(t, workflow, "publish")
+	for _, command := range []string{"just package-manifests", "just publish-asset", "gh release edit"} {
+		if !containsRun(publish.Steps, command) {
+			t.Errorf("the publish job does not run %q", command)
+		}
+	}
+	last := publish.Steps[len(publish.Steps)-1]
+	if !strings.Contains(last.Run, "--draft=false --latest") {
+		t.Fatalf("the release ends on %q, want the draft flipped to the latest release", last.Run)
+	}
 }
 
 func TestReleaseImagePublication(t *testing.T) {

@@ -26,6 +26,12 @@ const jobs = [
     completed_at: "2026-09-10T02:00:06Z",
   },
   {
+    name: "published",
+    conclusion: "success",
+    started_at: "2026-09-10T02:00:00Z",
+    completed_at: "2026-09-10T02:00:04Z",
+  },
+  {
     name: "gitops / webkit",
     conclusion: "success",
     started_at: "2026-09-10T02:01:00Z",

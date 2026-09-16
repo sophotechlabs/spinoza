@@ -130,10 +130,18 @@ func TestInstallSupersedesValidationButPreservesPublishedReleaseChecks(t *testin
 	if workflow.Concurrency.CancelInProgress != wantCancellation {
 		t.Fatalf("cancel-in-progress = %q, want %q", workflow.Concurrency.CancelInProgress, wantCancellation)
 	}
-	release := readYAML[workflowFile](t, ".github/workflows/release-artifacts.yaml")
-	version, ok := requireJob(t, release, "install").With["version"].(string)
-	if !ok || version != "${{ needs.version.outputs.tag }}" {
-		t.Fatalf("release install version = %q, want the detected release tag", version)
+	nightly := readYAML[workflowFile](t, ".github/workflows/nightly.yaml")
+	install := requireJob(t, nightly, "install")
+	version, ok := install.With["version"].(string)
+	if !ok || version != "${{ needs.published.outputs.tag }}" {
+		t.Fatalf("nightly install version = %q, want the published release tag", version)
+	}
+	if !contains(install.Needs, "published") {
+		t.Fatal("the nightly install check does not read the published release tag")
+	}
+	report := requireJob(t, nightly, "report")
+	if !contains(report.Needs, "install") {
+		t.Fatal("the nightly report does not wait for the install check")
 	}
 }
 

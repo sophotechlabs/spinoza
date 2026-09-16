@@ -28,40 +28,49 @@ func TestReleasePleaseOnlyCutsThePullRequest(t *testing.T) {
 	}
 }
 
-func TestReleaseArtifactsValidateBeforeAnythingIsBuilt(t *testing.T) {
+func TestReleaseArtifactsOnlyBuildAndPublish(t *testing.T) {
 	workflow := readYAML[workflowFile](t, ".github/workflows/release-artifacts.yaml")
-	validators := map[string]string{
-		"validate-e2e":      "./.github/workflows/e2e.yaml",
-		"validate-mutation": "./.github/workflows/go-mutation.yaml",
-		"validate-fuzz":     "./.github/workflows/go-fuzz.yaml",
-	}
-	for name, uses := range validators {
-		job := requireJob(t, workflow, name)
-		if job.Uses != uses {
-			t.Fatalf("%s uses %q, want %q", name, job.Uses, uses)
-		}
-		if !strings.Contains(job.If, "needs.version.outputs.pending") {
-			t.Fatalf("%s runs when no release is pending, which is every commit", name)
-		}
-		ref, ok := job.With["ref"].(string)
-		if !ok || ref != "${{ needs.version.outputs.sha }}" {
-			t.Fatalf("%s validates %v, want the release commit", name, job.With["ref"])
+	for name, job := range workflow.Jobs {
+		if job.Uses != "" {
+			t.Errorf("release artifacts calls %s through the %s job; a release waits on nothing but its own artifacts", job.Uses, name)
 		}
 	}
-	tier, ok := requireJob(t, workflow, "validate-e2e").With["tier"].(string)
-	if !ok || tier != "nightly" {
-		t.Fatalf("release validation runs the e2e %v tier, want every group on every browser", requireJob(t, workflow, "validate-e2e").With["tier"])
+	want := map[string]bool{
+		"version":       true,
+		"dist":          true,
+		"image":         true,
+		"chart":         true,
+		"desktop":       true,
+		"desktop-linux": true,
+		"publish":       true,
 	}
-	duration, ok := requireJob(t, workflow, "validate-fuzz").With["duration"].(string)
-	if !ok || duration != "10m" {
-		t.Fatalf("release validation fuzzes for %v, want longer than the per-commit smoke", requireJob(t, workflow, "validate-fuzz").With["duration"])
+	for name := range workflow.Jobs {
+		if !want[name] {
+			t.Errorf("release artifacts runs %s, which does not build or publish an artifact", name)
+		}
+		delete(want, name)
+	}
+	if len(want) != 0 {
+		t.Fatalf("release artifacts no longer has: %v", want)
 	}
 	for _, name := range []string{"dist", "image"} {
 		needs := requireJob(t, workflow, name).Needs
-		for validator := range validators {
-			if !contains(needs, validator) {
-				t.Fatalf("%s does not wait for %s, so an unvalidated release could publish", name, validator)
-			}
+		if len(needs) != 1 || needs[0] != "version" {
+			t.Fatalf("%s needs %v, want only the version job", name, needs)
+		}
+	}
+}
+
+func TestEveryReleaseJobIsBounded(t *testing.T) {
+	workflow := readYAML[workflowFile](t, ".github/workflows/release-artifacts.yaml")
+	for name, job := range workflow.Jobs {
+		minutes, ok := job.TimeoutMinutes.(int)
+		if !ok {
+			t.Errorf("%s job has no timeout, so a stuck release hangs for six hours", name)
+			continue
+		}
+		if minutes <= 0 || minutes > 45 {
+			t.Errorf("%s job timeout = %d minutes, want a bound between 1 and 45", name, minutes)
 		}
 	}
 }
