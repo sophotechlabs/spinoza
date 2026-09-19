@@ -1,53 +1,53 @@
 {
-  "sha": "f9a47eedc0eef0e2439c10e75eb1757acbf30592",
-  "runUrl": "https://github.com/sophotechlabs/spinoza/actions/runs/35320116388",
+  "sha": "a29317eb60e00c89b75fbdec8fb7bcf3e034b074",
+  "runUrl": "https://github.com/sophotechlabs/spinoza/actions/runs/35429515678",
   "trigger": "schedule",
-  "finishedAt": "2026-09-18T08:24:16.199Z",
+  "finishedAt": "2026-09-19T08:15:50.450Z",
   "jobs": {
     "total": 95,
     "failed": 0,
-    "minutes": 794.4
+    "minutes": 787.8
   },
   "groups": [
     {
       "name": "cluster-mode-release",
       "conclusion": "success",
-      "minutes": 3.3
+      "minutes": 3.9
     },
     {
       "name": "e2e / checks-issues-worklist / chromium",
       "conclusion": "success",
-      "minutes": 5.4
+      "minutes": 5.6
     },
     {
       "name": "e2e / checks-issues-worklist / firefox",
       "conclusion": "success",
-      "minutes": 5.5
+      "minutes": 5.4
     },
     {
       "name": "e2e / checks-issues-worklist / webkit",
       "conclusion": "success",
-      "minutes": 6.2
+      "minutes": 5.8
     },
     {
       "name": "e2e / cluster mode / chromium",
       "conclusion": "success",
-      "minutes": 5.7
+      "minutes": 6.3
     },
     {
       "name": "e2e / cluster mode / firefox",
       "conclusion": "success",
-      "minutes": 5.6
+      "minutes": 5.9
     },
     {
       "name": "e2e / cluster mode / webkit",
       "conclusion": "success",
-      "minutes": 7.1
+      "minutes": 6.8
     },
     {
       "name": "e2e / cluster-mode-auth",
       "conclusion": "success",
-      "minutes": 10.6
+      "minutes": 10
     },
     {
       "name": "e2e / distribution-desktop-install",
@@ -57,67 +57,67 @@
     {
       "name": "e2e / e2e-coverage",
       "conclusion": "success",
-      "minutes": 0.3
+      "minutes": 0.4
     },
     {
       "name": "e2e / foundation-security / chromium",
       "conclusion": "success",
-      "minutes": 4.7
+      "minutes": 4.5
     },
     {
       "name": "e2e / foundation-security / firefox",
       "conclusion": "success",
-      "minutes": 4.8
+      "minutes": 4.3
     },
     {
       "name": "e2e / foundation-security / webkit",
       "conclusion": "success",
-      "minutes": 5.1
+      "minutes": 5.5
     },
     {
       "name": "e2e / gitops / chromium",
       "conclusion": "success",
-      "minutes": 8.1
+      "minutes": 7.7
     },
     {
       "name": "e2e / gitops / firefox",
       "conclusion": "success",
-      "minutes": 8.5
+      "minutes": 9.1
     },
     {
       "name": "e2e / gitops / webkit",
       "conclusion": "success",
-      "minutes": 8.7
+      "minutes": 8.4
     },
     {
       "name": "e2e / helm / chromium",
       "conclusion": "success",
-      "minutes": 4.7
+      "minutes": 4.9
     },
     {
       "name": "e2e / helm / firefox",
       "conclusion": "success",
-      "minutes": 5.6
+      "minutes": 4.9
     },
     {
       "name": "e2e / helm / webkit",
       "conclusion": "success",
-      "minutes": 5.4
+      "minutes": 5.1
     },
     {
       "name": "e2e / inspect-compare-rbac-topology / chromium",
       "conclusion": "success",
-      "minutes": 8.9
+      "minutes": 9
     },
     {
       "name": "e2e / inspect-compare-rbac-topology / firefox",
       "conclusion": "success",
-      "minutes": 9.5
+      "minutes": 9.8
     },
     {
       "name": "e2e / inspect-compare-rbac-topology / webkit",
       "conclusion": "success",
-      "minutes": 10.6
+      "minutes": 8.8
     },
     {
       "name": "e2e / mcp-cli",
@@ -127,17 +127,17 @@
     {
       "name": "e2e / multicluster-fleet / chromium",
       "conclusion": "success",
-      "minutes": 9
+      "minutes": 8.5
     },
     {
       "name": "e2e / multicluster-fleet / firefox",
       "conclusion": "success",
-      "minutes": 9.2
+      "minutes": 9
     },
     {
       "name": "e2e / multicluster-fleet / webkit",
       "conclusion": "success",
-      "minutes": 9.2
+      "minutes": 9
     },
     {
       "name": "e2e / mutations-protection-history / chromium",
@@ -147,42 +147,42 @@
     {
       "name": "e2e / mutations-protection-history / firefox",
       "conclusion": "success",
-      "minutes": 5.6
+      "minutes": 6
     },
     {
       "name": "e2e / mutations-protection-history / webkit",
       "conclusion": "success",
-      "minutes": 6.2
+      "minutes": 5.3
     },
     {
       "name": "e2e / navigation-interaction / chromium",
       "conclusion": "success",
-      "minutes": 10.4
+      "minutes": 10.5
     },
     {
       "name": "e2e / navigation-interaction / firefox",
       "conclusion": "success",
-      "minutes": 11.1
+      "minutes": 10.5
     },
     {
       "name": "e2e / navigation-interaction / webkit",
       "conclusion": "success",
-      "minutes": 11.1
+      "minutes": 11
     },
     {
       "name": "e2e / observability-traffic / chromium",
       "conclusion": "success",
-      "minutes": 4.5
+      "minutes": 4.8
     },
     {
       "name": "e2e / observability-traffic / firefox",
       "conclusion": "success",
-      "minutes": 4.8
+      "minutes": 4.9
     },
     {
       "name": "e2e / observability-traffic / webkit",
       "conclusion": "success",
-      "minutes": 4.9
+      "minutes": 5
     },
     {
       "name": "e2e / outage / chromium",
@@ -192,22 +192,22 @@
     {
       "name": "e2e / outage / firefox",
       "conclusion": "success",
-      "minutes": 5.4
+      "minutes": 4.8
     },
     {
       "name": "e2e / outage / webkit",
       "conclusion": "success",
-      "minutes": 4.9
+      "minutes": 5.3
     },
     {
       "name": "e2e / resilience-capacity-soak / chromium",
       "conclusion": "success",
-      "minutes": 7.6
+      "minutes": 8.5
     },
     {
       "name": "e2e / resilience-capacity-soak / firefox",
       "conclusion": "success",
-      "minutes": 7.6
+      "minutes": 8.1
     },
     {
       "name": "e2e / resilience-capacity-soak / webkit",
@@ -222,12 +222,12 @@
     {
       "name": "e2e / resources-live-tables / firefox",
       "conclusion": "success",
-      "minutes": 8.9
+      "minutes": 8.8
     },
     {
       "name": "e2e / resources-live-tables / webkit",
       "conclusion": "success",
-      "minutes": 9.2
+      "minutes": 9.1
     },
     {
       "name": "e2e / select",
@@ -237,57 +237,57 @@
     {
       "name": "e2e / streams-terminals-forwards / chromium",
       "conclusion": "success",
-      "minutes": 5.2
+      "minutes": 5.1
     },
     {
       "name": "e2e / streams-terminals-forwards / firefox",
       "conclusion": "success",
-      "minutes": 5.5
+      "minutes": 5.4
     },
     {
       "name": "e2e / streams-terminals-forwards / webkit",
       "conclusion": "success",
-      "minutes": 5.6
+      "minutes": 6.7
     },
     {
       "name": "e2e / suite-contract",
       "conclusion": "success",
-      "minutes": 0.3
+      "minutes": 0.4
     },
     {
       "name": "e2e / visual-accessibility / chromium",
       "conclusion": "success",
-      "minutes": 13
+      "minutes": 12.7
     },
     {
       "name": "e2e / visual-accessibility / firefox",
       "conclusion": "success",
-      "minutes": 13.9
+      "minutes": 13.8
     },
     {
       "name": "e2e / visual-accessibility / webkit",
       "conclusion": "success",
-      "minutes": 13.4
+      "minutes": 13.9
     },
     {
       "name": "fuzz / fuzz (., FuzzServingCheckPublicURL)",
       "conclusion": "success",
-      "minutes": 12
+      "minutes": 12.5
     },
     {
       "name": "fuzz / fuzz (./internal/access, FuzzDecisionAggregation)",
       "conclusion": "success",
-      "minutes": 12
+      "minutes": 11.9
     },
     {
       "name": "fuzz / fuzz (./internal/auth, FuzzRoleAuthorization)",
       "conclusion": "success",
-      "minutes": 10.7
+      "minutes": 10.6
     },
     {
       "name": "fuzz / fuzz (./internal/charts, FuzzChartIndex)",
       "conclusion": "success",
-      "minutes": 10.7
+      "minutes": 10.6
     },
     {
       "name": "fuzz / fuzz (./internal/charts, FuzzFetchableRepositoryURL)",
@@ -302,17 +302,17 @@
     {
       "name": "fuzz / fuzz (./internal/issues, FuzzCursor)",
       "conclusion": "success",
-      "minutes": 10.7
+      "minutes": 10.6
     },
     {
       "name": "fuzz / fuzz (./internal/mcp, FuzzProtocol)",
       "conclusion": "success",
-      "minutes": 11.8
+      "minutes": 12.4
     },
     {
       "name": "fuzz / fuzz (./internal/mcp, FuzzStdioFraming)",
       "conclusion": "success",
-      "minutes": 11.3
+      "minutes": 11.8
     },
     {
       "name": "fuzz / fuzz (./internal/store, FuzzHistoryLimit)",
@@ -322,7 +322,7 @@
     {
       "name": "fuzz / fuzz (./internal/store, FuzzTimelineCellsRoundTrip)",
       "conclusion": "success",
-      "minutes": 11
+      "minutes": 10.8
     },
     {
       "name": "install / alpine, busybox wget",
@@ -357,77 +357,77 @@
     {
       "name": "install / windows arm64, binary and PATH",
       "conclusion": "success",
-      "minutes": 1
+      "minutes": 1.1
     },
     {
       "name": "mutation / mutation (checks-a-e)",
       "conclusion": "success",
-      "minutes": 14.8
+      "minutes": 14.9
     },
     {
       "name": "mutation / mutation (checks-f-j)",
       "conclusion": "success",
-      "minutes": 13.6
+      "minutes": 13.4
     },
     {
       "name": "mutation / mutation (checks-k-o)",
       "conclusion": "success",
-      "minutes": 7.5
+      "minutes": 7.7
     },
     {
       "name": "mutation / mutation (checks-p-r)",
       "conclusion": "success",
-      "minutes": 10.8
+      "minutes": 13.3
     },
     {
       "name": "mutation / mutation (checks-s-t)",
       "conclusion": "success",
-      "minutes": 9.9
+      "minutes": 10.1
     },
     {
       "name": "mutation / mutation (checks-u-z)",
       "conclusion": "success",
-      "minutes": 6.1
+      "minutes": 5.9
     },
     {
       "name": "mutation / mutation (cmd)",
       "conclusion": "success",
-      "minutes": 2.6
+      "minutes": 2.4
     },
     {
       "name": "mutation / mutation (internal-a-d)",
       "conclusion": "success",
-      "minutes": 18.1
+      "minutes": 16.9
     },
     {
       "name": "mutation / mutation (internal-e-l)",
       "conclusion": "success",
-      "minutes": 35.9
+      "minutes": 28
     },
     {
       "name": "mutation / mutation (internal-m-r)",
       "conclusion": "success",
-      "minutes": 16.7
+      "minutes": 16.1
     },
     {
       "name": "mutation / mutation (internal-s-z)",
       "conclusion": "success",
-      "minutes": 7.7
+      "minutes": 8.9
     },
     {
       "name": "mutation / mutation (resources-a-f)",
       "conclusion": "success",
-      "minutes": 6.6
+      "minutes": 6.8
     },
     {
       "name": "mutation / mutation (resources-g-l)",
       "conclusion": "success",
-      "minutes": 2.7
+      "minutes": 2.4
     },
     {
       "name": "mutation / mutation (resources-m-r)",
       "conclusion": "success",
-      "minutes": 14.6
+      "minutes": 14.1
     },
     {
       "name": "mutation / mutation (resources-s-z)",
@@ -437,52 +437,52 @@
     {
       "name": "mutation / mutation (root-default)",
       "conclusion": "success",
-      "minutes": 7
+      "minutes": 6.9
     },
     {
       "name": "mutation / mutation (root-desktop)",
       "conclusion": "success",
-      "minutes": 6.9
+      "minutes": 7.2
     },
     {
       "name": "mutation / mutation (server-a-c)",
       "conclusion": "success",
-      "minutes": 24
+      "minutes": 23.1
     },
     {
       "name": "mutation / mutation (server-d-e)",
       "conclusion": "success",
-      "minutes": 6.8
+      "minutes": 7.8
     },
     {
       "name": "mutation / mutation (server-f)",
       "conclusion": "success",
-      "minutes": 21.9
+      "minutes": 21.8
     },
     {
       "name": "mutation / mutation (server-g-l)",
       "conclusion": "success",
-      "minutes": 30.7
+      "minutes": 29.2
     },
     {
       "name": "mutation / mutation (server-m-r)",
       "conclusion": "success",
-      "minutes": 10.2
+      "minutes": 10
     },
     {
       "name": "mutation / mutation (server-s-z)",
       "conclusion": "success",
-      "minutes": 31.1
+      "minutes": 32.9
     },
     {
       "name": "mutation / mutation-total",
       "conclusion": "success",
-      "minutes": 0.1
+      "minutes": 0.2
     },
     {
       "name": "repeat",
       "conclusion": "success",
-      "minutes": 6.2
+      "minutes": 6.4
     }
   ],
   "failures": [],
