@@ -180,6 +180,44 @@ test('the graph draws what manages what, not just a legend', async ({ page }) =>
     .toBeGreaterThan(0);
 });
 
+test('a Flux application topology links its managed Service and opens that resource', async ({
+  page,
+}) => {
+  test.setTimeout(240_000);
+  const name = 'e2e-flux-topology';
+  await withManagedService(name, async () => {
+    await managedService(page, name);
+    const panel = page.getByRole('tabpanel', { name: 'Application' });
+    const graphResponse = page.waitForResponse(
+      (response) => new URL(response.url()).pathname === '/api/gitops/app/graph',
+    );
+    await panel.getByRole('button', { name: 'Topology', exact: true }).click();
+    const response = await graphResponse;
+    expect(response.ok()).toBe(true);
+    const root = `kustomize.toolkit.fluxcd.io/Kustomization/flux-system/${name}`;
+    const child = `/Service/${name}/podinfo`;
+    const graph = (await response.json()) as {
+      nodes: { id: string; namespace: string; category: string }[];
+      edges: { from: string; to: string; kind: string }[];
+    };
+    expect(graph.nodes.find((node) => node.id === root)).toMatchObject({ category: 'applier' });
+    expect(graph.nodes.find((node) => node.id === child)).toMatchObject({ namespace: name });
+    expect(graph.edges).toContainEqual({ from: root, to: child, kind: 'manages' });
+    await expect(
+      panel.getByRole('group', { name: `Edge from ${root} to ${child}`, exact: true }),
+    ).toBeAttached();
+    const node = panel.locator('.react-flow__node').filter({ hasText: 'podinfo · Service' });
+    await expect(node).toHaveCount(1);
+    await node.click();
+    await expect(page).toHaveTitle(/^podinfo /);
+    await expect(page.getByRole('tab', { name: 'YAML', exact: true })).toBeVisible();
+    expect(page.url()).toContain(`namespace=${name}`);
+    expect(kubectl(['get', 'service/podinfo', '-n', name, '-o', 'jsonpath={.metadata.name}'])).toBe(
+      'podinfo',
+    );
+  });
+});
+
 test('an edge names the source it comes from and the applier it feeds', async ({ page }) => {
   await openView(page, 'gitops');
   const edge = page.getByRole('group', {

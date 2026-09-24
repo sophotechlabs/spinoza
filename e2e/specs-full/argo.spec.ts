@@ -198,6 +198,73 @@ test('Argo auto-sync can be resumed and suspended without changing prune or self
   });
 });
 
+test('application topology shows a missing Service becoming synced and opens the live resource', async ({
+  page,
+}) => {
+  test.setTimeout(240_000);
+  const name = 'e2e-argo-topology';
+  await withApplication(page, name, async () => {
+    const resources = namedApplication(name).status?.resources;
+    const service = resources?.find((resource) => resource.kind === 'Service');
+    if (resources === undefined || service === undefined) {
+      throw new Error('the application has no declared Service');
+    }
+    expect(kubectl(['get', 'services', '-n', name, '-o', 'name'])).toBe('');
+    await page.getByRole('tab', { name: 'Application', exact: true }).click();
+    const panel = page.getByRole('tabpanel', { name: 'Application' });
+    const graphResponse = page.waitForResponse(
+      (response) => new URL(response.url()).pathname === '/api/gitops/app/graph',
+    );
+    await panel.getByRole('button', { name: 'Topology', exact: true }).click();
+    const response = await graphResponse;
+    expect(response.ok()).toBe(true);
+    const root = `argoproj.io/Application/argocd/${name}`;
+    const child = `/Service/${name}/${service.name}`;
+    const graph = (await response.json()) as {
+      nodes: { id: string; kind: string; status: string; ready: string }[];
+      edges: { from: string; to: string; kind: string }[];
+    };
+    expect(graph.nodes).toHaveLength(resources.length + 1);
+    expect(graph.edges).toHaveLength(resources.length);
+    expect(graph.edges).toContainEqual({ from: root, to: child, kind: 'manages' });
+    expect(graph.nodes.find((node) => node.id === child)).toMatchObject({
+      kind: 'Service',
+      status: 'OutOfSync',
+      ready: 'Unknown',
+    });
+    const node = panel
+      .locator('.react-flow__node')
+      .filter({ hasText: `${service.name} · Service` });
+    await expect(node).toBeVisible();
+    const unsyncedColor = await node.evaluate((element) => getComputedStyle(element).borderColor);
+    await expect(
+      panel.getByRole('group', { name: `Edge from ${root} to ${child}`, exact: true }),
+    ).toBeAttached();
+    await panel.getByRole('button', { name: 'Resources', exact: true }).click();
+    const mark = panel.getByRole('checkbox', { name: `Mark Service ${service.name}`, exact: true });
+    await mark.check();
+    await panel.getByRole('button', { name: 'Sync 1 marked', exact: true }).click();
+    await expect(mark.locator('../..')).toContainText('Synced', { timeout: 120_000 });
+    const refreshedGraph = page.waitForResponse(
+      (answer) => new URL(answer.url()).pathname === '/api/gitops/app/graph',
+    );
+    await panel.getByRole('button', { name: 'Topology', exact: true }).click();
+    const refreshed = (await (await refreshedGraph).json()) as typeof graph;
+    expect(refreshed.nodes.find((entry) => entry.id === child)).toMatchObject({
+      status: 'Synced',
+      ready: 'True',
+    });
+    await expect(node).toBeVisible();
+    await expect(node).not.toHaveCSS('border-color', unsyncedColor);
+    await node.click();
+    await expect(page).toHaveTitle(new RegExp(`^${service.name} `));
+    await expect(page.getByRole('tab', { name: 'YAML', exact: true })).toBeVisible();
+    expect(
+      kubectl(['get', 'service', service.name, '-n', name, '-o', 'jsonpath={.metadata.name}']),
+    ).toBe(service.name);
+  });
+});
+
 async function openGuestbook(page: Page): Promise<void> {
   await openView(page, 'argo-apps');
   const app = page.getByRole('button', { name: /^guestbook / });
