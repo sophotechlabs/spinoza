@@ -1,8 +1,10 @@
+import { renameSync } from 'node:fs';
+import { join } from 'node:path';
 import { expect, test } from '../harness/test';
 import { openView } from '../harness/app';
 import { helm, helmSoft, kubectl, kubectlSoft } from '../harness/cluster';
 import { editorText, replaceEditor } from '../harness/editor';
-import { CHART_REPO, NAMESPACE } from '../harness/paths';
+import { CHART_DIR, CHART_REPO, NAMESPACE } from '../harness/paths';
 import { DOOMED, RELEASE } from '../harness/fixtures';
 import { NEXT_VERSION, REPO_NAME } from '../harness/charts';
 import type { Locator, Page } from '@playwright/test';
@@ -163,13 +165,20 @@ test('the release overview names the storage driver and deployment times', async
 test('the history carries every revision helm recorded', async ({ page }) => {
   const recorded = JSON.parse(
     helm(['history', RELEASE, '--namespace', NAMESPACE, '-o', 'json']),
-  ) as { revision: number }[];
+  ) as { revision: number; status: string; description: string }[];
   expect(recorded.length).toBeGreaterThan(1);
-  const latest = recorded[recorded.length - 1].revision;
   await openRelease(page);
   await openTab(page, 'History');
-  await expect(panel(page)).toContainText(String(latest), { timeout: 30_000 });
-  await expect(panel(page)).toContainText(String(latest - 1));
+  const rows = panel(page).locator('tbody tr');
+  await expect(rows).toHaveCount(recorded.length, { timeout: 30_000 });
+  for (const entry of recorded) {
+    const row = rows.filter({
+      has: page.getByRole('cell', { name: String(entry.revision), exact: true }),
+    });
+    await expect(row).toHaveCount(1);
+    await expect(row.getByRole('cell').nth(1)).toHaveText(entry.status);
+    await expect(row.getByRole('cell').nth(3)).toHaveText(entry.description);
+  }
 });
 
 test('the selected release travels in the url through a reload', async ({ page }) => {
@@ -189,6 +198,9 @@ test('rolling back to the revision before puts its values back', async ({ page }
     helm(['history', RELEASE, '--namespace', NAMESPACE, '-o', 'json']),
   ) as { revision: number }[];
   const target = recorded[recorded.length - 2].revision;
+  const expected: unknown = JSON.parse(
+    helm(['get', 'values', RELEASE, '-n', NAMESPACE, '--revision', String(target), '-o', 'json']),
+  );
 
   await openRelease(page);
   await openTab(page, 'History');
@@ -199,8 +211,11 @@ test('rolling back to the revision before puts its values back', async ({ page }
   await rollback.click();
 
   await expect
-    .poll(() => helm(['get', 'values', RELEASE, '--namespace', NAMESPACE]), { timeout: 90_000 })
-    .not.toContain('hello from revision two');
+    .poll(
+      () => JSON.parse(helm(['get', 'values', RELEASE, '-n', NAMESPACE, '-o', 'json'])) as unknown,
+      { timeout: 90_000 },
+    )
+    .toEqual(expected);
 });
 
 test('the rollback is recorded as another revision, not a rewrite of history', async ({ page }) => {
@@ -350,23 +365,158 @@ test('an install creates the requested namespace and records the release there',
   }
 });
 
-test('invalid install values report a render error and can be corrected before installing', async ({
+test('invalid install values leave no release and corrected values install successfully', async ({
   page,
 }) => {
   const name = 'e2e-browser-values';
+  try {
+    const dialog = await chooseInstall(page, name, NAMESPACE);
+    await replaceEditor(page, 'not-a-values-map');
+    await dialog.getByRole('button', { name: 'Preview', exact: true }).click();
+    await expect(dialog.getByRole('alert')).toContainText(/yaml|JSON/i, { timeout: 60_000 });
+    await expect(dialog.getByRole('button', { name: `Install ${name}`, exact: true })).toHaveCount(
+      0,
+    );
+    expect(helm(['list', '-n', NAMESPACE, '--filter', `^${name}$`, '-o', 'json']).trim()).toBe(
+      '[]',
+    );
+    await replaceEditor(page, '{greeting: corrected}');
+    await dialog.getByRole('button', { name: 'Preview', exact: true }).click();
+    const install = dialog.getByRole('button', { name: `Install ${name}`, exact: true });
+    await expect(install).toBeEnabled({ timeout: 60_000 });
+    await expect(dialog.getByRole('alert')).toBeEmpty();
+    await install.click();
+    await expect(dialog).toBeHidden({ timeout: 90_000 });
+    expect(JSON.parse(helm(['get', 'values', name, '-n', NAMESPACE, '-o', 'json']))).toEqual({
+      greeting: 'corrected',
+    });
+    expect(
+      kubectl([
+        'get',
+        'configmap',
+        `${name}-greeting`,
+        '-n',
+        NAMESPACE,
+        '-o',
+        'jsonpath={.data.greeting}',
+      ]),
+    ).toBe('corrected');
+  } finally {
+    helmSoft(['uninstall', name, '-n', NAMESPACE]);
+  }
+});
+
+test('a protected Helm install refuses a wrong name and cancellation before accepting the exact name', async ({
+  page,
+}) => {
+  test.setTimeout(180_000);
+  const name = 'e2e-protected-install';
+  await openView(page, 'helm');
+  try {
+    const protectedStatus = await page.evaluate(
+      async () => (await fetch('/api/protection?protected=true', { method: 'POST' })).status,
+    );
+    expect(protectedStatus).toBe(200);
+    await page.reload();
+    const dialog = await chooseInstall(page, name, NAMESPACE);
+    await replaceEditor(page, '{greeting: explicitly confirmed}');
+    await dialog.getByRole('button', { name: 'Preview', exact: true }).click();
+    const install = dialog.getByRole('button', { name: `Install ${name}`, exact: true });
+    await expect(install).toBeEnabled({ timeout: 60_000 });
+    await install.click();
+    const confirmation = page.getByRole('dialog', { name: 'Confirm on a protected cluster' });
+    await expect(confirmation).toBeVisible();
+    await confirmation.getByRole('textbox', { name: 'Name', exact: true }).fill(`${name}-wrong`);
+    await expect(confirmation.getByRole('button', { name: 'Confirm', exact: true })).toBeDisabled();
+    expect(helm(['list', '-n', NAMESPACE, '--filter', `^${name}$`, '-o', 'json']).trim()).toBe(
+      '[]',
+    );
+    await confirmation.getByRole('button', { name: 'Cancel', exact: true }).click();
+    await expect(confirmation).toBeHidden();
+    expect(
+      kubectl([
+        'get',
+        'configmap',
+        `${name}-greeting`,
+        '-n',
+        NAMESPACE,
+        '--ignore-not-found',
+        '-o',
+        'name',
+      ]),
+    ).toBe('');
+    await install.click();
+    await confirmation.getByRole('textbox', { name: 'Name', exact: true }).fill(name);
+    await confirmation.getByRole('button', { name: 'Confirm', exact: true }).click();
+    await expect(dialog).toBeHidden({ timeout: 90_000 });
+    expect(JSON.parse(helm(['get', 'values', name, '-n', NAMESPACE, '-o', 'json']))).toEqual({
+      greeting: 'explicitly confirmed',
+    });
+    expect(
+      kubectl([
+        'get',
+        'configmap',
+        `${name}-greeting`,
+        '-n',
+        NAMESPACE,
+        '-o',
+        'jsonpath={.data.greeting}',
+      ]),
+    ).toBe('explicitly confirmed');
+  } finally {
+    const restored = await page.evaluate(
+      async () => (await fetch('/api/protection?protected=false', { method: 'POST' })).status,
+    );
+    expect(restored).toBe(200);
+    helmSoft(['uninstall', name, '-n', NAMESPACE]);
+  }
+});
+
+test('a missing chart archive refuses the install preview and recovers when the repository is repaired', async ({
+  page,
+}) => {
+  const name = 'e2e-repository-recovery';
+  const archive = join(CHART_DIR, `spinoza-e2e-${NEXT_VERSION}.tgz`);
+  const unavailable = `${archive}.unavailable`;
   const dialog = await chooseInstall(page, name, NAMESPACE);
-  await replaceEditor(page, 'not-a-values-map');
-  await dialog.getByRole('button', { name: 'Preview', exact: true }).click();
-  await expect(dialog.getByRole('alert')).toContainText(/yaml|JSON/i, { timeout: 60_000 });
-  await expect(dialog.getByRole('button', { name: `Install ${name}`, exact: true })).toHaveCount(0);
-  expect(helm(['list', '-n', NAMESPACE, '--filter', `^${name}$`, '-o', 'json']).trim()).toBe('[]');
-  await replaceEditor(page, '{greeting: corrected}');
-  await dialog.getByRole('button', { name: 'Preview', exact: true }).click();
-  await expect(dialog.getByRole('button', { name: `Install ${name}`, exact: true })).toBeEnabled({
-    timeout: 60_000,
-  });
-  await expect(dialog.getByRole('alert')).toBeEmpty();
-  await dialog.getByRole('button', { name: 'Close the install dialog' }).click();
+  renameSync(archive, unavailable);
+  try {
+    await dialog.getByRole('button', { name: 'Preview', exact: true }).click();
+    await expect(dialog.getByRole('alert')).toContainText('404', { timeout: 60_000 });
+    await expect(dialog.getByRole('button', { name: `Install ${name}`, exact: true })).toHaveCount(
+      0,
+    );
+    expect(helm(['list', '-n', NAMESPACE, '--filter', `^${name}$`, '-o', 'json']).trim()).toBe(
+      '[]',
+    );
+    expect(
+      kubectl([
+        'get',
+        'configmap',
+        `${name}-greeting`,
+        '-n',
+        NAMESPACE,
+        '--ignore-not-found',
+        '-o',
+        'name',
+      ]),
+    ).toBe('');
+  } finally {
+    renameSync(unavailable, archive);
+  }
+  try {
+    await dialog.getByRole('button', { name: 'Preview', exact: true }).click();
+    const install = dialog.getByRole('button', { name: `Install ${name}`, exact: true });
+    await expect(install).toBeEnabled({ timeout: 60_000 });
+    await expect(dialog.getByRole('alert')).toBeEmpty();
+    await install.click();
+    await expect(dialog).toBeHidden({ timeout: 90_000 });
+    expect(
+      JSON.parse(helm(['list', '-n', NAMESPACE, '--filter', `^${name}$`, '-o', 'json'])),
+    ).toEqual([expect.objectContaining({ name, status: 'deployed' })]);
+  } finally {
+    helmSoft(['uninstall', name, '-n', NAMESPACE]);
+  }
 });
 
 test('a release created after preview refuses the install without overwriting the existing release', async ({
@@ -481,6 +631,7 @@ test('closing an upgrade leaves the installed chart and revision untouched', asy
 });
 
 test('an upgrade renders the manifest it would apply before applying it', async ({ page }) => {
+  const before: unknown = JSON.parse(helm(['history', RELEASE, '-n', NAMESPACE, '-o', 'json']));
   await openRelease(page);
   await panel(page).getByRole('button', { name: 'Upgrade', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: `Upgrade ${RELEASE}` });
@@ -496,6 +647,7 @@ test('an upgrade renders the manifest it would apply before applying it', async 
   await previewed(dialog);
   await expect(dialog.getByRole('button', { name: 'Back', exact: true })).toBeVisible();
   await expect(dialog.locator('.monaco-diff-editor').first()).toBeVisible({ timeout: 60_000 });
+  expect(JSON.parse(helm(['history', RELEASE, '-n', NAMESPACE, '-o', 'json']))).toEqual(before);
 });
 
 test('going through with the upgrade moves the release onto the new chart', async ({ page }) => {

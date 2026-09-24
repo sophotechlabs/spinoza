@@ -13,6 +13,7 @@ interface ManagedApplication {
     resources?: { kind: string; name: string; namespace: string }[];
     operationState?: {
       phase: string;
+      message?: string;
       operation: {
         sync: { dryRun?: boolean; resources?: { kind: string; name: string; namespace: string }[] };
       };
@@ -110,6 +111,69 @@ test('an Argo dry run leaves resources absent and a selected sync creates only t
       .getByRole('checkbox', { name: `Mark Service ${service.name}`, exact: true })
       .locator('../..');
     await expect(row).toContainText('Synced', { timeout: 60_000 });
+  });
+});
+
+test('a controller refusal leaves a selected Service absent and the same sync recovers after quota repair', async ({
+  page,
+}) => {
+  test.setTimeout(300_000);
+  const name = 'e2e-sync-recovery';
+  await withApplication(page, name, async () => {
+    const service = namedApplication(name).status?.resources?.find(
+      (resource) => resource.kind === 'Service',
+    );
+    if (service === undefined) {
+      throw new Error('the fixture application has no Service to synchronize');
+    }
+    kubectlApply(
+      JSON.stringify({
+        apiVersion: 'v1',
+        kind: 'ResourceQuota',
+        metadata: { name: 'refuse-services', namespace: name },
+        spec: { hard: { services: '0' } },
+      }),
+    );
+    await expect
+      .poll(() =>
+        kubectl([
+          'get',
+          'resourcequota',
+          'refuse-services',
+          '-n',
+          name,
+          '-o',
+          'jsonpath={.status.hard.services}',
+        ]),
+      )
+      .toBe('0');
+    await page.getByRole('tab', { name: 'Application', exact: true }).click();
+    const panel = page.getByRole('tabpanel', { name: 'Application' });
+    const mark = panel.getByRole('checkbox', { name: `Mark Service ${service.name}`, exact: true });
+    await mark.check();
+    await panel.getByRole('button', { name: 'Sync 1 marked', exact: true }).click();
+    await expect(panel).toContainText('Sync requested.');
+    await expect
+      .poll(() => namedApplication(name).status?.operationState, { timeout: 120_000 })
+      .toMatchObject({
+        phase: 'Failed',
+        message: expect.stringContaining('exceeded quota'),
+        operation: {
+          sync: { resources: [{ kind: 'Service', name: service.name, namespace: name }] },
+        },
+      });
+    expect(kubectl(['get', 'services,deployments', '-n', name, '-o', 'name'])).toBe('');
+    kubectl(['delete', 'resourcequota', 'refuse-services', '-n', name, '--wait=true']);
+    await mark.check();
+    await panel.getByRole('button', { name: 'Sync 1 marked', exact: true }).click();
+    await expect
+      .poll(() => namedApplication(name).status?.operationState?.phase, { timeout: 120_000 })
+      .toBe('Succeeded');
+    expect(kubectl(['get', 'services', '-n', name, '-o', 'name']).trim()).toBe(
+      `service/${service.name}`,
+    );
+    expect(kubectl(['get', 'deployments', '-n', name, '-o', 'name'])).toBe('');
+    await expect(mark.locator('../..')).toContainText('Synced', { timeout: 60_000 });
   });
 });
 
