@@ -228,6 +228,9 @@ func (m *Manager) Search(ctx context.Context, query string) api.SearchResults {
 	if seen.all {
 		return searchScoped(ctx, m.meta, flat, query, m.limits.Search, nil)
 	}
+	if len(seen.names) == 0 {
+		return api.SearchResults{}
+	}
 	namespaces := make([]string, 0, len(seen.names))
 	for name := range seen.names {
 		namespaces = append(namespaces, name)
