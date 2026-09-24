@@ -72,7 +72,7 @@ async function openService(page: Page, name: string): Promise<void> {
   await page.getByRole('tab', { name: 'Overview', exact: true }).click();
 }
 
-async function expectServiceTraffic(page: Page, name: string): Promise<void> {
+async function expectServiceTraffic(page: Page, name: string, content = name): Promise<void> {
   await page.getByRole('button', { name: 'Forward', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Stop forwarding port 80' })).toBeVisible({
     timeout: 60_000,
@@ -89,7 +89,7 @@ async function expectServiceTraffic(page: Page, name: string): Promise<void> {
   }
   await expect
     .poll(async () => (await page.request.get(href)).text(), { timeout: 30_000 })
-    .toBe(`${name}\n`);
+    .toBe(`${content}\n`);
   await forward.getByRole('button', { name: 'Stop', exact: true }).click();
   await expect(forward).toHaveCount(0);
   await expect
@@ -110,6 +110,76 @@ test('a Service forwards its named target port and closes the listener when stop
   await withService(page, name, async () => {
     await openService(page, name);
     await expectServiceTraffic(page, name);
+  });
+});
+
+test('a Service forward reports its lost backend and resolves a replacement with a different named port', async ({
+  page,
+}) => {
+  test.setTimeout(180_000);
+  const name = 'e2e-forward-replacement';
+  await withService(page, name, async () => {
+    await openService(page, name);
+    await page.getByRole('button', { name: 'Forward', exact: true }).click();
+    await page.getByRole('tab', { name: 'Forwards', exact: true }).click();
+    const forward = page
+      .getByRole('tabpanel', { name: 'Forwards' })
+      .locator('div.flex.items-center')
+      .filter({ hasText: `service/${NAMESPACE}/${name}` });
+    const link = forward.getByRole('link');
+    await expect(link).toBeVisible();
+    const href = await link.getAttribute('href');
+    if (href === null) {
+      throw new Error('the original forward has no listener URL');
+    }
+    expect((await page.request.get(href)).ok()).toBe(true);
+    const original = JSON.parse(kubectl(['get', 'pod', name, '-n', NAMESPACE, '-o', 'json'])) as {
+      metadata: { uid: string };
+    };
+    kubectl(['delete', 'pod', name, '-n', NAMESPACE, '--wait=true', '--timeout=60s']);
+    await expect(forward.getByRole('img', { name: 'failed', exact: true })).toBeVisible({
+      timeout: 60_000,
+    });
+    await expect(link).toHaveCount(0);
+    await expect
+      .poll(async () => {
+        try {
+          return (await page.request.get(href, { timeout: 2_000 })).ok();
+        } catch {
+          return false;
+        }
+      })
+      .toBe(false);
+    await forward.getByRole('button', { name: 'Stop', exact: true }).click();
+    await expect(forward).toHaveCount(0);
+    kubectlApply(
+      JSON.stringify({
+        apiVersion: 'v1',
+        kind: 'Pod',
+        metadata: { name, namespace: NAMESPACE, labels: { forwarding: name } },
+        spec: {
+          containers: [
+            {
+              name: 'web',
+              image: 'busybox:1.37',
+              command: [
+                'sh',
+                '-c',
+                'mkdir -p /www\necho replacement-backend > /www/index.html\nexec httpd -f -p 8081 -h /www',
+              ],
+              ports: [{ name: 'http', containerPort: 8081 }],
+              readinessProbe: { httpGet: { path: '/', port: 'http' } },
+            },
+          ],
+        },
+      }),
+    );
+    kubectl(['wait', '-n', NAMESPACE, '--for=condition=Ready', `pod/${name}`, '--timeout=60s']);
+    expect(
+      kubectl(['get', 'pod', name, '-n', NAMESPACE, '-o', 'jsonpath={.metadata.uid}']),
+    ).not.toBe(original.metadata.uid);
+    await page.getByRole('tab', { name: 'Overview', exact: true }).click();
+    await expectServiceTraffic(page, name, 'replacement-backend');
   });
 });
 
