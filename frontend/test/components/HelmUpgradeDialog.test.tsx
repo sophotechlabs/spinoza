@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { StrictMode } from 'react';
 import type { HelmRelease } from '../../src/lib/types';
 import HelmUpgradeDialog from '../../src/components/HelmUpgradeDialog';
 import { useToastsStore } from '../../src/store/toasts';
@@ -125,6 +126,45 @@ afterEach(() => {
 });
 
 describe('HelmUpgradeDialog', () => {
+  it('upgrades the previewed values after Strict Mode replays the mount effects', async () => {
+    const user = userEvent.setup();
+    const calls = stub({
+      upgradeBody: { action: 'upgrade', manifest: 'new manifest', message: 'upgraded once' },
+    });
+    const onClose = vi.fn();
+    const onUpgraded = vi.fn();
+    render(
+      <StrictMode>
+        <HelmUpgradeDialog
+          release={release}
+          currentValues={'replicaCount: 2\n'}
+          currentManifest="old manifest"
+          onClose={onClose}
+          onUpgraded={onUpgraded}
+        />
+      </StrictMode>,
+    );
+    await pickAndPreview(user);
+    const diff = await screen.findByTestId('manifest-diff');
+    expect(diff).toHaveAttribute('data-original', 'old manifest');
+    expect(diff).toHaveAttribute('data-modified', 'new manifest');
+    expect(onUpgraded).not.toHaveBeenCalled();
+    await user.click(screen.getByRole('button', { name: 'Upgrade to 6.15.1' }));
+    await waitFor(() => {
+      expect(onUpgraded).toHaveBeenCalledTimes(1);
+    });
+    expect(onClose).toHaveBeenCalledTimes(1);
+    const writes = calls.filter((call) => call.url.startsWith('/api/helm/upgrade'));
+    expect(writes.map((call) => call.url)).toEqual([
+      '/api/helm/upgrade?dryRun=true',
+      '/api/helm/upgrade',
+    ]);
+    expect(JSON.parse(writes[1].body)).toEqual(JSON.parse(writes[0].body));
+    expect(useToastsStore.getState().toasts.map((toast) => toast.message)).toEqual([
+      'upgraded once',
+    ]);
+  });
+
   it('loads the versions and groups them by repository', async () => {
     stub();
     renderDialog();

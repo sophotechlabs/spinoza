@@ -102,6 +102,7 @@ export default function HelmInstallDialog({
   useHelmAccess(target, '');
 
   useEffect(() => {
+    mounted.current = true;
     return () => {
       mounted.current = false;
     };

@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { StrictMode } from 'react';
 import HelmInstallDialog from '../../src/components/HelmInstallDialog';
 import { useToastsStore } from '../../src/store/toasts';
 import { useContextsStore } from '../../src/store/contexts';
@@ -179,6 +180,45 @@ afterEach(() => {
 });
 
 describe('HelmInstallDialog', () => {
+  it('installs the loaded values after Strict Mode replays the mount effects', async () => {
+    const user = userEvent.setup();
+    const calls = stub({
+      installBody: { action: 'install', manifest: 'kind: ConfigMap', message: 'installed once' },
+    });
+    const onClose = vi.fn();
+    const onInstalled = vi.fn();
+    render(
+      <StrictMode>
+        <HelmInstallDialog namespace="demo" onClose={onClose} onInstalled={onInstalled} />
+      </StrictMode>,
+    );
+    await reachTheForm(user);
+    await user.click(screen.getByRole('button', { name: 'Load the chart defaults' }));
+    await waitFor(() => {
+      expect(screen.getByLabelText('yaml')).toHaveValue('replicaCount: 1\n');
+    });
+    await user.click(screen.getByRole('button', { name: 'Preview' }));
+    expect(await screen.findByTestId('manifest-diff')).toHaveAttribute(
+      'data-modified',
+      'kind: ConfigMap',
+    );
+    expect(onInstalled).not.toHaveBeenCalled();
+    await user.click(screen.getByRole('button', { name: 'Install podinfo' }));
+    await waitFor(() => {
+      expect(onInstalled).toHaveBeenCalledTimes(1);
+    });
+    expect(onClose).toHaveBeenCalledTimes(1);
+    const writes = calls.filter((call) => call.url.startsWith('/api/helm/install'));
+    expect(writes.map((call) => call.url)).toEqual([
+      '/api/helm/install?dryRun=true',
+      '/api/helm/install',
+    ]);
+    expect(JSON.parse(writes[1].body)).toEqual(JSON.parse(writes[0].body));
+    expect(useToastsStore.getState().toasts.map((toast) => toast.message)).toEqual([
+      'installed once',
+    ]);
+  });
+
   it('opens as a modal and waits for a search', async () => {
     stub();
 
