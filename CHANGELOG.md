@@ -1,5 +1,42 @@
 # Changelog
 
+## [2.1.2](https://github.com/sophotechlabs/spinoza/compare/v2.1.1...v2.1.2) (2026-09-24)
+
+
+### Bug Fixes
+
+* **helm:** restore dialog lifecycle after Strict Mode effect replay ([ee6de73](https://github.com/sophotechlabs/spinoza/commit/ee6de73e254bdab544b6630c93ec77f4bb281b45))
+* **resources:** prevent global search for empty identity scopes ([bbaad4f](https://github.com/sophotechlabs/spinoza/commit/bbaad4fe58132f297753d6e0d0842f29041cf170))
+
+
+### Miscellaneous
+
+* **ci:** nightly report for 2026-09-16 ([#51](https://github.com/sophotechlabs/spinoza/issues/51)) ([f9a47ee](https://github.com/sophotechlabs/spinoza/commit/f9a47eedc0eef0e2439c10e75eb1757acbf30592))
+* **ci:** nightly report for 2026-09-18 ([#54](https://github.com/sophotechlabs/spinoza/issues/54)) ([a29317e](https://github.com/sophotechlabs/spinoza/commit/a29317eb60e00c89b75fbdec8fb7bcf3e034b074))
+* **ci:** nightly report for 2026-09-21 ([#55](https://github.com/sophotechlabs/spinoza/issues/55)) ([3bdb1b6](https://github.com/sophotechlabs/spinoza/commit/3bdb1b64c6cc4bacea1e5f952285509cce4a0aba))
+* **ci:** nightly report for 2026-09-22 ([#56](https://github.com/sophotechlabs/spinoza/issues/56)) ([c264f4a](https://github.com/sophotechlabs/spinoza/commit/c264f4a65bfc50d4c29d60855d90e4fce41e1d8f))
+* **ci:** nightly report for 2026-09-24 ([#57](https://github.com/sophotechlabs/spinoza/issues/57)) ([0718319](https://github.com/sophotechlabs/spinoza/commit/0718319f8c47fcb35045249578ba845dd4a5e0a2))
+
+
+### CI
+
+* report uncovered mutants and separate system coverage ([7847f11](https://github.com/sophotechlabs/spinoza/commit/7847f11e06145781e6a52d5d9b1177ebc1bad7a5))
+
+
+### Tests
+
+* **baseline:** cover reader failures and import persistence ([89754ac](https://github.com/sophotechlabs/spinoza/commit/89754ac9c2b6a682a82c88a247d11e085124fb4c))
+* cover websocket and persistence failure recovery ([a188511](https://github.com/sophotechlabs/spinoza/commit/a188511731287effe84653355eed966be6c533ce))
+* **e2e:** assert log streaming and persisted audit results ([414a2d1](https://github.com/sophotechlabs/spinoza/commit/414a2d1a2d512211f8f7e056ab401e60098bdc1e))
+* **e2e:** cover Argo and Flux application topology ([d7eb64b](https://github.com/sophotechlabs/spinoza/commit/d7eb64b41892ff91a48297260687eb5435592c09))
+* **e2e:** verify core workflows and persisted diagnostics ([d17a87c](https://github.com/sophotechlabs/spinoza/commit/d17a87c657b1f221f67aeb1cb367831feed32b65))
+* **e2e:** verify GitOps drift, ownership and Argo actions ([f05e7f8](https://github.com/sophotechlabs/spinoza/commit/f05e7f8658feb2dfaa2891846303ec005bcf45a1))
+* **e2e:** verify Helm and Argo refusal and recovery ([21bb8bf](https://github.com/sophotechlabs/spinoza/commit/21bb8bf92c79eb8f5b69ebd26d206cd7ff4ee3b6))
+* **frontend:** reject stale recording and GitOps responses ([4ab9faa](https://github.com/sophotechlabs/spinoza/commit/4ab9faa7bebf27697d3ecd8c7b5b3f0eb6b2f444))
+* **portforward:** verify Service isolation and backend replacement ([7419e4a](https://github.com/sophotechlabs/spinoza/commit/7419e4a03ea4e596725119c8e708694e3938c17d))
+* **resources:** verify concurrent discovery shares one refresh ([9b4768f](https://github.com/sophotechlabs/spinoza/commit/9b4768fe2001d950c2f8593abe384101b2094a8d))
+* **store:** cover revocation failures and rollback ([5a89c55](https://github.com/sophotechlabs/spinoza/commit/5a89c5586ea7c982c4b9503d519dde2aa6b7c204))
+
 ## [2.1.1](https://github.com/sophotechlabs/spinoza/compare/v2.1.0...v2.1.1) (2026-09-16)
 
 
