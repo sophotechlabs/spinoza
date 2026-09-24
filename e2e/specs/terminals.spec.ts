@@ -1,6 +1,6 @@
 import { expect, test } from '../harness/test';
 import { openGrouped, openResource, selectRow } from '../harness/app';
-import { kubectl, kubectlApply } from '../harness/cluster';
+import { kubectl, kubectlApply, kubectlSoft } from '../harness/cluster';
 import type { Page } from '@playwright/test';
 
 async function openLogs(page: Page, pod: string): Promise<void> {
@@ -15,6 +15,62 @@ async function openWorkloadLogs(page: Page, workload: string): Promise<void> {
   await openGrouped(page, 'apps', 'deployments', 'Deployment');
   await selectRow(page, workload);
   await page.getByRole('tab', { name: 'Logs' }).click();
+}
+
+async function withControlledLogs(
+  page: Page,
+  name: string,
+  run: () => Promise<void>,
+): Promise<void> {
+  try {
+    kubectlApply(
+      JSON.stringify({
+        apiVersion: 'v1',
+        kind: 'Pod',
+        metadata: { name, namespace: 'e2e' },
+        spec: {
+          containers: [
+            {
+              name: 'writer',
+              image: 'busybox:1.37',
+              command: [
+                'sh',
+                '-c',
+                'echo controlled-initial > /tmp/events\ntail -n +1 -f /tmp/events',
+              ],
+              readinessProbe: {
+                exec: { command: ['test', '-f', '/tmp/events'] },
+                periodSeconds: 1,
+              },
+            },
+          ],
+        },
+      }),
+    );
+    kubectl(['wait', '--for=condition=Ready', `pod/${name}`, '-n', 'e2e', '--timeout=90s']);
+    await openLogs(page, name);
+    await expect(page.getByText('controlled-initial', { exact: true })).toBeVisible({
+      timeout: 60_000,
+    });
+    await run();
+  } finally {
+    kubectlSoft(['delete', 'pod', name, '-n', 'e2e', '--ignore-not-found', '--wait=false']);
+  }
+}
+
+function emitLogs(name: string, lines: string[]): void {
+  kubectl([
+    'exec',
+    '-n',
+    'e2e',
+    name,
+    '--',
+    'sh',
+    '-c',
+    'printf "%s\\n" "$@" >> /tmp/events',
+    'writer',
+    ...lines,
+  ]);
 }
 
 test('the log panel offers the controls it promises', async ({ page }) => {
@@ -41,16 +97,38 @@ test('a container that prints reaches the log panel', async ({ page }) => {
 });
 
 test('pausing follow stops the scroll, not the stream', async ({ page }) => {
-  await openLogs(page, 'chatty');
-  const lines = page.getByText('e2e-log-line');
-  await expect(lines.first()).toBeVisible({ timeout: 60_000 });
-  const before = await lines.count();
-  const follow = page.getByRole('button', { name: 'Following', exact: true });
-  await expect(follow).toBeVisible({ timeout: 30_000 });
-  await follow.click();
-  await expect(page.getByRole('button', { name: 'Follow', exact: true })).toBeVisible();
-  await expect.poll(async () => lines.count(), { timeout: 30_000 }).toBeGreaterThanOrEqual(before);
-  await expect(lines.first()).toBeVisible();
+  const name = 'e2e-log-pause';
+  await withControlledLogs(page, name, async () => {
+    await page.getByLabel('Filter log lines').fill('controlled-');
+    emitLogs(
+      name,
+      Array.from({ length: 200 }, (_, index) => `controlled-before-${String(index)}`),
+    );
+    await expect(page.getByText('201 of 201', { exact: true })).toBeVisible({ timeout: 30_000 });
+    const scroll = page
+      .getByRole('tabpanel', { name: 'Logs' })
+      .locator('[data-index]')
+      .first()
+      .locator('../..');
+    await expect.poll(() => scroll.evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
+    await page.getByRole('button', { name: 'Following', exact: true }).click();
+    await scroll.evaluate((element) => {
+      element.scrollTop = 0;
+    });
+    emitLogs(
+      name,
+      Array.from({ length: 50 }, (_, index) => `controlled-after-${String(index)}`),
+    );
+    await expect(page.getByText('251 of 251', { exact: true })).toBeVisible({ timeout: 30_000 });
+    expect(await scroll.evaluate((element) => element.scrollTop)).toBe(0);
+    await expect(page.getByRole('button', { name: 'Follow', exact: true })).toHaveAttribute(
+      'aria-pressed',
+      'false',
+    );
+    await page.getByRole('button', { name: 'Follow', exact: true }).click();
+    await expect(page.getByText('controlled-after-49', { exact: true })).toBeVisible();
+    await expect.poll(() => scroll.evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
+  });
 });
 
 test('the filter narrows the lines that are shown', async ({ page }) => {
@@ -61,10 +139,17 @@ test('the filter narrows the lines that are shown', async ({ page }) => {
 });
 
 test('clearing empties the panel without stopping the stream', async ({ page }) => {
-  await openLogs(page, 'chatty');
-  await expect(page.getByText('e2e-log-line').first()).toBeVisible({ timeout: 60_000 });
-  await page.getByRole('button', { name: 'Clear', exact: true }).click();
-  await expect(page.getByText('e2e-log-line').first()).toBeVisible({ timeout: 60_000 });
+  const name = 'e2e-log-clear';
+  await withControlledLogs(page, name, async () => {
+    await page.getByRole('button', { name: 'Clear', exact: true }).click();
+    await expect(page.getByText('controlled-initial', { exact: true })).toHaveCount(0);
+    await expect(page.getByText('Waiting for output', { exact: true })).toBeVisible();
+    emitLogs(name, ['controlled-after-clear']);
+    await expect(page.getByText('controlled-after-clear', { exact: true })).toBeVisible({
+      timeout: 30_000,
+    });
+    await expect(page.getByText('controlled-initial', { exact: true })).toHaveCount(0);
+  });
 });
 
 test('pretty and raw presentation can be toggled independently', async ({ page }) => {
@@ -162,14 +247,7 @@ spec:
             - -c
             - while true; do echo "$HOSTNAME e2e-workload-log"; sleep 1; done
 `);
-    kubectl([
-      '--namespace',
-      'e2e',
-      'rollout',
-      'status',
-      `deployment/${workload}`,
-      '--timeout=90s',
-    ]);
+    kubectl(['--namespace', 'e2e', 'rollout', 'status', `deployment/${workload}`, '--timeout=90s']);
     const pods = kubectl([
       '--namespace',
       'e2e',
@@ -188,7 +266,9 @@ spec:
     await openWorkloadLogs(page, workload);
     await expect(page.getByText('2 pods', { exact: true })).toBeVisible({ timeout: 60_000 });
     for (const pod of pods) {
-      await expect(page.getByText(pod, { exact: true }).first()).toBeVisible({ timeout: 60_000 });
+      await expect(page.getByText(`${pod} e2e-workload-log`, { exact: true }).first()).toBeVisible({
+        timeout: 60_000,
+      });
     }
     await expect(page.getByText('e2e-workload-log').first()).toBeVisible({ timeout: 60_000 });
   } finally {

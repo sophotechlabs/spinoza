@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { expect, test } from '../harness/test';
 import { openView } from '../harness/app';
 import type { Page } from '@playwright/test';
@@ -122,10 +123,18 @@ test('a saved baseline can be cleared and restored from its file', async ({ page
     if (saved === null) {
       throw new Error('the baseline download has no file');
     }
+    const exported: unknown = JSON.parse(readFileSync(saved, 'utf8'));
+    expect(exported).toEqual(
+      expect.objectContaining({ takenAt: expect.any(String), counts: expect.any(Object) }),
+    );
     await page.getByRole('button', { name: 'forget it', exact: true }).click();
     await expect(page.getByText(/No baseline taken/)).toBeVisible({ timeout: 90_000 });
     await page.getByLabel('A baseline to load').setInputFiles(saved);
     await expect(page.getByText(label, { exact: true })).toBeVisible({ timeout: 90_000 });
+    await page.reload();
+    const restored = await page.request.get('/api/checks/baseline/file');
+    expect(restored.status()).toBe(200);
+    expect(await restored.json()).toEqual(exported);
   } finally {
     await clearBaseline(page);
   }
@@ -239,6 +248,9 @@ test('a mute reason survives a reload and is removable from the mute ledger', as
 
 test('the findings export is a nonempty CSV with the active audit columns', async ({ page }) => {
   await openView(page, 'checks');
+  await expect(page.getByRole('button', { name: /Privileged containers/ })).toBeVisible({
+    timeout: 90_000,
+  });
   await openConfigure(page);
   const download = page.waitForEvent('download');
   await page.getByRole('button', { name: 'Export', exact: true }).click();
@@ -252,17 +264,51 @@ test('the findings export is a nonempty CSV with the active audit columns', asyn
       body += chunk.toString();
     }
   }
-  expect(body).toContain('severity');
-  expect(body.split('\n').length).toBeGreaterThan(1);
+  const rows = body.trim().split(/\r?\n/);
+  expect(rows[0]).toBe(
+    'check,title,category,severity,kind,namespace,name,container,detail,new,muted,reason',
+  );
+  expect(rows.slice(1)).toContain(
+    'privileged-containers,Privileged containers,security,high,Deployment,e2e,risky,risky,securityContext.privileged is true,false,false,',
+  );
 });
 
-test('invalid personal CEL rules are diagnosed before they replace the audit', async ({ page }) => {
+test('invalid personal CEL rules preserve the saved audit and a correction can be saved', async ({
+  page,
+}) => {
   await openView(page, 'checks');
-  await openConfigure(page);
-  await page.getByText('Your own rules', { exact: true }).click();
-  await page.getByLabel('Your own rules').fill('not valid cel {{{');
-  await page.getByRole('button', { name: 'Save', exact: true }).click();
-  await expect(page.getByText(/invalid|error|parse/i).first()).toBeVisible({ timeout: 30_000 });
+  const original = await readRules(page);
+  const rules = JSON.stringify([
+    {
+      id: 'e2e-recovered-rule',
+      title: 'E2E recovered rule',
+      match: 'Deployment',
+      expr: "object.metadata.name == 'healthy'",
+    },
+  ]);
+  try {
+    await storeRules(page, rules);
+    await page.reload();
+    await openConfigure(page);
+    await page.getByText('Your own rules', { exact: true }).click();
+    const editor = page.getByLabel('Your own rules');
+    await expect(editor).toHaveValue(rules);
+    await editor.fill('not valid cel {{{');
+    await page.getByRole('button', { name: 'Save', exact: true }).click();
+    await expect(page.getByText(/invalid|error|parse/i).first()).toBeVisible({ timeout: 30_000 });
+    expect(await readRules(page)).toBe(rules);
+    await editor.fill(rules.replace('recovered rule', 'corrected rule'));
+    const saved = settingsWrite(page);
+    await page.getByRole('button', { name: 'Save', exact: true }).click();
+    expect((await saved).ok()).toBe(true);
+    await page.reload();
+    await expect(page.getByText('E2E corrected rule', { exact: true })).toBeVisible({
+      timeout: 90_000,
+    });
+    expect(await readRules(page)).toBe(rules.replace('recovered rule', 'corrected rule'));
+  } finally {
+    await storeRules(page, original);
+  }
 });
 
 test('a valid personal rule is checked, saved, and restored in a new document', async ({
