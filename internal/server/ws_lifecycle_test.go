@@ -129,7 +129,6 @@ func TestEventsStopAfterUnsubscribe(t *testing.T) {
 func rawSession(t *testing.T, mgr *resources.Manager) (*wsSession, *websocket.Conn, context.Context) {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
-	t.Cleanup(cancel)
 	accepted := make(chan *websocket.Conn, 1)
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		conn, err := websocket.Accept(w, r, nil)
@@ -139,7 +138,10 @@ func rawSession(t *testing.T, mgr *resources.Manager) (*wsSession, *websocket.Co
 		accepted <- conn
 		<-ctx.Done()
 	}))
-	t.Cleanup(ts.Close)
+	t.Cleanup(func() {
+		cancel()
+		ts.Close()
+	})
 
 	client, _, dialErr := websocket.Dial(ctx, wsURL(ts.URL), nil)
 	if dialErr != nil {

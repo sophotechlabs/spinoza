@@ -7,6 +7,7 @@ import (
 	"reflect"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"testing/synctest"
 	"time"
@@ -1214,29 +1215,67 @@ func TestUnpinIgnoresAResourceItNeverWarmed(t *testing.T) {
 }
 
 func TestACancelledRequestStopsWaitingForTheCache(t *testing.T) {
-	mgr, _ := stuckManager(t, "deployments")
+	client := newClient(t, newDeployment("default", "web"))
+	mgr, shutdown := newManager(t, client)
+	t.Cleanup(shutdown)
 	mgr.syncTimeout = 30 * time.Second
-	ctx, cancel := context.WithCancel(context.Background())
-
-	go func() {
-		time.Sleep(100 * time.Millisecond)
-		cancel()
-	}()
-	start := time.Now()
-	_, err := mgr.Subscribe(ctx, "apps", "v1", "deployments", "default", 0, nil)
-	elapsed := time.Since(start)
-
-	if err == nil {
-		t.Fatal("expected the abandoned subscribe to fail")
-	}
-	if elapsed > 10*time.Second {
-		t.Fatalf("subscribe took %s, want it to stop when the request went away", elapsed)
-	}
-	cooling, _ := mgr.coolingOff(streamKey{
-		gvr: schema.GroupVersionResource{Group: "apps", Version: "v1", Resource: "deployments"},
+	listed := make(chan struct{})
+	var listedOnce sync.Once
+	var repaired atomic.Bool
+	client.PrependReactor("list", "deployments", func(k8stesting.Action) (bool, runtime.Object, error) {
+		if repaired.Load() {
+			return false, nil, nil
+		}
+		listedOnce.Do(func() {
+			close(listed)
+		})
+		return true, nil, errors.New("the apiserver is unavailable")
 	})
+	ctx, cancel := context.WithCancel(t.Context())
+	t.Cleanup(cancel)
+	done := make(chan error, 1)
+	go func() {
+		sub, err := mgr.Subscribe(ctx, "apps", "v1", "deployments", "default", 0, nil)
+		if sub != nil {
+			sub.Close()
+			done <- errors.New("a cache that never synced returned a subscription")
+			return
+		}
+		done <- err
+	}()
+	select {
+	case <-listed:
+	case <-time.After(time.Second):
+		t.Fatal("the cache never started syncing")
+	}
+	cancel()
+	select {
+	case err := <-done:
+		if !errors.Is(err, context.Canceled) {
+			t.Fatalf("canceled subscription = %v", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("cancellation left a cache sync waiting")
+	}
+	if streamCount(mgr) != 0 {
+		t.Fatal("the canceled subscription left a stream behind")
+	}
+	cooling, _ := mgr.coolingOff(streamKey{gvr: depGVR})
 	if cooling {
 		t.Fatal("a caller giving up put the resource into backoff for everyone else")
+	}
+	repaired.Store(true)
+	sub, err := mgr.Subscribe(t.Context(), "apps", "v1", "deployments", "default", 0, nil)
+	if err != nil {
+		t.Fatalf("retry after recovery: %v", err)
+	}
+	defer sub.Close()
+	rows, total, err := sub.Snapshot()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if total != 1 || len(rows) != 1 || rows[0].Name != "web" {
+		t.Fatalf("recovered snapshot = %+v, total %d", rows, total)
 	}
 }
 
