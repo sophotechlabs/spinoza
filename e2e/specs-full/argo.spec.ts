@@ -1,7 +1,138 @@
 import { expect, test } from '../harness/test';
 import { openView } from '../harness/app';
-import { kubectl } from '../harness/cluster';
+import { kubectl, kubectlApply, kubectlSoft } from '../harness/cluster';
 import type { Locator, Page } from '@playwright/test';
+
+interface ManagedApplication {
+  spec: {
+    source: Record<string, unknown>;
+    syncPolicy?: { automated?: { enabled: boolean; prune: boolean; selfHeal: boolean } };
+  };
+  status?: {
+    sync?: { revision?: string };
+    resources?: { kind: string; name: string; namespace: string }[];
+    operationState?: {
+      phase: string;
+      operation: {
+        sync: { dryRun?: boolean; resources?: { kind: string; name: string; namespace: string }[] };
+      };
+    };
+  };
+}
+
+function namedApplication(name: string): ManagedApplication {
+  return JSON.parse(
+    kubectl(['get', `application/${name}`, '-n', 'argocd', '-o', 'json']),
+  ) as ManagedApplication;
+}
+
+async function withApplication(page: Page, name: string, run: () => Promise<void>): Promise<void> {
+  const original = namedApplication('guestbook');
+  const revision = original.status?.sync?.revision;
+  expect(revision).toBeTruthy();
+  try {
+    kubectlApply(JSON.stringify({ apiVersion: 'v1', kind: 'Namespace', metadata: { name } }));
+    kubectlApply(
+      JSON.stringify({
+        apiVersion: 'argoproj.io/v1alpha1',
+        kind: 'Application',
+        metadata: { name, namespace: 'argocd' },
+        spec: {
+          project: 'default',
+          source: { ...original.spec.source, targetRevision: revision },
+          destination: { server: 'https://kubernetes.default.svc', namespace: name },
+          syncPolicy: { automated: { enabled: false, prune: true, selfHeal: true } },
+        },
+      }),
+    );
+    await expect
+      .poll(() => namedApplication(name).status?.resources?.length ?? 0, { timeout: 120_000 })
+      .toBeGreaterThan(0);
+    await openView(page, 'argo-apps');
+    await page.getByRole('button', { name: new RegExp(`^${name} `) }).click();
+    await page.getByRole('tab', { name: 'Overview', exact: true }).click();
+    await run();
+  } finally {
+    kubectlSoft([
+      'delete',
+      'application',
+      name,
+      '-n',
+      'argocd',
+      '--ignore-not-found',
+      '--wait=true',
+    ]);
+    kubectlSoft(['delete', 'namespace', name, '--ignore-not-found', '--wait=false']);
+  }
+}
+
+test('an Argo dry run leaves resources absent and a selected sync creates only the marked Service', async ({
+  page,
+}) => {
+  test.setTimeout(240_000);
+  const name = 'e2e-selected-sync';
+  await withApplication(page, name, async () => {
+    const service = namedApplication(name).status?.resources?.find(
+      (resource) => resource.kind === 'Service',
+    );
+    if (service === undefined) {
+      throw new Error('the fixture application has no Service to synchronize');
+    }
+    await page.getByRole('button', { name: 'Sync', exact: true }).click();
+    const dialog = page.getByRole('dialog', { name: `Sync ${name}`, exact: true });
+    await dialog.getByRole('checkbox', { name: /^Dry run/ }).check();
+    await dialog.getByRole('button', { name: 'Synchronize', exact: true }).click();
+    await expect(dialog).toBeHidden();
+    await expect
+      .poll(() => namedApplication(name).status?.operationState, { timeout: 120_000 })
+      .toMatchObject({ phase: 'Succeeded', operation: { sync: { dryRun: true } } });
+    expect(kubectl(['get', 'services,deployments', '-n', name, '-o', 'name'])).toBe('');
+    await page.getByRole('tab', { name: 'Application', exact: true }).click();
+    const panel = page.getByRole('tabpanel', { name: 'Application' });
+    await panel
+      .getByRole('checkbox', { name: `Mark Service ${service.name}`, exact: true })
+      .check();
+    await panel.getByRole('button', { name: 'Sync 1 marked', exact: true }).click();
+    await expect(panel).toContainText('Sync requested.');
+    await expect
+      .poll(() => namedApplication(name).status?.operationState, { timeout: 120_000 })
+      .toMatchObject({
+        phase: 'Succeeded',
+        operation: {
+          sync: { resources: [{ kind: 'Service', name: service.name, namespace: name }] },
+        },
+      });
+    expect(kubectl(['get', 'services', '-n', name, '-o', 'name']).trim()).toBe(
+      `service/${service.name}`,
+    );
+    expect(kubectl(['get', 'deployments', '-n', name, '-o', 'name'])).toBe('');
+    const row = panel
+      .getByRole('checkbox', { name: `Mark Service ${service.name}`, exact: true })
+      .locator('../..');
+    await expect(row).toContainText('Synced', { timeout: 60_000 });
+  });
+});
+
+test('Argo auto-sync can be resumed and suspended without changing prune or self-heal', async ({
+  page,
+}) => {
+  test.setTimeout(180_000);
+  const name = 'e2e-auto-sync';
+  await withApplication(page, name, async () => {
+    await page.getByRole('button', { name: 'Resume auto-sync', exact: true }).click();
+    await expect
+      .poll(() => namedApplication(name).spec.syncPolicy?.automated)
+      .toEqual({ enabled: true, prune: true, selfHeal: true });
+    await expect(page.getByText('Auto-sync on.', { exact: true })).toBeVisible();
+    await page.getByRole('button', { name: 'Suspend auto-sync', exact: true }).click();
+    await expect
+      .poll(() => namedApplication(name).spec.syncPolicy?.automated)
+      .toEqual({ enabled: false, prune: true, selfHeal: true });
+    await expect(
+      page.getByText('Auto-sync off. Prune and self-heal unchanged.', { exact: true }),
+    ).toBeVisible();
+  });
+});
 
 async function openGuestbook(page: Page): Promise<void> {
   await openView(page, 'argo-apps');
