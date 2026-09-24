@@ -4,9 +4,11 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"reflect"
 	"strings"
 	"sync"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -813,29 +815,41 @@ func TestRefreshResourcesWithoutADiscoveryClient(t *testing.T) {
 }
 
 func TestConcurrentDiscoveryRefreshesShareOneRebuild(t *testing.T) {
-	mgr, cancel := newManager(t, newClient(t))
-	defer cancel()
-	disco := &blockingDiscovery{started: make(chan struct{}), release: make(chan struct{})}
-	mgr.UseDiscovery(disco, nil)
-	results := make(chan api.ResourceCatalog, 2)
-	go func() { results <- mgr.RefreshResources() }()
-	<-disco.started
-	go func() { results <- mgr.RefreshResources() }()
-	close(disco.release)
-	for range 2 {
-		select {
-		case catalog := <-results:
-			if len(catalog.Categories) == 0 {
-				t.Fatal("a joined refresh returned no catalog")
-			}
-		case <-time.After(time.Second):
-			t.Fatal("a joined refresh did not return")
+	synctest.Test(t, func(t *testing.T) {
+		mgr, cancel := newManager(t, newClient(t))
+		defer cancel()
+		disco := &blockingDiscovery{started: make(chan struct{}), release: make(chan struct{})}
+		mgr.UseDiscovery(disco, nil)
+		results := make(chan api.ResourceCatalog, 2)
+		go func() { results <- mgr.RefreshResources() }()
+		<-disco.started
+		go func() { results <- mgr.RefreshResources() }()
+		synctest.Wait()
+		if len(results) != 0 {
+			t.Fatal("a refresh returned before discovery supplied its catalog")
 		}
-	}
-	invalidated, calls := disco.counts()
-	if invalidated != 1 || calls != 1 {
-		t.Fatalf("discovery invalidations/calls = %d/%d, want 1/1", invalidated, calls)
-	}
+		close(disco.release)
+		var first api.ResourceCatalog
+		for at := range 2 {
+			select {
+			case catalog := <-results:
+				if len(catalog.Categories) == 0 {
+					t.Fatal("a joined refresh returned no catalog")
+				}
+				if at == 0 {
+					first = catalog
+				} else if !reflect.DeepEqual(catalog, first) {
+					t.Fatalf("joined catalog = %+v, want the first result %+v", catalog, first)
+				}
+			case <-time.After(time.Second):
+				t.Fatal("a joined refresh did not return")
+			}
+		}
+		invalidated, calls := disco.counts()
+		if invalidated != 1 || calls != 1 {
+			t.Fatalf("discovery invalidations/calls = %d/%d, want 1/1", invalidated, calls)
+		}
+	})
 }
 
 func TestDiscoveryRefreshHasAGlobalCooldown(t *testing.T) {
