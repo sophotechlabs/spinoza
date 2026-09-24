@@ -2,9 +2,11 @@ package baseline
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strconv"
 	"strings"
 	"sync"
@@ -420,9 +422,15 @@ func TestMalformedBaselineShapesAreRefused(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			_, err := Decode([]byte(tc.body))
+			found, err := Decode([]byte(tc.body))
 			if err == nil {
 				t.Fatal("malformed baseline was accepted")
+			}
+			if !reflect.DeepEqual(found, checks.Baseline{}) {
+				t.Fatalf("baseline = %+v, want no partial document after refusal", found)
+			}
+			if errors.Is(err, ErrRead) {
+				t.Fatalf("error = %v, want malformed input distinguished from an interrupted read", err)
 			}
 			if strings.Contains(err.Error(), tc.want) {
 				return
