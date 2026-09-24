@@ -19,7 +19,8 @@ COPY LICENSE ./
 COPY --from=web /src/web/dist ./web/dist
 ARG SPINOZA_VERSION=dev
 ARG TARGETARCH
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH} go build \
+ARG SPINOZA_GOFLAGS=""
+RUN GOFLAGS="${SPINOZA_GOFLAGS}" CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH} go build \
     -trimpath \
     -ldflags "-s -w -X github.com/sophotechlabs/spinoza/internal/version.value=${SPINOZA_VERSION}" \
     -o /out/spinoza .

@@ -7,6 +7,7 @@ import {
   buildSummary,
   collectFlaky,
   collectMutation,
+  collectSystemCoverage,
   minutesBetween,
   readJobs,
   render,
@@ -154,14 +155,96 @@ test("the mutation score is the killed share of the shards that reported", () =>
   const dir = scratch();
   writeFileSync(
     join(dir, "a.json"),
-    JSON.stringify({ mutants_killed: 30, mutants_lived: 10 }),
+    JSON.stringify({
+      mutants_killed: 30,
+      mutants_lived: 10,
+      mutants_not_covered: 7,
+    }),
   );
   writeFileSync(
     join(dir, "b.json"),
-    JSON.stringify({ mutants_killed: 50, mutants_lived: 10 }),
+    JSON.stringify({
+      mutants_killed: 50,
+      mutants_lived: 10,
+      mutants_not_covered: 3,
+    }),
   );
   const mutation = collectMutation(dir);
-  assert.deepEqual(mutation, { shards: 2, killed: 80, lived: 20, score: 80 });
+  assert.deepEqual(mutation, {
+    shards: 2,
+    killed: 80,
+    lived: 20,
+    uncovered: 10,
+    score: 80,
+  });
+});
+
+test("legacy shards with missing uncovered counts do not imply zero uncovered mutants", () => {
+  const dir = scratch();
+  writeFileSync(
+    join(dir, "old.json"),
+    JSON.stringify({ mutants_killed: 10, mutants_lived: 0 }),
+  );
+  writeFileSync(
+    join(dir, "new.json"),
+    JSON.stringify({
+      mutants_killed: 5,
+      mutants_lived: 0,
+      mutants_not_covered: 3,
+    }),
+  );
+  assert.deepEqual(collectMutation(dir), {
+    shards: 2,
+    killed: 15,
+    lived: 0,
+    uncovered: null,
+    score: 100,
+  });
+});
+
+test("separate coverage artifacts retain their denominators and recompute percentages", () => {
+  const dir = scratch();
+  for (const [suite, covered, total] of [
+    ["mcp-cli", 5, 10],
+    ["cluster-mode-auth", 2, 20],
+  ]) {
+    mkdirSync(join(dir, suite));
+    writeFileSync(
+      join(dir, suite, "summary.json"),
+      JSON.stringify({ suite, covered, total, percent: 100 }),
+    );
+  }
+  assert.deepEqual(collectSystemCoverage(dir), [
+    { suite: "cluster-mode-auth", covered: 2, total: 20, percent: 10 },
+    { suite: "mcp-cli", covered: 5, total: 10, percent: 50 },
+  ]);
+});
+
+test("duplicate system suites cannot silently inflate reported coverage", () => {
+  const dir = scratch();
+  for (const name of ["first", "second"]) {
+    mkdirSync(join(dir, name));
+    writeFileSync(
+      join(dir, name, "summary.json"),
+      JSON.stringify({ suite: "mcp-cli", covered: 5, total: 10 }),
+    );
+  }
+  assert.throws(
+    () => collectSystemCoverage(dir),
+    /duplicate system coverage suite/,
+  );
+});
+
+test("a malformed system report fails instead of presenting impossible coverage", () => {
+  const dir = scratch();
+  writeFileSync(
+    join(dir, "summary.json"),
+    JSON.stringify({ suite: "mcp-cli", covered: 11, total: 10 }),
+  );
+  assert.throws(
+    () => collectSystemCoverage(dir),
+    /invalid system coverage report/,
+  );
 });
 
 test("a report with no mutation shards says so instead of claiming zero", () => {
@@ -323,4 +406,46 @@ test("a green run never notifies, whatever failed before", () => {
     verdict: "nightly:green",
     notify: false,
   });
+});
+
+test("uncovered mutants remain visible beside a perfect score", () => {
+  const text = render(
+    {
+      ...summary,
+      mutation: { shards: 1, killed: 20, lived: 0, uncovered: 9, score: 100 },
+    },
+    null,
+  );
+  assert.match(text, /mutation score \| 100%/);
+  assert.match(text, /uncovered mutants \| 9/);
+});
+
+test("legacy uncovered counts render as unknown", () => {
+  assert.match(render(summary, null), /uncovered mutants \| n\/a/);
+});
+
+test("system profiles do not alter the browser denominator", () => {
+  const text = render(
+    {
+      ...summary,
+      systemCoverage: [
+        { suite: "mcp-cli", covered: 2, total: 10, percent: 20 },
+      ],
+    },
+    null,
+  );
+  assert.match(text, /e2e coverage \| 71\.2%/);
+  assert.match(text, /mcp-cli \| 2 \/ 10 \| 20%/);
+});
+
+test("artifact suite names cannot inject report markup", () => {
+  const dir = scratch();
+  writeFileSync(
+    join(dir, "summary.json"),
+    JSON.stringify({ suite: "mcp | forged", covered: 1, total: 2 }),
+  );
+  assert.throws(
+    () => collectSystemCoverage(dir),
+    /invalid system coverage report/,
+  );
 });

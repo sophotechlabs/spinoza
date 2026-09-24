@@ -83,6 +83,8 @@ export function collectMutation(dir) {
   }
   let killed = 0;
   let lived = 0;
+  let uncovered = 0;
+  let uncoveredKnown = true;
   let found = 0;
   for (const path of jsonUnder(dir)) {
     const report = JSON.parse(readFileSync(path, "utf8"));
@@ -94,6 +96,14 @@ export function collectMutation(dir) {
     }
     killed += report.mutants_killed;
     lived += report.mutants_lived;
+    if (
+      Number.isInteger(report.mutants_not_covered) &&
+      report.mutants_not_covered >= 0
+    ) {
+      uncovered += report.mutants_not_covered;
+    } else {
+      uncoveredKnown = false;
+    }
     found += 1;
   }
   if (found === 0) {
@@ -104,7 +114,38 @@ export function collectMutation(dir) {
   if (total > 0) {
     score = Math.round((killed / total) * 1000) / 10;
   }
-  return { shards: found, killed, lived, score };
+  if (!uncoveredKnown) {
+    uncovered = null;
+  }
+  return { shards: found, killed, lived, uncovered, score };
+}
+
+export function collectSystemCoverage(dir) {
+  const reports = [];
+  const suites = new Set();
+  for (const path of filesUnder(dir, (entry) => entry === "summary.json")) {
+    const report = JSON.parse(readFileSync(path, "utf8"));
+    if (
+      typeof report.suite !== "string" ||
+      !/^[a-z][a-z0-9-]+$/.test(report.suite) ||
+      !Number.isSafeInteger(report.covered) ||
+      !Number.isSafeInteger(report.total) ||
+      report.covered < 0 ||
+      report.total <= 0 ||
+      report.covered > report.total
+    ) {
+      throw new Error(`invalid system coverage report: ${path}`);
+    }
+    if (suites.has(report.suite)) {
+      throw new Error(`duplicate system coverage suite: ${report.suite}`);
+    }
+    suites.add(report.suite);
+    reports.push({
+      ...report,
+      percent: Math.round((1000 * report.covered) / report.total) / 10,
+    });
+  }
+  return reports.sort((left, right) => left.suite.localeCompare(right.suite));
 }
 
 export function buildSummary(input) {
@@ -114,6 +155,10 @@ export function buildSummary(input) {
     .map((row) => row.name);
   const minutes =
     Math.round(rows.reduce((total, row) => total + row.minutes, 0) * 10) / 10;
+  let systemCoverage = input.systemCoverage;
+  if (systemCoverage === undefined || systemCoverage === null) {
+    systemCoverage = [];
+  }
   return {
     sha: input.sha,
     runUrl: input.runUrl,
@@ -125,6 +170,7 @@ export function buildSummary(input) {
     flaky: input.flaky,
     e2eCoverage: input.e2eCoverage,
     mutation: input.mutation,
+    systemCoverage,
   };
 }
 
@@ -172,6 +218,41 @@ export function render(summary, previous) {
     } |`,
     `| flaky | ${delta(summary.flaky.length, older.flaky?.length)} | passed only on retry |`,
   ];
+  const uncovered = summary.mutation?.uncovered;
+  if (uncovered === null || uncovered === undefined) {
+    lines.push(
+      "| uncovered mutants | n/a | absent from one or more package reports |",
+    );
+  } else {
+    lines.push(
+      `| uncovered mutants | ${delta(uncovered, older.mutation?.uncovered)} | records across reported build variants |`,
+    );
+  }
+  lines.push(
+    "",
+    "Mutation score is killed / (killed + lived). Uncovered mutants are excluded from that score; some are uninstrumented constant expressions.",
+  );
+  const systemCoverage = summary.systemCoverage;
+  if (
+    systemCoverage !== undefined &&
+    systemCoverage !== null &&
+    systemCoverage.length > 0
+  ) {
+    lines.push(
+      "",
+      "## Separate system coverage",
+      "",
+      "These suites retain their own Go statement denominators. The browser E2E coverage above is unchanged by these profiles.",
+      "",
+      "| suite | covered / total statements | coverage |",
+      "|---|---|---|",
+    );
+    for (const report of systemCoverage) {
+      lines.push(
+        `| ${report.suite} | ${report.covered} / ${report.total} | ${report.percent}% |`,
+      );
+    }
+  }
   if (newly.length > 0) {
     lines.push("", "## New failures", "");
     for (const name of newly) {
@@ -263,6 +344,7 @@ function main() {
     flaky: reports === "" ? [] : collectFlaky(reports),
     e2eCoverage: coverage === "" ? null : Number(coverage),
     mutation: mutation === "" ? null : collectMutation(mutation),
+    systemCoverage: collectSystemCoverage(argument("--system-coverage")),
   });
   mkdirSync(resolve(out), { recursive: true });
   writeFileSync(

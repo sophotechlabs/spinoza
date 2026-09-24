@@ -1,0 +1,34 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: spinoza-coverage
+  namespace: spinoza
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 256Mi
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: coverage-collector
+  namespace: spinoza
+spec:
+  securityContext:
+    runAsUser: 65532
+    runAsGroup: 65532
+    fsGroup: 65532
+  containers:
+    - name: collector
+      image: spinoza:cluster-mode
+      imagePullPolicy: Never
+      command: ["sleep", "infinity"]
+      volumeMounts:
+        - name: coverage
+          mountPath: /coverage
+  volumes:
+    - name: coverage
+      persistentVolumeClaim:
+        claimName: spinoza-coverage

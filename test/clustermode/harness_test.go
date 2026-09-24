@@ -92,6 +92,14 @@ func baseValues() map[string]string {
 		"rbac.impersonation.unsafeAllowAnyUser":  "true",
 		"rbac.impersonation.unsafeAllowAnyGroup": "true",
 	}
+	if os.Getenv("SPINOZA_CM_COVERAGE") == "1" {
+		values["extraEnv[0].name"] = "GOCOVERDIR"
+		values["extraEnv[0].value"] = "/coverage"
+		values["extraVolumes[0].name"] = "coverage"
+		values["extraVolumes[0].persistentVolumeClaim.claimName"] = "spinoza-coverage"
+		values["extraVolumeMounts[0].name"] = "coverage"
+		values["extraVolumeMounts[0].mountPath"] = "/coverage"
+	}
 	if os.Getenv("SPINOZA_CM_USE_CHART_IMAGE") == "1" {
 		return values
 	}

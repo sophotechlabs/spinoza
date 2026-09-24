@@ -372,6 +372,18 @@ test-integration name='': cluster-base
     set -euo pipefail
     export SPINOZA_TEST_CONTEXT={{ test_context }}
     name={{ quote(name) }}
+    if [ "$name" = MCP ]; then
+        output=.tmp/system-coverage/mcp-cli
+        mkdir -p "$output"
+        status=0
+        if ! go test -tags integration -count=1 -timeout 15m -v -run MCP \
+            -covermode=atomic -coverprofile="$output/coverage.out" \
+            -coverpkg=./internal/... ./test/integration/...; then
+            status=1
+        fi
+        node scripts/system-coverage.mjs "$output/coverage.out" mcp-cli "$output/summary.json"
+        exit "$status"
+    fi
     if [ -n "$name" ]; then
         go test -tags integration -count=1 -timeout 15m -run "$name" ./test/integration/...
         exit 0
@@ -887,7 +899,7 @@ cluster-mode-image:
     version="$(just app-version)"
     named="${KIND_EXPERIMENTAL_DOCKER_NETWORK:-}"
     if [ -z "$named" ]; then
-        docker build --build-arg SPINOZA_VERSION="$version" -t spinoza:cluster-mode .
+        docker build --build-arg SPINOZA_GOFLAGS="-cover -covermode=atomic" --build-arg SPINOZA_VERSION="$version" -t spinoza:cluster-mode .
     else
         # buildkit takes a network from its builder, not from the build, and the
         # default bridge is the one this host's firewall will not forward.
@@ -897,17 +909,34 @@ cluster-mode-image:
                 --driver-opt "network=$named" > /dev/null
         fi
         docker buildx build --builder "$builder" --load \
+            --build-arg SPINOZA_GOFLAGS="-cover -covermode=atomic" \
             --build-arg SPINOZA_VERSION="$version" -t spinoza:cluster-mode .
     fi
     kind load docker-image spinoza:cluster-mode --name {{ cm_cluster }}
+
+cluster-mode-cover-prepare:
+    bash scripts/cluster-mode-coverage.sh prepare {{ cm_context }}
+
+cluster-mode-cover suite:
+    bash scripts/cluster-mode-coverage.sh collect {{ cm_context }} {{ quote(suite) }}
 
 cluster-mode-down:
     kind delete cluster --name {{ cm_cluster }}
 
 # every cluster-mode path, against a real cluster and a real identity provider
-test-cluster-mode name='': stub-assets cluster-mode-up cluster-mode-image
+test-cluster-mode name='': stub-assets cluster-mode-up cluster-mode-image cluster-mode-cover-prepare
     #!/usr/bin/env bash
     set -euo pipefail
+    export SPINOZA_CM_COVERAGE=1
+    finish() {
+        status=$?
+        trap - EXIT
+        if ! just cluster-mode-cover cluster-mode-auth; then
+            exit 1
+        fi
+        exit "$status"
+    }
+    trap finish EXIT
     args=(-tags clustermode -count=1 -timeout 45m -v)
     if [ -n '{{ name }}' ]; then
         args+=(-run '{{ name }}')
@@ -915,7 +944,7 @@ test-cluster-mode name='': stub-assets cluster-mode-up cluster-mode-image
     SPINOZA_CM_CONTEXT={{ cm_context }} SPINOZA_CM_CA="$PWD/.tmp/cm/tls.crt" \
         go test "${args[@]}" ./{{ cm_dir }}/...
 
-test-cluster-mode-browser browser='chromium' mode='' name='': stub-assets cluster-mode-up cluster-mode-image
+test-cluster-mode-browser browser='chromium' mode='' name='': stub-assets cluster-mode-up cluster-mode-image cluster-mode-cover-prepare
     #!/usr/bin/env bash
     set -euo pipefail
     browser={{ quote(browser) }}
@@ -927,6 +956,16 @@ test-cluster-mode-browser browser='chromium' mode='' name='': stub-assets cluste
             exit 1
             ;;
     esac
+    export SPINOZA_CM_COVERAGE=1
+    finish() {
+        status=$?
+        trap - EXIT
+        if ! just cluster-mode-cover "cluster-mode-$browser"; then
+            exit 1
+        fi
+        exit "$status"
+    }
+    trap finish EXIT
     requested={{ quote(mode) }}
     modes=(oidc proxy)
     if [ -n "$requested" ]; then
@@ -1235,6 +1274,9 @@ nightly-report dir sha url trigger coverage='':
     if [ -d {{ quote(dir) }}/mutation ]; then
         args+=(--mutation {{ quote(dir) }}/mutation)
     fi
+    if [ -d {{ quote(dir) }}/system-coverage ]; then
+        args+=(--system-coverage {{ quote(dir) }}/system-coverage)
+    fi
     coverage={{ quote(coverage) }}
     if [ -n "$coverage" ]; then
         args+=(--coverage "$coverage")
@@ -1245,7 +1287,7 @@ hygiene:
     typos
     just editorconfig
     scripts/check-kubectl-skew.sh .
-    shellcheck install.sh scripts/check-kubectl-skew.sh scripts/check-mutation-report.sh scripts/check-mutation-total.sh scripts/create-kind-cluster.sh \
+    shellcheck install.sh scripts/cluster-mode-coverage.sh scripts/check-kubectl-skew.sh scripts/check-mutation-report.sh scripts/check-mutation-total.sh scripts/create-kind-cluster.sh \
         scripts/nightly-credential-helper.sh scripts/nightly-due.sh scripts/nightly-publish.sh \
         scripts/release-commit.sh scripts/release-pending.sh \
         test/release-commit.sh test/release-pending.sh test/install/container.sh \

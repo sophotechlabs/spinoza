@@ -229,7 +229,7 @@ jobs:
           ref: ${{ inputs.ref }}
       - uses: jdx/mise-action@3c2e0cf82a5b2e5249f0d3635a4d83d0ae861518
         with:
-          install_args: just go kind kubectl helm
+          install_args: just node go kind kubectl helm
       - run: just test-cluster-mode
       - run: just cluster-mode-diagnostics
         if: failure()
@@ -240,6 +240,13 @@ jobs:
           path: .tmp/cm/diagnostics
           if-no-files-found: ignore
           retention-days: 14
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        if: always()
+        with:
+          name: system-coverage-cluster-mode-auth
+          path: .tmp/system-coverage/cluster-mode-auth
+          if-no-files-found: error
+          retention-days: 30
       - run: just cluster-mode-down
         if: always()
 
@@ -286,6 +293,13 @@ jobs:
             .tmp/cm/diagnostics
           if-no-files-found: ignore
           retention-days: 14
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        if: always()
+        with:
+          name: system-coverage-cluster-mode-${{ matrix.browser }}
+          path: .tmp/system-coverage/cluster-mode-${{ matrix.browser }}
+          if-no-files-found: error
+          retention-days: 30
       - run: just cluster-mode-down
         if: always()
 
@@ -301,10 +315,18 @@ jobs:
           ref: ${{ inputs.ref }}
       - uses: jdx/mise-action@3c2e0cf82a5b2e5249f0d3635a4d83d0ae861518
         with:
-          install_args: just go kind kubectl helm
+          install_args: just node go kind kubectl helm
       - run: just test-integration MCP
       - run: just cluster-down
         if: always()
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        if: always()
+        with:
+          name: system-coverage-mcp-cli
+          path: .tmp/system-coverage/mcp-cli
+          if-no-files-found: error
+          retention-days: 30
 
   distribution-desktop-install:
     needs: select
