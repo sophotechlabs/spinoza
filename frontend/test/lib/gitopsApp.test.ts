@@ -196,6 +196,52 @@ describe('fetching the managed-resource graph', () => {
 });
 
 describe('watching one application', () => {
+  for (const change of ['application', 'cluster'] as const) {
+    for (const outcome of ['success', 'failure'] as const) {
+      it(`ignores an old ${outcome} after the ${change} changes and its replacement loads`, async () => {
+        let finish!: (response: Response) => void;
+        let fail!: (error: Error) => void;
+        const pending = new Promise<Response>((resolve, reject) => {
+          finish = resolve;
+          fail = reject;
+        });
+        const next = { ...ref, name: 'replacement' };
+        const fetcher = vi
+          .fn()
+          .mockImplementationOnce(() => pending)
+          .mockResolvedValueOnce(Response.json({ ...full, ref: next, name: 'replacement' }));
+        vi.stubGlobal('fetch', fetcher);
+        const { result, rerender, unmount } = renderHook(
+          ({ target }: { target: ObjectRef }) => useGitopsApp(target),
+          { initialProps: { target: ref } },
+        );
+        expect(fetcher).toHaveBeenCalledTimes(1);
+        if (change === 'application') {
+          rerender({ target: next });
+        } else {
+          act(() => {
+            bumpClusterEpoch();
+          });
+        }
+        await waitFor(() => {
+          expect(result.current.data?.name).toBe('replacement');
+        });
+        await act(async () => {
+          if (outcome === 'success') {
+            finish(Response.json({ ...full, name: 'obsolete' }));
+          } else {
+            fail(new Error('obsolete cluster refusal'));
+          }
+          await pending.catch(() => undefined);
+        });
+        expect(result.current.data?.name).toBe('replacement');
+        expect(result.current.error).toBeNull();
+        expect(fetcher).toHaveBeenCalledTimes(2);
+        unmount();
+      });
+    }
+  }
+
   it('loads it and reloads on demand', async () => {
     const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve(full) });
     vi.stubGlobal('fetch', fetchMock);
