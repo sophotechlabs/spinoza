@@ -389,12 +389,14 @@
         "specs/actions.spec.ts",
         "specs/guarded.spec.ts",
         "specs/history.spec.ts",
+        "specs/recordings.spec.ts",
         "specs/rollout.spec.ts"
       ],
       "paths": [
         "e2e/specs/actions.spec.ts",
         "e2e/specs/guarded.spec.ts",
         "e2e/specs/history.spec.ts",
+        "e2e/specs/recordings.spec.ts",
         "frontend/src/components/BulkBar.tsx",
         "frontend/src/components/ConfirmByName.tsx",
         "frontend/src/components/DisabledActionReasons.tsx",
@@ -483,12 +485,14 @@
       "observedMinutes": 5,
       "specs": [
         "specs/checks.spec.ts",
+        "specs/audit-schedule.spec.ts",
         "specs/issues.spec.ts",
         "specs/posture.spec.ts",
         "specs/worklist.spec.ts"
       ],
       "paths": [
         "e2e/specs/checks.spec.ts",
+        "e2e/specs/audit-schedule.spec.ts",
         "e2e/specs/issues.spec.ts",
         "e2e/specs/worklist.spec.ts",
         "frontend/src/components/Checks.tsx",

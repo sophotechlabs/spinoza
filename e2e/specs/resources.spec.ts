@@ -1,6 +1,7 @@
 import { expect, test } from '../harness/test';
 import { openResource } from '../harness/app';
-import { CONTEXT } from '../harness/paths';
+import { CONTEXT, NAMESPACE } from '../harness/paths';
+import { kubectl } from '../harness/cluster';
 import type { Locator, Page } from '@playwright/test';
 
 function settingsWrite(page: Page) {
@@ -44,7 +45,30 @@ test('a restart count is reported for a failing pod', async ({ page }) => {
   await openResource(page, 'pods', 'Pod');
   const crashing = page.locator('main tbody tr').filter({ hasText: 'crashing-' }).first();
   await expect(crashing).toBeVisible({ timeout: 60_000 });
-  await expect(crashing).not.toContainText('crashing-x');
+  const name = await crashing.getByRole('button').first().innerText();
+  const headers = await page.locator('main thead th').allTextContents();
+  const restartsColumn = headers.findIndex((header) => header.includes('Restarts'));
+  expect(restartsColumn).toBeGreaterThanOrEqual(0);
+  const count = crashing.getByRole('cell').nth(restartsColumn);
+  await expect
+    .poll(
+      async () => {
+        const pod = JSON.parse(kubectl(['get', 'pod', name, '-n', NAMESPACE, '-o', 'json'])) as {
+          status: { containerStatuses: { restartCount: number }[] };
+        };
+        const actual = pod.status.containerStatuses.reduce(
+          (total, container) => total + container.restartCount,
+          0,
+        );
+        expect(actual).toBeGreaterThan(0);
+        return Number(await count.innerText()) - actual;
+      },
+      {
+        message: 'the Restarts cell must equal the restart count reported by Kubernetes',
+        timeout: 60_000,
+      },
+    )
+    .toBe(0);
 });
 
 test('selecting a row deep-links to that object', async ({ page }) => {

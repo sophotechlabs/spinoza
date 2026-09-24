@@ -1,7 +1,8 @@
 import { expect, test } from '../harness/test';
 import { openView } from '../harness/app';
-import { helm } from '../harness/cluster';
-import { NAMESPACE } from '../harness/paths';
+import { helm, helmSoft, kubectl, kubectlSoft } from '../harness/cluster';
+import { editorText, replaceEditor } from '../harness/editor';
+import { CHART_REPO, NAMESPACE } from '../harness/paths';
 import { DOOMED, RELEASE } from '../harness/fixtures';
 import { NEXT_VERSION, REPO_NAME } from '../harness/charts';
 import type { Locator, Page } from '@playwright/test';
@@ -240,14 +241,180 @@ test('cancelling an uninstall leaves the release and its revision untouched', as
 });
 
 test('a chart the repo offers is searchable and installable from the dialog', async ({ page }) => {
+  const name = 'e2e-browser-install';
+  try {
+    const dialog = await chooseInstall(page, name, NAMESPACE);
+    await dialog.getByRole('button', { name: 'Load the chart defaults' }).click();
+    await expect.poll(() => editorText(page)).toContain('greeting:');
+    await replaceEditor(page, '{greeting: installed through the browser, replicaCount: 1}');
+    await dialog.getByRole('button', { name: 'Preview', exact: true }).click();
+    const install = dialog.getByRole('button', { name: `Install ${name}`, exact: true });
+    await expect(install).toBeEnabled({ timeout: 60_000 });
+    expect(helm(['list', '-n', NAMESPACE, '--filter', `^${name}$`, '-o', 'json']).trim()).toBe(
+      '[]',
+    );
+    await install.click();
+    await expect(dialog).toBeHidden({ timeout: 90_000 });
+    await openNamed(page, name);
+    await expect(panel(page)).toContainText('deployed');
+    const values = JSON.parse(
+      helm(['get', 'values', name, '-n', NAMESPACE, '-o', 'json']),
+    ) as Record<string, unknown>;
+    expect(values).toEqual({ greeting: 'installed through the browser', replicaCount: 1 });
+    expect(
+      kubectl([
+        'get',
+        'configmap',
+        `${name}-greeting`,
+        '-n',
+        NAMESPACE,
+        '-o',
+        'jsonpath={.data.greeting}',
+      ]),
+    ).toBe('installed through the browser');
+  } finally {
+    helmSoft(['uninstall', name, '-n', NAMESPACE]);
+  }
+});
+
+async function chooseInstall(page: Page, name: string, namespace: string): Promise<Locator> {
   await openView(page, 'helm');
   await page.getByRole('button', { name: 'Install chart' }).click();
   const dialog = page.getByRole('dialog', { name: 'Install a chart' });
   await dialog.getByRole('searchbox', { name: 'Search charts' }).fill('spinoza');
   await expect(dialog).toContainText('1 charts', { timeout: 60_000 });
-  await expect(
-    dialog.getByRole('button', { name: `spinoza-e2e ${NEXT_VERSION} from ${REPO_NAME}` }),
-  ).toBeVisible();
+  await dialog
+    .getByRole('button', { name: `spinoza-e2e ${NEXT_VERSION} from ${REPO_NAME}` })
+    .click();
+  await dialog.getByLabel('Release name').fill(name);
+  await dialog.getByLabel('Namespace', { exact: true }).fill(namespace);
+  return dialog;
+}
+
+test('cancelling a rendered install leaves no release or chart resources', async ({ page }) => {
+  const name = 'e2e-browser-cancel';
+  const dialog = await chooseInstall(page, name, NAMESPACE);
+  await dialog.getByRole('button', { name: 'Preview', exact: true }).click();
+  await expect(dialog.getByRole('button', { name: `Install ${name}`, exact: true })).toBeEnabled({
+    timeout: 60_000,
+  });
+  await dialog.getByRole('button', { name: 'Back', exact: true }).click();
+  await expect(dialog.getByLabel('Release name')).toHaveValue(name);
+  await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
+  await expect(dialog).toBeHidden();
+  expect(helm(['list', '-n', NAMESPACE, '--filter', `^${name}$`, '-o', 'json']).trim()).toBe('[]');
+  expect(
+    kubectl([
+      'get',
+      'configmap',
+      `${name}-greeting`,
+      '-n',
+      NAMESPACE,
+      '--ignore-not-found',
+      '-o',
+      'name',
+    ]),
+  ).toBe('');
+});
+
+test('an install creates the requested namespace and records the release there', async ({
+  page,
+}) => {
+  const name = 'e2e-browser-namespace';
+  try {
+    const dialog = await chooseInstall(page, name, name);
+    await dialog.getByRole('checkbox', { name: 'Create the namespace' }).check();
+    await dialog.getByRole('button', { name: 'Preview', exact: true }).click();
+    const install = dialog.getByRole('button', { name: `Install ${name}`, exact: true });
+    await expect(install).toBeEnabled({ timeout: 60_000 });
+    expect(kubectl(['get', 'namespace', name, '--ignore-not-found', '-o', 'name'])).toBe('');
+    await install.click();
+    await expect(dialog).toBeHidden({ timeout: 90_000 });
+    expect(JSON.parse(helm(['list', '-n', name, '-o', 'json']))).toEqual([
+      expect.objectContaining({ name, namespace: name, status: 'deployed' }),
+    ]);
+    expect(
+      kubectl([
+        'get',
+        'configmap',
+        `${name}-greeting`,
+        '-n',
+        name,
+        '-o',
+        'jsonpath={.data.greeting}',
+      ]),
+    ).toBe('hello from the chart');
+  } finally {
+    helmSoft(['uninstall', name, '-n', name]);
+    kubectlSoft(['delete', 'namespace', name, '--ignore-not-found', '--wait=false']);
+  }
+});
+
+test('invalid install values report a render error and can be corrected before installing', async ({
+  page,
+}) => {
+  const name = 'e2e-browser-values';
+  const dialog = await chooseInstall(page, name, NAMESPACE);
+  await replaceEditor(page, 'not-a-values-map');
+  await dialog.getByRole('button', { name: 'Preview', exact: true }).click();
+  await expect(dialog.getByRole('alert')).toContainText(/yaml|JSON/i, { timeout: 60_000 });
+  await expect(dialog.getByRole('button', { name: `Install ${name}`, exact: true })).toHaveCount(0);
+  expect(helm(['list', '-n', NAMESPACE, '--filter', `^${name}$`, '-o', 'json']).trim()).toBe('[]');
+  await replaceEditor(page, '{greeting: corrected}');
+  await dialog.getByRole('button', { name: 'Preview', exact: true }).click();
+  await expect(dialog.getByRole('button', { name: `Install ${name}`, exact: true })).toBeEnabled({
+    timeout: 60_000,
+  });
+  await expect(dialog.getByRole('alert')).toBeEmpty();
+  await dialog.getByRole('button', { name: 'Close the install dialog' }).click();
+});
+
+test('a release created after preview refuses the install without overwriting the existing release', async ({
+  page,
+}) => {
+  const name = 'e2e-browser-name-conflict';
+  try {
+    const dialog = await chooseInstall(page, name, NAMESPACE);
+    await replaceEditor(page, '{greeting: browser replacement}');
+    await dialog.getByRole('button', { name: 'Preview', exact: true }).click();
+    const install = dialog.getByRole('button', { name: `Install ${name}`, exact: true });
+    await expect(install).toBeEnabled({ timeout: 60_000 });
+    helm([
+      'install',
+      name,
+      'spinoza-e2e',
+      '--repo',
+      CHART_REPO,
+      '--version',
+      NEXT_VERSION,
+      '-n',
+      NAMESPACE,
+      '--set-string',
+      'greeting=existing release value',
+    ]);
+    const before = JSON.parse(helm(['history', name, '-n', NAMESPACE, '-o', 'json'])) as unknown[];
+    expect(before).toHaveLength(1);
+    await install.click();
+    await expect(dialog.getByRole('alert')).toContainText(/name.*in use/, { timeout: 60_000 });
+    expect(JSON.parse(helm(['history', name, '-n', NAMESPACE, '-o', 'json']))).toEqual(before);
+    expect(JSON.parse(helm(['get', 'values', name, '-n', NAMESPACE, '-o', 'json']))).toEqual({
+      greeting: 'existing release value',
+    });
+    expect(
+      kubectl([
+        'get',
+        'configmap',
+        `${name}-greeting`,
+        '-n',
+        NAMESPACE,
+        '-o',
+        'jsonpath={.data.greeting}',
+      ]),
+    ).toBe('existing release value');
+    await dialog.getByRole('button', { name: 'Close the install dialog' }).click();
+  } finally {
+    helmSoft(['uninstall', name, '-n', NAMESPACE]);
+  }
 });
 
 test('a chart no repository offers is reported as an empty search result', async ({ page }) => {

@@ -147,4 +147,85 @@ test('clearing the history empties it and says so', async ({ page }) => {
     timeout: 30_000,
   });
   await expect(clear).toBeDisabled();
+  const exported = await page.request.get('/api/history/export?format=json&source=action');
+  expect(exported.status()).toBe(200);
+  expect(await exported.json()).toEqual([]);
+});
+
+test('history exports preserve browser actions and paginate without repeating the cursor', async ({
+  page,
+}) => {
+  await recordScale(page);
+  await recordScale(page);
+  const response = await page.request.get('/api/history/export?format=json&source=action&limit=2');
+  expect(response.status()).toBe(200);
+  expect(response.headers()['content-disposition']).toBe(
+    'attachment; filename="spinoza-history.json"',
+  );
+  const entries = (await response.json()) as {
+    id: number;
+    source: string;
+    verb: string;
+    name: string;
+    outcome: string;
+    namespace: string;
+  }[];
+  expect(entries).toHaveLength(2);
+  for (const entry of entries) {
+    expect(entry).toMatchObject({
+      source: 'action',
+      verb: 'scale',
+      name: 'chatty',
+      namespace: NAMESPACE,
+      outcome: 'done',
+    });
+  }
+  expect(entries[0].id).toBeGreaterThan(entries[1].id);
+  const older = await page.request.get(
+    `/api/history/export?format=json&source=action&limit=1&afterAction=${String(entries[0].id)}`,
+  );
+  expect(older.status()).toBe(200);
+  expect(await older.json()).toEqual([entries[1]]);
+  const changes = await page.request.get('/api/history/export?format=json&source=change&limit=2');
+  expect(changes.status()).toBe(200);
+  for (const entry of (await changes.json()) as { source: string }[]) {
+    expect(entry.source).toBe('change');
+  }
+});
+
+test('a CSV history download names the browser action and preserves its identity', async ({
+  page,
+}) => {
+  await recordScale(page);
+  const json = await page.request.get('/api/history/export?format=json&source=action&limit=1');
+  expect(json.status()).toBe(200);
+  const [entry] = (await json.json()) as { id: number; cluster: string; at: string }[];
+  const csv = await page.request.get('/api/history/export?format=csv&source=action&limit=1');
+  expect(csv.status()).toBe(200);
+  expect(csv.headers()['content-type']).toBe('text/csv; charset=utf-8');
+  expect(csv.headers()['content-disposition']).toBe('attachment; filename="spinoza-history.csv"');
+  const lines = (await csv.text()).trimEnd().split('\n');
+  expect(lines).toHaveLength(2);
+  expect(lines[0]).toBe(
+    'id,source,cluster,at,verb,actor,group,version,resource,kind,namespace,name,detail,was,outcome,message',
+  );
+  expect(lines[1]).toContain(`${String(entry.id)},action,${entry.cluster},${entry.at},scale,`);
+  expect(lines[1]).toContain(`,apps,v1,deployments,,${NAMESPACE},chatty,`);
+  expect(lines[1]).toContain(',done,');
+});
+
+test('history export refuses an invalid source before starting a download and accepts a corrected request', async ({
+  page,
+}) => {
+  await openView(page, 'history');
+  const response = await page.request.get('/api/history/export?format=json&source=unknown');
+  expect(response.status()).toBe(400);
+  expect(response.headers()['content-disposition']).toBeUndefined();
+  expect(await response.json()).toEqual({
+    message: 'source must be all, action or change',
+    request: expect.stringMatching(/\S+/),
+  });
+  const recovered = await page.request.get('/api/history/export?format=json&source=action&limit=1');
+  expect(recovered.status()).toBe(200);
+  expect(Array.isArray(await recovered.json())).toBe(true);
 });

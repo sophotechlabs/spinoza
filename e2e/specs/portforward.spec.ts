@@ -1,5 +1,160 @@
 import { expect, test } from '../harness/test';
-import { openResource } from '../harness/app';
+import { openResource, selectRow } from '../harness/app';
+import { kubectl, kubectlApply, kubectlSoft } from '../harness/cluster';
+import { NAMESPACE } from '../harness/paths';
+import type { Page } from '@playwright/test';
+
+function serviceFixture(
+  name: string,
+  selector: Record<string, string>,
+  targetPort: string | number,
+) {
+  return {
+    apiVersion: 'v1',
+    kind: 'Service',
+    metadata: { name, namespace: NAMESPACE },
+    spec: { selector, ports: [{ name: 'web', port: 80, targetPort }] },
+  };
+}
+
+async function withService(page: Page, name: string, run: () => Promise<void>): Promise<void> {
+  try {
+    kubectlApply(
+      JSON.stringify({
+        apiVersion: 'v1',
+        kind: 'Pod',
+        metadata: { name, namespace: NAMESPACE, labels: { forwarding: name } },
+        spec: {
+          containers: [
+            {
+              name: 'web',
+              image: 'busybox:1.37',
+              command: [
+                'sh',
+                '-c',
+                `mkdir -p /www\necho ${name} > /www/index.html\nexec httpd -f -p 8080 -h /www`,
+              ],
+              ports: [{ name: 'http', containerPort: 8080 }],
+              readinessProbe: { httpGet: { path: '/', port: 'http' } },
+            },
+          ],
+        },
+      }),
+    );
+    kubectl(['wait', '-n', NAMESPACE, '--for=condition=Ready', `pod/${name}`, '--timeout=60s']);
+    kubectlApply(JSON.stringify(serviceFixture(name, { forwarding: name }, 'http')));
+    await run();
+  } finally {
+    const response = await page.request.get('/api/portforward');
+    if (response.ok()) {
+      const forwards = (await response.json()) as { id: string; name: string }[];
+      for (const forward of forwards) {
+        if (forward.name === name) {
+          await page.request.delete(`/api/portforward?id=${encodeURIComponent(forward.id)}`);
+        }
+      }
+    }
+    kubectlSoft([
+      'delete',
+      'service,pod',
+      name,
+      '-n',
+      NAMESPACE,
+      '--ignore-not-found',
+      '--wait=false',
+    ]);
+  }
+}
+
+async function openService(page: Page, name: string): Promise<void> {
+  await openResource(page, 'services', 'Service');
+  await selectRow(page, name);
+  await page.getByRole('tab', { name: 'Overview', exact: true }).click();
+}
+
+async function expectServiceTraffic(page: Page, name: string): Promise<void> {
+  await page.getByRole('button', { name: 'Forward', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Stop forwarding port 80' })).toBeVisible({
+    timeout: 60_000,
+  });
+  await page.getByRole('tab', { name: 'Forwards', exact: true }).click();
+  const panel = page.getByRole('tabpanel', { name: 'Forwards' });
+  const forward = panel
+    .locator('div.flex.items-center')
+    .filter({ hasText: `service/${NAMESPACE}/${name}` });
+  await expect(forward).toContainText('to 80');
+  const href = await forward.getByRole('link').getAttribute('href');
+  if (href === null) {
+    throw new Error('the Service forward has no listener URL');
+  }
+  await expect
+    .poll(async () => (await page.request.get(href)).text(), { timeout: 30_000 })
+    .toBe(`${name}\n`);
+  await forward.getByRole('button', { name: 'Stop', exact: true }).click();
+  await expect(forward).toHaveCount(0);
+  await expect
+    .poll(async () => {
+      try {
+        return (await page.request.get(href, { timeout: 2_000 })).ok();
+      } catch {
+        return false;
+      }
+    })
+    .toBe(false);
+}
+
+test('a Service forwards its named target port and closes the listener when stopped', async ({
+  page,
+}) => {
+  const name = 'e2e-forward-named';
+  await withService(page, name, async () => {
+    await openService(page, name);
+    await expectServiceTraffic(page, name);
+  });
+});
+
+const unusableServices: {
+  name: string;
+  selector: Record<string, string> | null;
+  targetPort: string;
+  message: RegExp;
+}[] = [
+  { name: 'selector', selector: {}, targetPort: 'http', message: /no selector/ },
+  {
+    name: 'empty',
+    selector: { forwarding: 'no-matching-pod' },
+    targetPort: 'http',
+    message: /no .*pod|no pods/i,
+  },
+  { name: 'port', selector: null, targetPort: 'missing', message: /missing|named port/i },
+];
+
+for (const failure of unusableServices) {
+  test(`a Service with an unusable ${failure.name} refuses forwarding and recovers after repair`, async ({
+    page,
+  }) => {
+    const name = `e2e-forward-${failure.name}`;
+    await withService(page, name, async () => {
+      let selector: Record<string, string> = { forwarding: name };
+      if (failure.selector !== null) {
+        selector = failure.selector;
+      }
+      kubectlApply(JSON.stringify(serviceFixture(name, selector, failure.targetPort)));
+      await openService(page, name);
+      await page.getByRole('button', { name: 'Forward', exact: true }).click();
+      await expect(
+        page.getByRole('tabpanel', { name: 'Overview' }).getByRole('alert'),
+      ).toContainText(failure.message);
+      const response = await page.request.get('/api/portforward');
+      expect(response.ok()).toBe(true);
+      expect(await response.json()).not.toEqual(
+        expect.arrayContaining([expect.objectContaining({ name })]),
+      );
+      kubectlApply(JSON.stringify(serviceFixture(name, { forwarding: name }, 'http')));
+      await expectServiceTraffic(page, name);
+    });
+  });
+}
 
 async function openHealthy(page: import('@playwright/test').Page): Promise<void> {
   await openResource(page, 'pods', 'Pod');
