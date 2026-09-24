@@ -19,6 +19,7 @@ type faults struct {
 	beginFails bool
 	commitErr  error
 	closeErr   error
+	readErr    error
 }
 
 type faultyConnector struct {
@@ -99,13 +100,14 @@ func (s faultyStmt) Exec([]driver.Value) (driver.Result, error) {
 }
 
 func (s faultyStmt) Query([]driver.Value) (driver.Rows, error) {
-	return &faultyRows{columns: s.arm.columns, values: s.arm.values}, nil
+	return &faultyRows{columns: s.arm.columns, values: s.arm.values, readErr: s.arm.readErr}, nil
 }
 
 type faultyRows struct {
 	columns int
 	values  []driver.Value
 	served  bool
+	readErr error
 }
 
 func (r *faultyRows) Columns() []string {
@@ -125,6 +127,9 @@ func (r *faultyRows) Next(dest []driver.Value) error {
 		return errQueryFailed
 	}
 	if r.served {
+		if r.readErr != nil {
+			return r.readErr
+		}
 		return io.EOF
 	}
 	r.served = true
