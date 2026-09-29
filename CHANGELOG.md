@@ -1,5 +1,19 @@
 # Changelog
 
+## [2.2.0](https://github.com/sophotechlabs/spinoza/compare/v2.1.2...v2.2.0) (2026-09-29)
+
+
+### Features
+
+* **namespaces:** narrow the desktop app to the namespaces an account can read ([f7166f9](https://github.com/sophotechlabs/spinoza/commit/f7166f98dc833c2f2201b5c86228b8eaabd54721))
+
+
+### Bug Fixes
+
+* **deps:** bump undici to 7.30.0 for GHSA-3wwx-pv8p-q78v ([e3f7bda](https://github.com/sophotechlabs/spinoza/commit/e3f7bda2aab5d67867a29bc0e6219a6346d1d992))
+* **feed:** free the snapshot slot of a table replaced while it was building ([8e72c9c](https://github.com/sophotechlabs/spinoza/commit/8e72c9c53bbe3607cacda9597c38ede65141e0e8))
+* **overview:** stop showing unread nodes, events and a missing metrics API as data ([9c9fce0](https://github.com/sophotechlabs/spinoza/commit/9c9fce0c60d759f0d3a0c3059621b1b9e664b5a5))
+
 ## [2.1.2](https://github.com/sophotechlabs/spinoza/compare/v2.1.1...v2.1.2) (2026-09-28)
 
 
