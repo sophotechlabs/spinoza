@@ -15,10 +15,12 @@ function overview(patch: Partial<Overview> = {}): Overview {
       memAllocatableMi: 32768,
       memUsedMi: 8192,
       usageKnown: true,
+      known: true,
     },
     pods: { total: 40, running: 38, pending: 1, failed: 1, succeeded: 0, known: true, capped: [] },
     warnings: [],
     warningCount: 0,
+    warningsRead: true,
     ...patch,
   };
 }
@@ -73,6 +75,7 @@ describe('ClusterOverview', () => {
           memAllocatableMi: 0,
           memUsedMi: 0,
           usageKnown: false,
+          known: true,
         },
       }),
     );
@@ -174,6 +177,7 @@ describe('ClusterOverview', () => {
           memAllocatableMi: 8192,
           memUsedMi: 0,
           usageKnown: false,
+          known: true,
         },
       }),
     );
@@ -196,6 +200,7 @@ describe('ClusterOverview', () => {
           memAllocatableMi: 8192,
           memUsedMi: 0,
           usageKnown: true,
+          known: true,
         },
       }),
     );
@@ -279,6 +284,46 @@ describe('ClusterOverview', () => {
       await vi.advanceTimersByTimeAsync(0);
     });
     expect(fetchMock.mock.calls.length).toBeGreaterThan(before);
+  });
+});
+
+describe('what the overview says about things it could not read', () => {
+  it('says the nodes could not be read rather than showing none', async () => {
+    stub(
+      overview({
+        nodes: {
+          total: 0,
+          ready: 0,
+          unschedulable: 0,
+          cpuAllocatableMilli: 0,
+          cpuUsedMilli: 0,
+          memAllocatableMi: 0,
+          memUsedMi: 0,
+          usageKnown: false,
+          known: false,
+        },
+      }),
+    );
+    render(<ClusterOverview />);
+
+    expect(await screen.findByText('the nodes could not be read')).toBeInTheDocument();
+    expect(screen.queryByText('0 ready')).toBeNull();
+    expect(
+      screen.getByText('The nodes could not be read, so neither capacity nor usage is known.'),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText('Live usage needs metrics-server; only the allocatable totals are shown.'),
+    ).toBeNull();
+  });
+
+  it('says the warning events could not be read rather than that there are none', async () => {
+    stub(overview({ warningsRead: false }));
+    render(<ClusterOverview />);
+
+    expect(await screen.findByText('the events could not be read')).toBeInTheDocument();
+    expect(screen.getByText('Warning events could not be read.')).toBeInTheDocument();
+    expect(screen.queryByText('none right now')).toBeNull();
+    expect(screen.queryByText('No warning events in the cluster right now.')).toBeNull();
   });
 });
 

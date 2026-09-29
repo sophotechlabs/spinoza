@@ -285,6 +285,7 @@ type NodeSummary struct {
 	MemAllocatableMi    int64 `json:"memAllocatableMi"`
 	MemUsedMi           int64 `json:"memUsedMi"`
 	UsageKnown          bool  `json:"usageKnown"`
+	Known               bool  `json:"known"`
 }
 
 type PodSummary struct {
@@ -320,6 +321,7 @@ type ClusterOverview struct {
 	Pods         PodSummary         `json:"pods"`
 	Warnings     []OverviewEvent    `json:"warnings"`
 	WarningCount int                `json:"warningCount"`
+	WarningsRead bool               `json:"warningsRead"`
 	Controllers  []GitopsController `json:"controllers,omitempty"`
 	Error        string             `json:"error,omitempty"`
 }
@@ -1251,9 +1253,10 @@ type MetricHistory struct {
 }
 
 type Metrics struct {
-	Pods  map[string]ResourceUsage `json:"pods"`
-	Nodes map[string]ResourceUsage `json:"nodes"`
-	Error string                   `json:"error,omitempty"`
+	Pods   map[string]ResourceUsage `json:"pods"`
+	Nodes  map[string]ResourceUsage `json:"nodes"`
+	Absent bool                     `json:"absent,omitempty"`
+	Error  string                   `json:"error,omitempty"`
 }
 
 type CheckObject struct {

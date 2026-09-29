@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -222,5 +223,65 @@ func TestANodeSourceThatFailsIsReported(t *testing.T) {
 	}
 	if built.Nodes["n1"].CPUPercent != 0 {
 		t.Fatalf("cpu percent = %d, want none without allocatable", built.Nodes["n1"].CPUPercent)
+	}
+}
+
+func notServed(resource string) error {
+	return apierrors.NewNotFound(schema.GroupResource{Group: "metrics.k8s.io", Resource: resource}, "")
+}
+
+func TestAClusterThatServesNoMetricsAPISaysSoWithoutAnError(t *testing.T) {
+	dyn := fake.NewSimpleDynamicClientWithCustomListKinds(runtime.NewScheme(), listKinds())
+	dyn.PrependReactor("list", "pods", func(k8stesting.Action) (bool, runtime.Object, error) {
+		return true, nil, notServed("pods")
+	})
+	dyn.PrependReactor("list", "nodes", func(action k8stesting.Action) (bool, runtime.Object, error) {
+		if action.GetResource().Group != "metrics.k8s.io" {
+			return false, nil, nil
+		}
+		return true, nil, notServed("nodes")
+	})
+
+	got := Build(context.Background(), dyn, FromCluster(dyn))
+
+	if !got.Absent {
+		t.Fatal("a cluster with no metrics api was not marked absent")
+	}
+	if got.Error != "" {
+		t.Fatalf("error = %q, want none for a metrics api that is simply not installed", got.Error)
+	}
+}
+
+func TestAMetricsAPIThatFailsIsStillAFailure(t *testing.T) {
+	dyn := fake.NewSimpleDynamicClientWithCustomListKinds(runtime.NewScheme(), listKinds())
+	dyn.PrependReactor("list", "pods", func(k8stesting.Action) (bool, runtime.Object, error) {
+		return true, nil, notServed("pods")
+	})
+	dyn.PrependReactor("list", "nodes", func(action k8stesting.Action) (bool, runtime.Object, error) {
+		if action.GetResource().Group != "metrics.k8s.io" {
+			return false, nil, nil
+		}
+		return true, nil, errors.New("metrics-server timed out")
+	})
+
+	got := Build(context.Background(), dyn, FromCluster(dyn))
+
+	if got.Absent {
+		t.Fatal("a metrics api that answered with an error was called absent")
+	}
+	if !strings.Contains(got.Error, "metrics-server timed out") {
+		t.Fatalf("error = %q, want the node metrics failure named", got.Error)
+	}
+}
+
+func TestOnlyANotFoundAnswerMeansTheMetricsAPIIsNotServed(t *testing.T) {
+	if !NotServed(notServed("nodes")) {
+		t.Fatal("a not-found answer was not read as a missing metrics api")
+	}
+	if NotServed(errors.New("the server could not find the requested resource")) {
+		t.Fatal("a plain error that only reads like not-found was taken as a missing metrics api")
+	}
+	if NotServed(nil) {
+		t.Fatal("no error was read as a missing metrics api")
 	}
 }

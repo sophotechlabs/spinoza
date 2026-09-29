@@ -282,6 +282,14 @@ describe('parseMetrics', () => {
   it('gives empty maps for a payload with neither pods nor nodes', () => {
     expect(parseMetrics({})).toEqual({ pods: {}, nodes: {}, error: undefined });
   });
+
+  it('says so when the cluster serves no metrics at all', () => {
+    expect(parseMetrics({ pods: {}, nodes: {}, absent: true }).absent).toBe(true);
+  });
+
+  it('does not call metrics absent unless the server said so', () => {
+    expect(parseMetrics({ pods: {}, nodes: {}, absent: 'yes' }).absent).toBeUndefined();
+  });
 });
 
 describe('parseMetricHistory', () => {

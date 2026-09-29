@@ -562,11 +562,15 @@ function parseUsage(item: Record<string, unknown>): ResourceUsage {
 
 export function parseMetrics(body: unknown): Metrics {
   const item = asRecord(body);
-  return {
+  const out: Metrics = {
     pods: recordMap(item.pods, parseUsage),
     nodes: recordMap(item.nodes, parseUsage),
     error: optionalString(item.error),
   };
+  if (asBoolean(item.absent)) {
+    out.absent = true;
+  }
+  return out;
 }
 
 function parseMetricPoint(item: Record<string, unknown>): MetricPoint {
@@ -692,6 +696,7 @@ function parseNodeSummary(item: Record<string, unknown>): NodeSummary {
     memAllocatableMi: asNumber(item.memAllocatableMi),
     memUsedMi: asNumber(item.memUsedMi),
     usageKnown: asBoolean(item.usageKnown),
+    known: asBoolean(item.known),
   };
 }
 
@@ -791,6 +796,7 @@ export function parseClusterOverview(body: unknown): ClusterOverview {
     pods: parsePodSummary(asRecord(item.pods)),
     warnings: listOf(item.warnings, parseOverviewEvent),
     warningCount: asNumber(item.warningCount),
+    warningsRead: asBoolean(item.warningsRead),
     controllers: optionalListOf(item.controllers, parseGitopsController),
     error: optionalString(item.error),
   };

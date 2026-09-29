@@ -88,7 +88,7 @@ func Build(
 		defer func() {
 			failures.RecordPanic(eventsKey, "collecting warnings", recover())
 		}()
-		out.Warnings, out.WarningCount = warnings(bounded, dyn, descs, failures)
+		out.Warnings, out.WarningCount, out.WarningsRead = warnings(bounded, dyn, descs, failures)
 	})
 	wg.Wait()
 
@@ -119,6 +119,7 @@ func nodeSummary(ctx context.Context, dyn dynamic.Interface, lister Lister, desc
 	if err != nil {
 		return summary
 	}
+	summary.Known = true
 	for _, node := range nodes {
 		summary.Total++
 		if readyNode(node) {
@@ -142,6 +143,9 @@ func addUsage(ctx context.Context, dyn dynamic.Interface, summary *api.NodeSumma
 	bounded, cancel := context.WithTimeout(ctx, probeTimeout)
 	defer cancel()
 	usage, err := metrics.NodeUsage(bounded, dyn)
+	if metrics.NotServed(err) {
+		return
+	}
 	if err != nil {
 		failures.Record("nodes.metrics.k8s.io", err)
 		return
@@ -269,11 +273,11 @@ func lowestCap(capped map[string]int) int {
 func warnings(
 	ctx context.Context, dyn dynamic.Interface,
 	descs map[string]api.ResourceDescriptor, failures *listerr.Collector,
-) (shown []api.OverviewEvent, found int) {
+) (shown []api.OverviewEvent, found int, read bool) {
 	out := []api.OverviewEvent{}
 	_, ok := descs[discovery.Key("", "v1", "events")]
 	if !ok {
-		return out, len(out)
+		return out, len(out), false
 	}
 	bounded, cancel := context.WithTimeout(ctx, probeTimeout)
 	defer cancel()
@@ -286,12 +290,13 @@ func warnings(
 		list, err := dyn.Resource(eventsGVR).List(bounded, opts)
 		if err != nil {
 			failures.Record(eventsKey, err)
-			return out, seen
+			return out, seen, read
 		}
+		read = true
 		next := list.GetContinue()
 		if next != "" && tokens[next] {
 			failures.Record(eventsKey, errors.New("the apiserver repeated a continuation token while listing warning events"))
-			return out, seen
+			return out, seen, read
 		}
 		if next != "" {
 			tokens[next] = true
@@ -303,7 +308,7 @@ func warnings(
 		out = newestFirst(out)
 		if next == "" {
 			failures.Record(eventsKey, nil)
-			return out, seen
+			return out, seen, read
 		}
 		opts.Continue = next
 	}
@@ -311,7 +316,7 @@ func warnings(
 		"more than %d warning events, so the newest are taken from the first %d",
 		warningWindow*warningPages, warningWindow*warningPages,
 	))
-	return out, seen
+	return out, seen, read
 }
 
 func newestFirst(events []api.OverviewEvent) []api.OverviewEvent {

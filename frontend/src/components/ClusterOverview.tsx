@@ -1,5 +1,11 @@
 import type { ReactNode } from 'react';
-import type { GitopsController, NodeSummary, OverviewEvent, PodSummary } from '../lib/types';
+import type {
+  ClusterOverview,
+  GitopsController,
+  NodeSummary,
+  OverviewEvent,
+  PodSummary,
+} from '../lib/types';
 import { percentOf, useOverview } from '../lib/overview';
 import { cpuFromMilli, memFromMi } from '../lib/units';
 import { ago } from '../lib/time';
@@ -24,6 +30,9 @@ function Tile({ label, value, hint }: { label: string; value: string; hint?: str
 }
 
 function nodeHint(nodes: NodeSummary): string {
+  if (!nodes.known) {
+    return 'the nodes could not be read';
+  }
   const parts = [`${String(nodes.ready)} ready`];
   if (nodes.unschedulable > 0) {
     parts.push(`${String(nodes.unschedulable)} cordoned`);
@@ -114,7 +123,18 @@ function capacityLabel(total: number, format: (value: number) => string): string
   return format(total);
 }
 
-function Warnings({ warnings, now }: { warnings: OverviewEvent[]; now: number }) {
+function Warnings({
+  warnings,
+  read,
+  now,
+}: {
+  warnings: OverviewEvent[];
+  read: boolean;
+  now: number;
+}) {
+  if (!read) {
+    return <p className="px-1 text-fg-muted">Warning events could not be read.</p>;
+  }
   if (warnings.length === 0) {
     return <p className="px-1 text-fg-muted">No warning events in the cluster right now.</p>;
   }
@@ -214,7 +234,25 @@ function newestWarning(warnings: OverviewEvent[]): string {
   return newest;
 }
 
-function warningHint(warnings: OverviewEvent[], now: number): string {
+function nodeTotal(nodes: NodeSummary): string {
+  if (!nodes.known) {
+    return '-';
+  }
+  return String(nodes.total);
+}
+
+function warningTotal(overview: ClusterOverview): string {
+  if (!overview.warningsRead) {
+    return '-';
+  }
+  return String(overview.warnings.length);
+}
+
+function warningHint(overview: ClusterOverview, now: number): string {
+  const warnings = overview.warnings;
+  if (!overview.warningsRead) {
+    return 'the events could not be read';
+  }
   if (warnings.length === 0) {
     return 'none right now';
   }
@@ -262,13 +300,9 @@ export default function ClusterOverview({ active = true }: ClusterOverviewProps)
         <h2 className="mb-2 text-[11px] tracking-wide text-fg-muted uppercase">Cluster</h2>
         <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
           <Tile label="Kubernetes" value={versionOf(data.version)} />
-          <Tile label="Nodes" value={String(data.nodes.total)} hint={nodeHint(data.nodes)} />
+          <Tile label="Nodes" value={nodeTotal(data.nodes)} hint={nodeHint(data.nodes)} />
           <Tile label="Pods" value={podTotal(data.pods)} hint={podHint(data.pods)} />
-          <Tile
-            label="Warning events"
-            value={String(data.warnings.length)}
-            hint={warningHint(data.warnings, now)}
-          />
+          <Tile label="Warning events" value={warningTotal(data)} hint={warningHint(data, now)} />
         </div>
 
         <Controllers controllers={data.controllers ?? []} />
@@ -292,7 +326,12 @@ export default function ClusterOverview({ active = true }: ClusterOverviewProps)
             format={memFromMi}
           />
         </div>
-        {!data.nodes.usageKnown && (
+        {!data.nodes.known && (
+          <p className="mt-1.5 text-fg-muted">
+            The nodes could not be read, so neither capacity nor usage is known.
+          </p>
+        )}
+        {data.nodes.known && !data.nodes.usageKnown && (
           <p className="mt-1.5 text-fg-muted">
             Live usage needs metrics-server; only the allocatable totals are shown.
           </p>
@@ -301,7 +340,7 @@ export default function ClusterOverview({ active = true }: ClusterOverviewProps)
         <h2 className="mt-4 mb-2 text-[11px] tracking-wide text-fg-muted uppercase">
           Warning events
         </h2>
-        <Warnings warnings={data.warnings} now={now} />
+        <Warnings warnings={data.warnings} read={data.warningsRead} now={now} />
       </div>
     </div>
   );

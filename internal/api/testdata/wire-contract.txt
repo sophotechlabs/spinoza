@@ -129,6 +129,7 @@ ClusterOverview.Pods pods PodSummary
 ClusterOverview.Version version string
 ClusterOverview.WarningCount warningCount int
 ClusterOverview.Warnings warnings []OverviewEvent
+ClusterOverview.WarningsRead warningsRead bool
 Column.Name name string
 Column.Render render,omitempty string
 Comparison.HiddenDifferences hiddenDifferences,omitempty bool
@@ -564,6 +565,7 @@ MetricHistory.Since since,omitempty int64
 MetricHistory.Source source,omitempty string
 MetricPoint.At at int64
 MetricPoint.Value value float64
+Metrics.Absent absent,omitempty bool
 Metrics.Error error,omitempty string
 Metrics.Nodes nodes map[string]ResourceUsage
 Metrics.Pods pods map[string]ResourceUsage
@@ -595,6 +597,7 @@ NodeShellSupport.Node node string
 NodeShellSupport.Reason reason,omitempty string
 NodeSummary.CPUAllocatableMilli cpuAllocatableMilli int64
 NodeSummary.CPUUsedMilli cpuUsedMilli int64
+NodeSummary.Known known bool
 NodeSummary.MemAllocatableMi memAllocatableMi int64
 NodeSummary.MemUsedMi memUsedMi int64
 NodeSummary.Ready ready int

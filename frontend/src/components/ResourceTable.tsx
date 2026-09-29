@@ -467,7 +467,7 @@ export default function ResourceTable({
         }),
       );
     });
-    if (wantMetrics && metrics !== null) {
+    if (wantMetrics && metrics !== null && metrics.absent !== true) {
       const sample = metrics;
       defs.push(
         columnHelper.accessor((row) => metricKey(activeKind, sample, row, false), {

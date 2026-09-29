@@ -750,6 +750,24 @@ describe('ResourceTable', () => {
     expect(names()).toEqual(['pod-a', 'pod-b']);
   });
 
+  it('leaves out the usage columns when the cluster serves no metrics', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ pods: {}, nodes: {}, absent: true }),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    seed(makeColumns([]), true, [makeRow({ uid: 'a', name: 'pod-a', namespace: 'prod' })]);
+    renderTable(descriptor, null);
+    await screen.findByText('pod-a');
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalled();
+    });
+
+    expect(screen.queryByRole('button', { name: /^CPU/ })).toBeNull();
+    expect(screen.queryByRole('button', { name: /^Memory/ })).toBeNull();
+    expect(screen.queryByRole('status')).toBeNull();
+  });
+
   it('says the metrics columns stopped updating without blanking them', async () => {
     vi.useFakeTimers();
     let call = 0;

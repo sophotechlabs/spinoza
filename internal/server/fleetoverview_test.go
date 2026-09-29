@@ -37,7 +37,7 @@ func (s *surveying) ListKind(context.Context, api.ObjectRef) ([]*unstructured.Un
 func overviewOf(version string, nodes, ready, pods, running int) api.ClusterOverview {
 	return api.ClusterOverview{
 		Version: version,
-		Nodes:   api.NodeSummary{Total: nodes, Ready: ready, CPUAllocatableMilli: 1000},
+		Nodes:   api.NodeSummary{Total: nodes, Ready: ready, CPUAllocatableMilli: 1000, Known: true},
 		Pods:    api.PodSummary{Total: pods, Running: running, Known: true},
 	}
 }
@@ -71,6 +71,34 @@ func TestTheFleetOverviewTotalsWhatEveryClusterReported(t *testing.T) {
 	}
 	if got.Pods.Total != 60 || got.Pods.Running != 57 {
 		t.Fatalf("pods = %+v", got.Pods)
+	}
+}
+
+func TestAClusterWhoseNodesCouldNotBeReadAddsNothingToTheFleetTotal(t *testing.T) {
+	unread := overviewOf("v1.33.0", 0, 0, 20, 18)
+	unread.Nodes = api.NodeSummary{}
+	ts := listServer(t,
+		&surveying{overview: overviewOf("v1.34.1", 3, 3, 40, 39)},
+		&surveying{overview: unread})
+
+	var got api.FleetOverview
+	readFleet(t, ts, "/api/overview/fleet", &got)
+
+	if !got.Nodes.Known || got.Nodes.Total != 3 || got.Nodes.CPUAllocatableMilli != 1000 {
+		t.Fatalf("nodes = %+v, want only the cluster whose nodes were read", got.Nodes)
+	}
+}
+
+func TestAFleetWhereNoClustersNodesCouldBeReadSaysSo(t *testing.T) {
+	unread := overviewOf("v1.33.0", 0, 0, 20, 18)
+	unread.Nodes = api.NodeSummary{}
+	ts := listServer(t, &surveying{overview: unread}, &surveying{overview: unread})
+
+	var got api.FleetOverview
+	readFleet(t, ts, "/api/overview/fleet", &got)
+
+	if got.Nodes.Known {
+		t.Fatalf("nodes = %+v, want them marked unread rather than zero", got.Nodes)
 	}
 }
 

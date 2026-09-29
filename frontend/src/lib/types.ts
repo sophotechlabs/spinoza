@@ -793,6 +793,7 @@ export interface NodeSummary {
   memAllocatableMi: number;
   memUsedMi: number;
   usageKnown: boolean;
+  known: boolean;
 }
 
 export interface PodSummary {
@@ -828,6 +829,7 @@ export interface ClusterOverview {
   pods: PodSummary;
   warnings: OverviewEvent[];
   warningCount: number;
+  warningsRead: boolean;
   controllers?: GitopsController[];
   error?: string;
 }
@@ -1040,6 +1042,7 @@ export interface ResourceUsage {
 export interface Metrics {
   pods: Record<string, ResourceUsage>;
   nodes: Record<string, ResourceUsage>;
+  absent?: boolean;
   error?: string;
 }
 

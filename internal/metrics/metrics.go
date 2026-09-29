@@ -3,8 +3,10 @@ package metrics
 import (
 	"context"
 	"sync"
+	"sync/atomic"
 	"time"
 
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -54,6 +56,8 @@ func Build(ctx context.Context, dyn dynamic.Interface, nodes Nodes) api.Metrics 
 	defer cancel()
 	ctx = bounded
 	failures := listerr.New()
+	var podsMissing atomic.Bool
+	var nodesMissing atomic.Bool
 	var pods map[string]api.ResourceUsage
 	var used map[string]api.ResourceUsage
 	var group sync.WaitGroup
@@ -63,26 +67,40 @@ func Build(ctx context.Context, dyn dynamic.Interface, nodes Nodes) api.Metrics 
 		defer func() {
 			failures.RecordPanic("pods.metrics.k8s.io", "reading pod metrics", recover())
 		}()
-		pods = podUsage(ctx, dyn, failures)
+		pods = podUsage(ctx, dyn, failures, &podsMissing)
 	})
 	safe.Go("reading node metrics", func() {
 		defer group.Done()
 		defer func() {
 			failures.RecordPanic("nodes.metrics.k8s.io", "reading node metrics", recover())
 		}()
-		used = nodeUsage(ctx, dyn, nodes, failures)
+		used = nodeUsage(ctx, dyn, nodes, failures, &nodesMissing)
 	})
 	group.Wait()
 	return api.Metrics{
-		Pods:  pods,
-		Nodes: used,
-		Error: failures.Message(),
+		Pods:   pods,
+		Nodes:  used,
+		Absent: podsMissing.Load() && nodesMissing.Load(),
+		Error:  failures.Message(),
 	}
 }
 
-func podUsage(ctx context.Context, dyn dynamic.Interface, failures *listerr.Collector) map[string]api.ResourceUsage {
+func NotServed(err error) bool {
+	return apierrors.IsNotFound(err)
+}
+
+func podUsage(
+	ctx context.Context,
+	dyn dynamic.Interface,
+	failures *listerr.Collector,
+	missing *atomic.Bool,
+) map[string]api.ResourceUsage {
 	out := map[string]api.ResourceUsage{}
 	list, err := dyn.Resource(podMetricsGVR).List(ctx, metav1.ListOptions{})
+	if NotServed(err) {
+		missing.Store(true)
+		return out
+	}
 	failures.Record("pods.metrics.k8s.io", err)
 	if err != nil {
 		return out
@@ -133,8 +151,13 @@ func nodeUsage(
 	dyn dynamic.Interface,
 	nodes Nodes,
 	failures *listerr.Collector,
+	missing *atomic.Bool,
 ) map[string]api.ResourceUsage {
 	usage, err := NodeUsage(ctx, dyn)
+	if NotServed(err) {
+		missing.Store(true)
+		return map[string]api.ResourceUsage{}
+	}
 	failures.Record("nodes.metrics.k8s.io", err)
 	if err != nil {
 		return map[string]api.ResourceUsage{}

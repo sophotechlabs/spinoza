@@ -67,6 +67,10 @@ func reasonOf(one clusterAnswer[api.ClusterOverview]) string {
 }
 
 func addNodes(into *api.NodeSummary, one api.NodeSummary) {
+	if !one.Known {
+		return
+	}
+	into.Known = true
 	into.Total += one.Total
 	into.Ready += one.Ready
 	into.Unschedulable += one.Unschedulable

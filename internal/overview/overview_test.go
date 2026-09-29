@@ -9,6 +9,7 @@ import (
 	"sync/atomic"
 	"testing"
 
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -820,5 +821,81 @@ func TestTheOverviewSaysHowManyWarningsThereWereNotHowManyItKept(t *testing.T) {
 	}
 	if got.WarningCount != warningsShown+11 {
 		t.Fatalf("count = %d, want every warning the cluster had", got.WarningCount)
+	}
+}
+
+func metricsNotServed(dyn *fake.FakeDynamicClient) {
+	dyn.PrependReactor("list", "nodes", func(k8stesting.Action) (bool, runtime.Object, error) {
+		return true, nil, apierrors.NewNotFound(schema.GroupResource{Group: "metrics.k8s.io", Resource: "nodes"}, "")
+	})
+}
+
+func TestNodesThatWereReadAreMarkedKnown(t *testing.T) {
+	lister := &stubLister{nodes: []*unstructured.Unstructured{node("a", true, false, "4", "8Gi")}}
+
+	got := Build(context.Background(), dynClient(), metaClient(), lister, nil, fullCatalog())
+
+	if !got.Nodes.Known {
+		t.Fatal("a node list that was read came back marked unknown")
+	}
+}
+
+func TestANodeListTheAccountMayNotReadIsNotReportedAsNoNodes(t *testing.T) {
+	lister := &stubLister{err: errors.New(`nodes is forbidden: User "editor" cannot list resource "nodes"`)}
+
+	got := Build(context.Background(), dynClient(), metaClient(), lister, nil, fullCatalog())
+
+	if got.Nodes.Known {
+		t.Fatalf("nodes = %+v, want them marked unread rather than zero", got.Nodes)
+	}
+}
+
+func TestAClusterThatServesNoMetricsAPIIsNotAFailure(t *testing.T) {
+	lister := &stubLister{nodes: []*unstructured.Unstructured{node("a", true, false, "4", "8Gi")}}
+	dyn := dynClient()
+	metricsNotServed(dyn)
+
+	got := Build(context.Background(), dyn, metaClient(), lister, nil, fullCatalog())
+
+	if got.Nodes.UsageKnown {
+		t.Fatal("usage was reported as known with no metrics api")
+	}
+	if strings.Contains(got.Error, "metrics") {
+		t.Fatalf("error = %q, want a missing metrics api left to the usage line, not reported as a failure", got.Error)
+	}
+	if !got.Nodes.Known || got.Nodes.Total != 1 {
+		t.Fatalf("nodes = %+v, want the node list to survive", got.Nodes)
+	}
+}
+
+func TestWarningsThatWereReadAreMarkedRead(t *testing.T) {
+	got := Build(context.Background(), dynClient(), metaClient(), &stubLister{}, nil, fullCatalog())
+
+	if !got.WarningsRead {
+		t.Fatal("an empty but readable event list came back marked unread")
+	}
+}
+
+func TestEventsTheAccountMayNotReadAreNotReportedAsNoWarnings(t *testing.T) {
+	dyn := dynClient()
+	dyn.PrependReactor("list", "events", func(k8stesting.Action) (bool, runtime.Object, error) {
+		return true, nil, errors.New("events is forbidden")
+	})
+
+	got := Build(context.Background(), dyn, metaClient(), &stubLister{}, nil, fullCatalog())
+
+	if got.WarningsRead {
+		t.Fatal("events that could not be read were reported as read")
+	}
+}
+
+func TestAClusterWithNoEventKindHasNoWarningsRead(t *testing.T) {
+	catalog := fullCatalog()
+	delete(catalog, discovery.Key("", "v1", "events"))
+
+	got := Build(context.Background(), dynClient(), metaClient(), &stubLister{}, nil, catalog)
+
+	if got.WarningsRead {
+		t.Fatal("a cluster without events was reported as having read them")
 	}
 }

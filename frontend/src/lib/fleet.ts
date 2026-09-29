@@ -111,6 +111,7 @@ function emptyNodes() {
     memAllocatableMi: 0,
     memUsedMi: 0,
     usageKnown: false,
+    known: false,
   };
 }
 
