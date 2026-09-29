@@ -63,6 +63,7 @@ func run() error {
 	held := settingsStore(ctx)
 	opts.cluster.NodeShell = allowNodeShell(opts.nodeShell, held)
 	opts.cluster.Columns = customColumns(held)
+	opts.cluster.Namespaces = readableNamespaces(held)
 	opts.cluster.ToolKubeconfig = toolKubeconfig(opts)
 
 	clusters, err := cluster.New(ctx, opts.cluster)

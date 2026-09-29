@@ -8,7 +8,13 @@ import ProtectionToggle from './ProtectionToggle';
 import ViewSwitch from './ViewSwitch';
 import { ReconnectIcon } from './icons';
 import { useNamespaces } from '../lib/namespaces';
-import { ALL, useNamespace, useNamespaceNames, useNamespaceStore } from '../store/namespace';
+import {
+  ALL,
+  useNamespace,
+  useNamespaceNames,
+  useNamespaceNarrowed,
+  useNamespaceStore,
+} from '../store/namespace';
 import { useClusterHealth } from '../store/clusterHealth';
 import { causePhrase } from '../lib/health';
 import UserMenu from './UserMenu';
@@ -94,6 +100,7 @@ export default function TopBar({
   const attempt = useFeedStore((state) => state.attempt);
   const namespace = useNamespace();
   const names = useNamespaceNames();
+  const narrowed = useNamespaceNarrowed();
   const choose = useNamespaceStore((state) => state.choose);
   useNamespaces();
 
@@ -175,7 +182,7 @@ export default function TopBar({
         }}
         className={`${CONTROL} max-w-48 border-edge-strong bg-surface-raised text-fg-soft disabled:cursor-not-allowed disabled:text-fg-muted`}
       >
-        <option value={ALL}>All namespaces</option>
+        {!narrowed && <option value={ALL}>All namespaces</option>}
         {names.map((name) => (
           <option key={name} value={name}>
             {name}

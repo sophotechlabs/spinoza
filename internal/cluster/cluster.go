@@ -22,6 +22,7 @@ type Options struct {
 	DebugImage       string
 	NodeShell        func() bool
 	Columns          func() map[string][]api.CustomColumn
+	Namespaces       func() map[string][]string
 	NodeShellImage   string
 	NodeShellNS      string
 	KubectlBinary    string

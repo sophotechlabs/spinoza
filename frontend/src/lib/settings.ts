@@ -226,6 +226,70 @@ export function writeColumns(held: Record<string, CustomColumn[]>): Promise<void
   return flush();
 }
 
+export const NAMESPACES_KEY = 'spinoza.namespaces.v1';
+
+const NAMESPACE_NAME = /^[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?$/;
+
+export function readNamespaces(): Record<string, string[]> {
+  const raw = readStored(NAMESPACES_KEY);
+  if (raw === null || raw === '') {
+    return {};
+  }
+  let held: unknown;
+  try {
+    held = JSON.parse(raw);
+  } catch {
+    return {};
+  }
+  if (held === null || typeof held !== 'object' || Array.isArray(held)) {
+    return {};
+  }
+  const out: Record<string, string[]> = {};
+  for (const [context, value] of Object.entries(held)) {
+    if (!Array.isArray(value)) {
+      continue;
+    }
+    out[context] = value.filter((name): name is string => typeof name === 'string');
+  }
+  return out;
+}
+
+export function writeNamespaces(held: Record<string, string[]>): Promise<void> {
+  const kept: Record<string, string[]> = {};
+  for (const [context, names] of Object.entries(held)) {
+    if (names.length === 0) {
+      continue;
+    }
+    kept[context] = names;
+  }
+  writeStored(NAMESPACES_KEY, JSON.stringify(kept));
+  return flush();
+}
+
+export interface NamespaceList {
+  names: string[];
+  wrong: string[];
+}
+
+export function parseNamespaceList(text: string): NamespaceList {
+  const names: string[] = [];
+  const wrong: string[] = [];
+  for (const piece of text.split(/[\s,]+/)) {
+    if (piece === '') {
+      continue;
+    }
+    if (!NAMESPACE_NAME.test(piece)) {
+      wrong.push(piece);
+      continue;
+    }
+    if (names.includes(piece)) {
+      continue;
+    }
+    names.push(piece);
+  }
+  return { names, wrong };
+}
+
 export const UPDATE_CHECK_KEY = 'spinoza.update.check.v1';
 
 export function readUpdateCheck(): boolean {

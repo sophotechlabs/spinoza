@@ -24,6 +24,7 @@ import { FRONTEND_VERSION, fetchBackendVersion } from '../lib/version';
 import { installUpdate, updateFailure, updateOutcome } from '../lib/update';
 import Announce from './Announce';
 import ColumnSettings from './ColumnSettings';
+import ReadableNamespaces from './ReadableNamespaces';
 import SupportBundle from './SupportBundle';
 import SavedViewsList from './SavedViewsList';
 
@@ -512,6 +513,7 @@ export default function SettingsDialog({
                   ))}
                 </select>
               </Row>
+              <ReadableNamespaces key={context} context={context} />
               <Row
                 label="Picking a context"
                 hint="What happens when you pick a context while one cluster is open."

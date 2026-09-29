@@ -349,3 +349,91 @@ func TestAManagerWithNoPermissionServiceReadsEverythingEvenMidRequest(t *testing
 		t.Fatalf("scope = %+v, want the whole cluster", got)
 	}
 }
+
+func neverAsked(t *testing.T) func() []string {
+	t.Helper()
+	return func() []string {
+		t.Error("the namespaces were worked out for an account that reads the whole cluster")
+		return nil
+	}
+}
+
+func TestYourOwnAccountThatReadsTheWholeClusterIsNotNarrowed(t *testing.T) {
+	rules := &namespaceRules{allowed: map[string]bool{"": true}}
+
+	got := scopeService(t, rules).OwnScope(t.Context(), neverAsked(t))
+
+	if !got.Everywhere {
+		t.Fatalf("scope = %+v, want the whole cluster", got)
+	}
+	if rules.count() != 2 {
+		t.Fatalf("asked %d times, want the two cluster-wide questions", rules.count())
+	}
+}
+
+func TestYourOwnAccountBoundInOneNamespaceReadsOnlyThatOne(t *testing.T) {
+	rules := &namespaceRules{allowed: map[string]bool{"payments": true}}
+
+	got := scopeService(t, rules).OwnScope(t.Context(), names)
+
+	if got.Everywhere {
+		t.Fatal("an account bound in one namespace was given the whole cluster")
+	}
+	if strings.Join(got.Namespaces, ",") != "payments" {
+		t.Fatalf("namespaces = %v, want payments", got.Namespaces)
+	}
+	if len(got.Undecided) != 0 {
+		t.Fatalf("undecided = %v, want none when every answer came back", got.Undecided)
+	}
+}
+
+func TestYourOwnAccountIsOnlyAskedAboutTheNamespacesItWasGiven(t *testing.T) {
+	rules := &namespaceRules{allowed: map[string]bool{"payments": true, "storefront": true}}
+
+	got := scopeService(t, rules).OwnScope(t.Context(), func() []string {
+		return []string{"storefront"}
+	})
+
+	if strings.Join(got.Namespaces, ",") != "storefront" {
+		t.Fatalf("namespaces = %v, want only the one it was given", got.Namespaces)
+	}
+	if rules.count() != 4 {
+		t.Fatalf("asked %d times, want two cluster-wide and two for storefront", rules.count())
+	}
+}
+
+func TestYourOwnAccountWithNoCandidateReadsNothing(t *testing.T) {
+	rules := &namespaceRules{allowed: map[string]bool{"payments": true}}
+
+	got := scopeService(t, rules).OwnScope(t.Context(), func() []string {
+		return nil
+	})
+
+	if got.Everywhere || len(got.Namespaces) != 0 {
+		t.Fatalf("scope = %+v, want nothing readable", got)
+	}
+}
+
+func TestYourOwnAccountKeepsTheWholeClusterWhenTheClusterWillNotAnswer(t *testing.T) {
+	rules := &namespaceRules{allowed: map[string]bool{}, silent: true}
+
+	got := scopeService(t, rules).OwnScope(t.Context(), neverAsked(t))
+
+	if !got.Everywhere {
+		t.Fatalf("scope = %+v, want the whole cluster when the question went unanswered", got)
+	}
+}
+
+func TestYourOwnAccountWithoutAPermissionServiceReadsEverything(t *testing.T) {
+	var missing *Service
+
+	if !missing.OwnScope(t.Context(), neverAsked(t)).Everywhere {
+		t.Fatal("a manager with no permission service narrowed its own account")
+	}
+}
+
+func TestYourOwnAccountWithoutAClusterReadsEverything(t *testing.T) {
+	if !New(nil).OwnScope(t.Context(), neverAsked(t)).Everywhere {
+		t.Fatal("a permission service with no cluster narrowed its own account")
+	}
+}

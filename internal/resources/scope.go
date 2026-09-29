@@ -19,6 +19,8 @@ var ErrClusterWide = errors.New("your account reads named namespaces only, and t
 
 var ErrNamespaceNeeded = errors.New("your account cannot read this kind across every namespace; pick one namespace")
 
+var ErrNoReadableNamespace = errors.New("your account reads no namespace spinoza knows of; add the ones it can read under Settings, Cluster")
+
 type nsFilter struct {
 	all   bool
 	names map[string]bool
@@ -80,14 +82,43 @@ func (m *Manager) everyNamespace(ctx context.Context) api.Namespaces {
 func (m *Manager) Scope(ctx context.Context) api.Scope {
 	_, acting := auth.ActingAs(ctx)
 	if !acting {
-		return api.Scope{Everywhere: true}
+		return m.perms.OwnScope(ctx, func() []string {
+			return m.candidates(ctx)
+		})
 	}
 	return m.perms.Scope(ctx, func() []string {
 		return m.everyNamespace(ctx).Names
 	})
 }
 
+func (m *Manager) listedNamespaces(ctx context.Context) api.Namespaces {
+	found, ok := shared(ctx, &m.listed, m.now, namespaceListTTL, func(ctx context.Context) (api.Namespaces, bool) {
+		return m.everyNamespace(ctx), true
+	})
+	if !ok {
+		return api.Namespaces{Error: ctx.Err().Error()}
+	}
+	return found
+}
+
+func (m *Manager) candidates(ctx context.Context) []string {
+	names := slices.Clone(m.listedNamespaces(ctx).Names)
+	names = append(names, m.home)
+	if m.named != nil {
+		names = append(names, m.named()...)
+	}
+	names = slices.DeleteFunc(names, func(name string) bool {
+		return name == ""
+	})
+	slices.Sort(names)
+	return slices.Compact(names)
+}
+
 func (m *Manager) filter(ctx context.Context) nsFilter {
+	_, acting := auth.ActingAs(ctx)
+	if !acting {
+		return everything()
+	}
 	return filterFor(m.Scope(ctx))
 }
 

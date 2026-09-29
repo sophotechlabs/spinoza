@@ -26,8 +26,15 @@ describe('fetchNamespaces', () => {
 
     await expect(fetchNamespaces()).resolves.toEqual({
       names: ['default', 'shop'],
+      narrowed: false,
       error: undefined,
     });
+  });
+
+  it('says when the list was narrowed to what the account can read', async () => {
+    stub({ names: ['payments'], narrowed: true });
+
+    expect((await fetchNamespaces()).narrowed).toBe(true);
   });
 
   it('has no names when the backend sent none', async () => {
@@ -65,6 +72,22 @@ describe('settle', () => {
   it('waits rather than guessing before the names arrive', () => {
     expect(settle('shop', [])).toBe('shop');
   });
+
+  it('moves off every namespace when the account can read only some', () => {
+    expect(settle(ALL, ['payments', 'storefront'], true)).toBe('payments');
+  });
+
+  it('keeps a readable namespace when the account can read only some', () => {
+    expect(settle('storefront', ['payments', 'storefront'], true)).toBe('storefront');
+  });
+
+  it('moves to a readable namespace when the kept one is not readable', () => {
+    expect(settle('shop', ['payments'], true)).toBe('payments');
+  });
+
+  it('waits on a narrowed list that has not arrived', () => {
+    expect(settle(ALL, [], true)).toBe(ALL);
+  });
 });
 
 describe('useNamespaces', () => {
@@ -83,6 +106,72 @@ describe('useNamespaces', () => {
       );
     });
     expect(useNamespaceStore.getState().byCluster[MK1]?.names).toEqual(['default', 'shop']);
+  });
+
+  it('opens a narrowed account on a namespace it can read', async () => {
+    showing(MK1);
+    stub({ names: ['payments'], narrowed: true });
+
+    renderHook(() => {
+      useNamespaces();
+    });
+
+    await waitFor(() => {
+      expect(useNamespaceStore.getState().byCluster[MK1]?.namespace).toBe('payments');
+    });
+    expect(useNamespaceStore.getState().byCluster[MK1]?.narrowed).toBe(true);
+  });
+
+  it('points an account that reads nothing at the setting', async () => {
+    showing(MK1);
+    stub({
+      names: [],
+      narrowed: true,
+      error:
+        'your account reads no namespace spinoza knows of; add the ones it can read under Settings, Cluster',
+    });
+
+    renderHook(() => {
+      useNamespaces();
+    });
+
+    await waitFor(() => {
+      expect(useToastsStore.getState().toasts.at(-1)?.message).toBe(
+        'Listing namespaces: your account reads no namespace spinoza knows of; add the ones it can read under Settings, Cluster',
+      );
+    });
+  });
+
+  it('asks again when told the readable namespaces changed', async () => {
+    showing(MK1);
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: () => Promise.resolve({ names: [], narrowed: true, error: 'reads nothing' }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: () => Promise.resolve({ names: ['payments'], narrowed: true }),
+      });
+    vi.stubGlobal('fetch', fetchMock);
+    renderHook(() => {
+      useNamespaces();
+    });
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
+
+    act(() => {
+      useNamespaceStore.getState().askAgain();
+    });
+
+    await waitFor(() => {
+      expect(useNamespaceStore.getState().byCluster[MK1]?.names).toEqual(['payments']);
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
   it('reports a namespace request that failed outright', async () => {

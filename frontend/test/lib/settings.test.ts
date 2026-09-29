@@ -8,13 +8,17 @@ import {
 } from '../../src/lib/persist';
 import {
   COLUMNS_KEY,
+  NAMESPACES_KEY,
   NODE_SHELL_KEY,
   SETTINGS_KEY,
+  parseNamespaceList,
   parseSettings,
   readColumns,
+  readNamespaces,
   readNodeShell,
   readSettings,
   writeColumns,
+  writeNamespaces,
   writeNodeShell,
   writeSettings,
 } from '../../src/lib/settings';
@@ -272,6 +276,80 @@ describe('custom columns', () => {
     expect(readColumns()).toEqual({
       '/v1/pods': [{ name: 'App', path: '.a' }],
       'apps/v1/deployments': [],
+    });
+  });
+});
+
+describe('namespaces an account can read', () => {
+  afterEach(() => {
+    resetStored();
+  });
+
+  it('reads back what was written for each context', async () => {
+    await writeNamespaces({ 'spinoza-eks-editor': ['payments'], other: ['shop', 'web'] });
+
+    expect(readNamespaces()).toEqual({
+      'spinoza-eks-editor': ['payments'],
+      other: ['shop', 'web'],
+    });
+  });
+
+  it('drops a context whose list was emptied', async () => {
+    await writeNamespaces({ 'spinoza-eks-editor': ['payments'], other: [] });
+
+    expect(Object.keys(readNamespaces())).toEqual(['spinoza-eks-editor']);
+  });
+
+  it('reads nothing when nothing was written', () => {
+    expect(readNamespaces()).toEqual({});
+  });
+
+  it('reads anything that is not a map of lists as none', () => {
+    for (const raw of ['not json', '[]', 'null', '42', '"text"']) {
+      writeStored(NAMESPACES_KEY, raw);
+      expect(readNamespaces()).toEqual({});
+    }
+  });
+
+  it('skips entries that are not names', () => {
+    writeStored(
+      NAMESPACES_KEY,
+      JSON.stringify({ 'spinoza-eks-editor': ['payments', 42, null], other: 'shop' }),
+    );
+
+    expect(readNamespaces()).toEqual({ 'spinoza-eks-editor': ['payments'] });
+  });
+});
+
+describe('parseNamespaceList', () => {
+  it('splits on commas and spaces', () => {
+    expect(parseNamespaceList('payments, storefront  web,,')).toEqual({
+      names: ['payments', 'storefront', 'web'],
+      wrong: [],
+    });
+  });
+
+  it('keeps each name once, in the order typed', () => {
+    expect(parseNamespaceList('web payments web').names).toEqual(['web', 'payments']);
+  });
+
+  it('reads an empty field as no names', () => {
+    expect(parseNamespaceList('  ')).toEqual({ names: [], wrong: [] });
+  });
+
+  it('names what is not a namespace name', () => {
+    expect(parseNamespaceList('payments Payments -web a_b')).toEqual({
+      names: ['payments'],
+      wrong: ['Payments', '-web', 'a_b'],
+    });
+  });
+
+  it('accepts the longest name kubernetes allows and refuses one longer', () => {
+    const longest = 'a'.repeat(63);
+
+    expect(parseNamespaceList(`${longest} ${longest}b`)).toEqual({
+      names: [longest],
+      wrong: [`${longest}b`],
     });
   });
 });

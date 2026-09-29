@@ -109,7 +109,20 @@ func (s *Service) readScope(ctx context.Context, everyNamespace func() []string)
 	if decide(s.review(ctx, clusterWide())) == allowed {
 		return api.Scope{Everywhere: true}
 	}
-	names := everyNamespace()
+	return s.readable(ctx, everyNamespace())
+}
+
+func (s *Service) OwnScope(ctx context.Context, candidates func() []string) api.Scope {
+	if s == nil || s.cs == nil {
+		return api.Scope{Everywhere: true}
+	}
+	if decide(s.review(ctx, clusterWide())) != denied {
+		return api.Scope{Everywhere: true}
+	}
+	return s.readable(ctx, candidates())
+}
+
+func (s *Service) readable(ctx context.Context, names []string) api.Scope {
 	checks := make([]Check, 0, len(names)*2)
 	for _, name := range names {
 		checks = append(checks, within(name)...)

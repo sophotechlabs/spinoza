@@ -251,9 +251,20 @@ func build(ctx context.Context, ref api.ContextRef, options Options, promTarget 
 		Categories:  cats,
 		Descriptors: descs,
 		Columns:     options.Columns,
+		Namespace:   bundle.Namespace,
+		Namespaces:  namedFor(options.Namespaces, bundle.Ref.Name),
 	})
 	mgr.UseDiscovery(bundle.Discovery, discErr)
 	return mgr, bundle, nil
+}
+
+func namedFor(held func() map[string][]string, name string) func() []string {
+	return func() []string {
+		if held == nil {
+			return nil
+		}
+		return held()[name]
+	}
 }
 
 func metaClient(bundle *kube.Bundle) metadata.Interface {

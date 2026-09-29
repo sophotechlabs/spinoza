@@ -581,6 +581,7 @@ NamespaceCount.Namespace namespace string
 NamespaceCount.Total total int
 Namespaces.Error error,omitempty string
 Namespaces.Names names []string
+Namespaces.Narrowed narrowed,omitempty bool
 NodeShellSession.Container container string
 NodeShellSession.Image image string
 NodeShellSession.Namespace namespace string

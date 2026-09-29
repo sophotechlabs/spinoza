@@ -296,6 +296,33 @@ describe('the top bar entry points', () => {
     expect(picker).toHaveValue('');
   });
 
+  it('offers only the readable namespaces to an account that cannot read them all', async () => {
+    showing(MK1);
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() =>
+        Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () => Promise.resolve({ names: ['payments', 'storefront'], narrowed: true }),
+        }),
+      ),
+    );
+
+    render(<TopBar status="connected" />);
+
+    const picker = await screen.findByRole('combobox', { name: 'Namespace' });
+    await waitFor(() => {
+      expect(picker).toHaveValue('payments');
+    });
+    expect(within(picker).queryByRole('option', { name: 'All namespaces' })).toBeNull();
+    expect(
+      within(picker)
+        .getAllByRole('option')
+        .map((option) => option.textContent),
+    ).toEqual(['payments', 'storefront']);
+  });
+
   it('takes the namespace that was chosen', async () => {
     const user = userEvent.setup();
     showing(MK1);

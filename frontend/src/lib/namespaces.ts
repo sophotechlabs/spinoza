@@ -13,13 +13,14 @@ export async function fetchNamespaces(): Promise<Namespaces> {
     throw await failure(response, `the namespace request failed with status ${response.status}`);
   }
   const body = (await response.json()) as Partial<Namespaces>;
-  return { names: body.names ?? [], error: body.error };
+  return { names: body.names ?? [], narrowed: body.narrowed ?? false, error: body.error };
 }
 
 export function useNamespaces(): void {
   const cluster = useActiveCluster();
   const epoch = useClusterEpoch();
   const offer = useNamespaceStore((state) => state.offer);
+  const asked = useNamespaceStore((state) => state.asked);
 
   useEffect(() => {
     if (cluster === '') {
@@ -35,7 +36,7 @@ export function useNamespaces(): void {
           notifyError(`Listing namespaces: ${found.error}`);
           return;
         }
-        offer(cluster, found.names);
+        offer(cluster, found.names, found.narrowed);
       })
       .catch((err: unknown) => {
         if (live) {
@@ -49,5 +50,5 @@ export function useNamespaces(): void {
     return () => {
       live = false;
     };
-  }, [cluster, epoch, offer]);
+  }, [asked, cluster, epoch, offer]);
 }

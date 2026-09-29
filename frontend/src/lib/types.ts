@@ -587,6 +587,7 @@ export interface FilePicker {
 
 export interface Namespaces {
   names: string[];
+  narrowed?: boolean;
   error?: string;
 }
 

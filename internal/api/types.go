@@ -105,8 +105,9 @@ type FilePicker struct {
 }
 
 type Namespaces struct {
-	Names []string `json:"names"`
-	Error string   `json:"error,omitempty"`
+	Names    []string `json:"names"`
+	Narrowed bool     `json:"narrowed,omitempty"`
+	Error    string   `json:"error,omitempty"`
 }
 
 type SearchHit struct {

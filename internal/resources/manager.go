@@ -68,6 +68,7 @@ const (
 	defaultTrafficTTL  = 10 * time.Second
 	listKindTimeout    = 60 * time.Second
 	refreshCooldown    = 30 * time.Second
+	namespaceListTTL   = 30 * time.Second
 )
 
 type Event struct {
@@ -163,6 +164,9 @@ type Manager struct {
 	usage       recent[api.Metrics]
 	tally       recent[api.ResourceCounts]
 	meshes      recent[api.TrafficSupport]
+	listed      recent[api.Namespaces]
+	home        string
+	named       func() []string
 	noteMu      sync.Mutex
 	notes       Timeline
 	noted       map[schema.GroupVersionResource]struct{}
@@ -239,6 +243,8 @@ type Deps struct {
 	Categories  []api.Category
 	Descriptors map[string]api.ResourceDescriptor
 	Columns     Columns
+	Namespace   string
+	Namespaces  func() []string
 }
 
 func NewManager(ctx context.Context, deps Deps) *Manager {
@@ -269,6 +275,8 @@ func NewManager(ctx context.Context, deps Deps) *Manager {
 		streams:     map[streamKey]*stream{},
 		layouts:     map[schema.GroupVersionResource]*recent[layout]{},
 		columns:     deps.Columns,
+		home:        deps.Namespace,
+		named:       deps.Namespaces,
 		surveys:     checks.NewSurveys(time.Now),
 		building:    map[streamKey]*buildGate{},
 		failures:    map[streamKey]buildFailure{},

@@ -12,6 +12,7 @@ import (
 	"k8s.io/client-go/metadata"
 
 	"github.com/sophotechlabs/spinoza/internal/api"
+	"github.com/sophotechlabs/spinoza/internal/auth"
 	"github.com/sophotechlabs/spinoza/internal/safe"
 )
 
@@ -244,6 +245,10 @@ const namespaceResource = "namespaces"
 var namespaceGVR = schema.GroupVersionResource{Version: "v1", Resource: namespaceResource}
 
 func (m *Manager) Namespaces(ctx context.Context) api.Namespaces {
+	_, acting := auth.ActingAs(ctx)
+	if !acting {
+		return m.ownNamespaces(ctx)
+	}
 	found := m.everyNamespace(ctx)
 	if found.Error != "" {
 		return found
@@ -254,4 +259,15 @@ func (m *Manager) Namespaces(ctx context.Context) api.Namespaces {
 	}
 	found.Names = seen.Namespaces
 	return found
+}
+
+func (m *Manager) ownNamespaces(ctx context.Context) api.Namespaces {
+	seen := m.Scope(ctx)
+	if seen.Everywhere {
+		return m.everyNamespace(ctx)
+	}
+	if len(seen.Namespaces) == 0 {
+		return api.Namespaces{Names: []string{}, Narrowed: true, Error: ErrNoReadableNamespace.Error()}
+	}
+	return api.Namespaces{Names: seen.Namespaces, Narrowed: true}
 }

@@ -75,6 +75,34 @@ func TestCustomColumnsFollowStoredSettings(t *testing.T) {
 	}
 }
 
+func TestReadableNamespacesFollowStoredSettings(t *testing.T) {
+	store := settingsstore.Memory()
+	named := readableNamespaces(store)
+
+	if got := named(); len(got) != 0 {
+		t.Fatalf("namespaces before configuration = %v", got)
+	}
+
+	err := store.Merge(map[string]string{
+		settingsstore.NamespacesKey: `{"spinoza-eks-editor":["payments"]}`,
+	})
+	if err != nil {
+		t.Fatalf("store namespaces: %v", err)
+	}
+	got := named()
+	if len(got["spinoza-eks-editor"]) != 1 || got["spinoza-eks-editor"][0] != "payments" {
+		t.Fatalf("namespaces after configuration = %v, want payments", got)
+	}
+
+	err = store.Merge(map[string]string{settingsstore.NamespacesKey: "not json"})
+	if err != nil {
+		t.Fatalf("store malformed namespaces: %v", err)
+	}
+	if got := named(); len(got) != 0 {
+		t.Fatalf("malformed namespaces = %v, want none", got)
+	}
+}
+
 func TestTheStoreIsReadFromTheUsualPlace(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("HOME", dir)

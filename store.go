@@ -53,6 +53,12 @@ func allowNodeShell(flagged bool, held *settingsstore.Store) func() bool {
 	}
 }
 
+func readableNamespaces(held *settingsstore.Store) func() map[string][]string {
+	return func() map[string][]string {
+		return api.ParseNamespaces(held.All()[settingsstore.NamespacesKey])
+	}
+}
+
 func customColumns(held *settingsstore.Store) func() map[string][]api.CustomColumn {
 	return func() map[string][]api.CustomColumn {
 		return api.ParseColumns(held.All()[settingsstore.ColumnsKey])
