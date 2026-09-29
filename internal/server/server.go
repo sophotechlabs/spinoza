@@ -115,6 +115,7 @@ type Server struct {
 	now             func() time.Time
 	pingEvery       time.Duration
 	feedPingEvery   time.Duration
+	slotWait        time.Duration
 	feedPingWait    time.Duration
 	authEvery       time.Duration
 	stdinWait       time.Duration
@@ -153,6 +154,7 @@ func New(cluster Cluster, assets fs.FS, token string) *Server {
 		now:             time.Now,
 		pingEvery:       defaultPingInterval,
 		feedPingEvery:   defaultFeedPingInterval,
+		slotWait:        snapshotWait,
 		feedPingWait:    defaultFeedPingTimeout,
 		authEvery:       defaultAuthorizationCheckInterval,
 		stdinWait:       defaultStdinTimeout,

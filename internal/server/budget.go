@@ -1,6 +1,9 @@
 package server
 
-import "sync"
+import (
+	"context"
+	"sync"
+)
 
 type workBudget struct {
 	mu          sync.Mutex
@@ -8,6 +11,7 @@ type workBudget struct {
 	perIdentity int
 	used        int
 	byIdentity  map[string]int
+	freed       chan struct{}
 }
 
 func newWorkBudget(global, perIdentity int) *workBudget {
@@ -15,22 +19,46 @@ func newWorkBudget(global, perIdentity int) *workBudget {
 		global:      global,
 		perIdentity: perIdentity,
 		byIdentity:  map[string]int{},
+		freed:       make(chan struct{}),
 	}
 }
 
 func (b *workBudget) claim(identity string, units int) (func(), bool) {
+	release, ok, _ := b.attempt(identity, units)
+	return release, ok
+}
+
+func (b *workBudget) await(ctx context.Context, identity string) (func(), bool) {
+	for {
+		release, ok, freed := b.attempt(identity, 1)
+		if ok {
+			return release, true
+		}
+		select {
+		case <-freed:
+		case <-ctx.Done():
+			return nil, false
+		}
+	}
+}
+
+func (b *workBudget) attempt(identity string, units int) (func(), bool, <-chan struct{}) {
 	if b == nil {
-		return func() {}, true
+		return func() {}, true, nil
 	}
 	if units <= 0 {
-		return func() {}, true
+		return func() {}, true, nil
 	}
 	b.mu.Lock()
+	if b.freed == nil {
+		b.freed = make(chan struct{})
+	}
 	globalFull := b.used+units > b.global
 	identityFull := b.byIdentity[identity]+units > b.perIdentity
 	if globalFull || identityFull {
+		freed := b.freed
 		b.mu.Unlock()
-		return nil, false
+		return nil, false, freed
 	}
 	b.used += units
 	b.byIdentity[identity] += units
@@ -44,9 +72,11 @@ func (b *workBudget) claim(identity string, units int) (func(), bool) {
 			if b.byIdentity[identity] == 0 {
 				delete(b.byIdentity, identity)
 			}
+			close(b.freed)
+			b.freed = make(chan struct{})
 			b.mu.Unlock()
 		})
-	}, true
+	}, true, nil
 }
 
 type reservedResource struct {

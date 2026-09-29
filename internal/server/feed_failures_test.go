@@ -80,6 +80,7 @@ func awkwardServer(t *testing.T, broken *awkward) *httptest.Server {
 	cluster := fixed(mgr)
 	cluster.mgr = mgr
 	srv := New(&brokenCluster{stubCluster: cluster, backend: broken}, testAssets(), testToken)
+	srv.slotWait = 50 * time.Millisecond
 	ts := httptest.NewServer(authed(srv.Handler()))
 	t.Cleanup(ts.Close)
 	return ts
@@ -281,8 +282,8 @@ func TestASubscriptionReplacedWhileItWasBeingBuiltIsDropped(t *testing.T) {
 	}
 
 	sendMsg(ctx, t, conn, subscribe)
-	sendMsg(ctx, t, conn, subscribe)
 	<-broken.entered
+	sendMsg(ctx, t, conn, subscribe)
 	<-broken.entered
 	close(broken.hold)
 

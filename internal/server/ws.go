@@ -30,6 +30,7 @@ const (
 	authorizationRecheckTimeout       = 3 * time.Second
 	defaultSnapshotLimit              = 8
 	defaultIdentitySnapshotLimit      = 2
+	snapshotWait                      = 10 * time.Second
 	defaultLogStreamLimit             = 512
 	defaultIdentityLogStreamLimit     = 80
 	maxLogTailLines                   = 5000
@@ -100,6 +101,7 @@ type entry struct {
 	authorize func(context.Context) error
 	gen       uint64
 	cluster   string
+	cancel    context.CancelFunc
 }
 
 func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
@@ -129,6 +131,7 @@ func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 		logs:       map[string]*entry{},
 		pingEvery:  s.feedPingEvery,
 		pingWait:   s.feedPingWait,
+		slotWait:   s.slotWait,
 	}
 	defer sess.closeAll()
 	kind := viewOf(r)
@@ -321,6 +324,7 @@ type wsSession struct {
 	writeMu    sync.Mutex
 	pingEvery  time.Duration
 	pingWait   time.Duration
+	slotWait   time.Duration
 }
 
 func (sess *wsSession) keepAlive(ctx context.Context, cancel context.CancelFunc) {
@@ -367,6 +371,24 @@ func (sess *wsSession) tryClaim(which feed, subID, cluster string) (uint64, bool
 		stop(previous)
 	}
 	return gen, true
+}
+
+func (sess *wsSession) waitForSlot() time.Duration {
+	if sess.slotWait > 0 {
+		return sess.slotWait
+	}
+	return snapshotWait
+}
+
+func (sess *wsSession) holdCancel(which feed, subID string, gen uint64, cancel context.CancelFunc) bool {
+	sess.mu.Lock()
+	defer sess.mu.Unlock()
+	held, ok := sess.entriesOf(which)[subID]
+	if !ok || held.gen != gen {
+		return false
+	}
+	held.cancel = cancel
+	return true
 }
 
 func (sess *wsSession) adopt(which feed, subID string, gen uint64, resource stoppable) bool {
@@ -472,6 +494,9 @@ func (sess *wsSession) drop(which feed, subID string) {
 }
 
 func stop(held *entry) {
+	if held.cancel != nil {
+		held.cancel()
+	}
 	if held.resource == nil {
 		return
 	}
@@ -509,7 +534,7 @@ func (sess *wsSession) subscribe(msg api.ClientMsg) {
 		sess.failAndForget(tables, msg.SubID, gen, err)
 		return
 	}
-	safe.Go("building the subscription "+msg.SubID, func() { sess.buildSub(backend, msg, gen) })
+	safe.Go("building the subscription "+msg.SubID, func() { sess.buildSub(sess.ctx, backend, msg, gen) })
 }
 
 func validFilters(filters []api.RowFilter) error {
@@ -561,14 +586,21 @@ func (sess *wsSession) resourceOf(which feed, subID string) stoppable {
 	return held.resource
 }
 
-func (sess *wsSession) buildSub(backend Reader, msg api.ClientMsg, gen uint64) {
-	release, ok := sess.snapshots.claim(sess.identity, 1)
+func (sess *wsSession) buildSub(ctx context.Context, backend Reader, msg api.ClientMsg, gen uint64) {
+	building, cancel := context.WithCancel(ctx)
+	defer cancel()
+	if !sess.holdCancel(tables, msg.SubID, gen, cancel) {
+		return
+	}
+	waiting, stopWaiting := context.WithTimeout(building, sess.waitForSlot())
+	release, ok := sess.snapshots.await(waiting, sess.identity)
+	stopWaiting()
 	if !ok {
 		sess.failAndForget(tables, msg.SubID, gen, errors.New("table snapshot capacity is full; try again later"))
 		return
 	}
 	sub, err := backend.Subscribe(
-		sess.ctx, msg.Group, msg.Version, msg.Resource, msg.Namespace, msg.Limit, msg.Filters,
+		building, msg.Group, msg.Version, msg.Resource, msg.Namespace, msg.Limit, msg.Filters,
 	)
 	release()
 	if err != nil {
