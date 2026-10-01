@@ -11,6 +11,7 @@ test_context := 'kind-' + test_cluster
 kind_dir := 'test/integration'
 kind_merged := '.tmp/kind'
 registry_host := 'localhost:5001'
+argocd_chart := '10.9.6'
 registry_endpoint := 'http://kind-registry:5000'
 ldflags := '-s -w'
 version_pkg := 'github.com/sophotechlabs/spinoza/internal/version.value'
@@ -273,19 +274,6 @@ kind-config tier:
 cluster-up tier:
     #!/usr/bin/env bash
     set -euo pipefail
-    pull_image() {
-        local image="$1"
-        local attempt
-        for attempt in 1 2 3; do
-            if docker pull "$image"; then
-                return 0
-            fi
-            if [ "$attempt" -lt 3 ]; then
-                sleep $((attempt * 5))
-            fi
-        done
-        return 1
-    }
     just kind-config {{ tier }}
     config={{ kind_merged }}/{{ tier }}.yaml
     if ! kind get clusters | grep -qx {{ test_cluster }}; then
@@ -305,7 +293,29 @@ cluster-up tier:
     if [ '{{ tier }}' != base ]; then
         images+=(busybox:1.37 busybox@sha256:9db7b59979c38555a39def84a31fb98b5296952f9e3afd4f6f11f05b07adfab0 busybox:latest registry.k8s.io/pause:3.10)
     fi
-    for image in "${images[@]}"; do
+    just kind-sideload "${images[@]}"
+    kubectl --context {{ test_context }} apply -f {{ kind_dir }}/metrics-server.yaml
+    kubectl --context {{ test_context }} -n kube-system rollout status deployment/metrics-server --timeout=5m
+    kubectl --context {{ test_context }} wait --for=condition=Available apiservice/v1beta1.metrics.k8s.io --timeout=5m
+
+[private]
+kind-sideload +images:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    pull_image() {
+        local image="$1"
+        local attempt
+        for attempt in 1 2 3; do
+            if docker pull "$image"; then
+                return 0
+            fi
+            if [ "$attempt" -lt 3 ]; then
+                sleep $((attempt * 5))
+            fi
+        done
+        return 1
+    }
+    for image in {{ images }}; do
         if ! docker image inspect "$image" > /dev/null 2>&1; then
             pull_image "$image"
         fi
@@ -315,9 +325,6 @@ cluster-up tier:
             fi
         done
     done
-    kubectl --context {{ test_context }} apply -f {{ kind_dir }}/metrics-server.yaml
-    kubectl --context {{ test_context }} -n kube-system rollout status deployment/metrics-server --timeout=5m
-    kubectl --context {{ test_context }} wait --for=condition=Available apiservice/v1beta1.metrics.k8s.io --timeout=5m
 
 cluster-base: (cluster-up 'base')
 
@@ -343,9 +350,11 @@ cluster-gitops:
     helm --kube-context {{ test_context }} repo update
     helm --kube-context {{ test_context }} upgrade --install flux fluxcd-community/flux2 \
         --namespace flux-system --create-namespace --wait --timeout 10m
-    helm --kube-context {{ test_context }} upgrade --install argocd argo/argo-cd \
-        --namespace argocd --create-namespace --wait --timeout 10m \
-        --set dex.enabled=false --set notifications.enabled=false --set applicationSet.enabled=true
+    argocd_values=(--set dex.enabled=false --set notifications.enabled=false --set applicationSet.enabled=true)
+    argocd_images=$(helm template argocd argo/argo-cd --version {{ argocd_chart }} --namespace argocd "${argocd_values[@]}" | yq -N '.. | select(tag == "!!map") | select(has("image")) | .image' | sort -u)
+    just kind-sideload $argocd_images
+    helm --kube-context {{ test_context }} upgrade --install argocd argo/argo-cd --version {{ argocd_chart }} \
+        --namespace argocd --create-namespace --wait --timeout 10m "${argocd_values[@]}"
     kubectl --context {{ test_context }} -n flux-system wait --for=condition=Available deployment --all --timeout=10m
     kubectl --context {{ test_context }} -n argocd wait --for=condition=Available deployment --all --timeout=10m
 
@@ -1031,6 +1040,25 @@ test-cluster-mode-release previous current: cluster-mode-up
     SPINOZA_CM_CURRENT_VERSION="$current" \
         go test -tags clustermode -count=1 -timeout 60m -v \
         -run '^TestOnePublishedReleaseCanBeUpgradedAndRolledBack$' ./{{ cm_dir }}/...
+
+e2e-diagnostics:
+    #!/usr/bin/env bash
+    set -u
+    output="$PWD/e2e/.tmp/diagnostics"
+    mkdir -p "$output"
+    if ! kind get clusters | grep -qx {{ test_cluster }}; then
+        echo "no kind cluster {{ test_cluster }}" > "$output/cluster.txt"
+        exit 0
+    fi
+    kubectl --context {{ test_context }} get nodes -o wide > "$output/cluster.txt" 2>&1
+    kubectl --context {{ test_context }} get pods -A -o wide > "$output/pods.txt" 2>&1
+    kubectl --context {{ test_context }} get events -A --sort-by=.lastTimestamp > "$output/events.txt" 2>&1
+    kubectl --context {{ test_context }} -n argocd describe deployments,pods > "$output/argocd.txt" 2>&1
+    kubectl --context {{ test_context }} -n flux-system describe deployments,pods > "$output/flux.txt" 2>&1
+    helm --kube-context {{ test_context }} list -A > "$output/helm-list.txt" 2>&1
+    for node in $(kind get nodes --name {{ test_cluster }}); do
+        docker exec "$node" crictl images > "$output/images-$node.txt" 2>&1
+    done
 
 cluster-mode-diagnostics:
     #!/usr/bin/env bash

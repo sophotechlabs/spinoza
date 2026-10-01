@@ -152,6 +152,8 @@ jobs:
           E2E_BROWSER: ${{ matrix.browser }}
           E2E_GROUP: ${{ matrix.group.group }}
         run: just test-e2e-group "$E2E_GROUP" "$E2E_BROWSER"
+      - run: just e2e-diagnostics
+        if: failure()
       - run: just e2e-cover
       - run: just e2e-flaky
         if: always()
@@ -177,6 +179,7 @@ jobs:
             e2e/playwright-report
             e2e/test-results
             e2e/.tmp/*.log
+            e2e/.tmp/diagnostics
           if-no-files-found: ignore
           retention-days: 14
       - run: just cluster-down
