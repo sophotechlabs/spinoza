@@ -1,5 +1,18 @@
 # Changelog
 
+## [2.2.1](https://github.com/sophotechlabs/spinoza/compare/v2.2.0...v2.2.1) (2026-10-01)
+
+
+### Bug Fixes
+
+* **e2e:** keep non-ascii out of harness command errors ([10ea45d](https://github.com/sophotechlabs/spinoza/commit/10ea45dc11251cfcb519fb093e2b72bc7f1943f2))
+* **e2e:** map the namespaces setting and keep its parser out of the full-run set ([b934b18](https://github.com/sophotechlabs/spinoza/commit/b934b18068f234f8ac144ecf6bb5cb00b9fe7c32))
+* **e2e:** pin argo cd, preload its images and keep cluster diagnostics on failure ([5df3e02](https://github.com/sophotechlabs/spinoza/commit/5df3e02f8adeb727b8570856ed00aa801d67eeca))
+* **frontend:** show the error a failed payload carries when it has no message ([4567662](https://github.com/sophotechlabs/spinoza/commit/456766295721c9dfa1f07f6ad7604f04ff4a6755))
+* **helm:** retry release reads the server refuses as busy ([5ae317b](https://github.com/sophotechlabs/spinoza/commit/5ae317b92c104ddf76336534895489cce4e6abc8))
+* **resources:** do not cache a custom resource layout whose definition could not be read ([d845a5e](https://github.com/sophotechlabs/spinoza/commit/d845a5e7a429f416fb63c85d96ea6b4ecb8521ca))
+* **settings:** skip settings when there is no user ([e419b9a](https://github.com/sophotechlabs/spinoza/commit/e419b9aa0b5bcfbf021f5e1835852bfd282e5e32))
+
 ## [2.2.0](https://github.com/sophotechlabs/spinoza/compare/v2.1.2...v2.2.0) (2026-09-29)
 
 
