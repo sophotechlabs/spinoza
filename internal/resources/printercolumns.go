@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -51,7 +52,10 @@ func (m *Manager) layoutFor(
 		return withCustom(builtinLayout(desc.Kind), custom)
 	}
 	built, ok := shared(ctx, m.layoutStore(gvr), m.now, layoutTTL, func(ctx context.Context) (layout, bool) {
-		declared, found := m.crdLayout(ctx, gvr)
+		declared, found, err := m.crdLayout(ctx, gvr)
+		if err != nil {
+			return builtinLayout(desc.Kind), false
+		}
 		if !found {
 			return builtinLayout(desc.Kind), true
 		}
@@ -81,21 +85,25 @@ func (m *Manager) forgetLayouts() {
 	m.layouts = map[schema.GroupVersionResource]*recent[layout]{}
 }
 
-func (m *Manager) crdLayout(ctx context.Context, gvr schema.GroupVersionResource) (layout, bool) {
+func (m *Manager) crdLayout(ctx context.Context, gvr schema.GroupVersionResource) (layout, bool, error) {
 	if m.dyn == nil {
-		return layout{}, false
+		return layout{}, false, nil
 	}
 	if gvr.Group == "" {
-		return layout{}, false
+		return layout{}, false, nil
 	}
 	bounded, cancel := context.WithTimeout(ctx, crdReadTimeout)
 	defer cancel()
 	definition, err := m.dyn.Resource(crdGVR).
 		Get(bounded, gvr.Resource+"."+gvr.Group, metav1.GetOptions{})
-	if err != nil {
-		return layout{}, false
+	if apierrors.IsNotFound(err) {
+		return layout{}, false, nil
 	}
-	return layoutOf(definition, gvr.Version)
+	if err != nil {
+		return layout{}, false, err
+	}
+	declared, found := layoutOf(definition, gvr.Version)
+	return declared, found, nil
 }
 
 func layoutOf(definition *unstructured.Unstructured, version string) (layout, bool) {
