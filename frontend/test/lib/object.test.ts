@@ -10,6 +10,7 @@ import {
 } from '../../src/lib/object';
 import type { K8sEvent, ObjectDetail, ObjectRef } from '../../src/lib/types';
 import { anySignal } from '../helpers';
+import { failure } from '../../src/lib/object';
 
 const ref: ObjectRef = {
   group: 'apps',
@@ -201,5 +202,44 @@ describe('the reason a request failed', () => {
   it('falls back when there is no reason at all', () => {
     expect(reasonOf(null, 'nothing happened')).toBe('nothing happened');
     expect(reasonOf(undefined, 'nothing happened')).toBe('nothing happened');
+  });
+});
+
+describe('reading why a request failed', () => {
+  function answer(body: unknown): Response {
+    return { json: () => Promise.resolve(body) } as unknown as Response;
+  }
+
+  it('takes the message the server gave', async () => {
+    const got = await failure(answer({ message: 'secrets is forbidden' }), 'fallback');
+
+    expect(got.message).toBe('secrets is forbidden');
+  });
+
+  it('takes the error a payload carried when there is no message', async () => {
+    const got = await failure(
+      answer({ nodes: [], edges: [], error: 'prometheus is unavailable: no service matched' }),
+      'traffic graph request failed with status 502',
+    );
+
+    expect(got.message).toBe('prometheus is unavailable: no service matched');
+  });
+
+  it('prefers the message when both are there', async () => {
+    const got = await failure(answer({ message: 'the message', error: 'the error' }), 'fallback');
+
+    expect(got.message).toBe('the message');
+  });
+
+  it('falls back when neither says anything', async () => {
+    const got = await failure(answer({ error: '', message: '' }), 'request failed with status 500');
+
+    expect(got.message).toBe('request failed with status 500');
+  });
+
+  it('falls back when the error is not text', async () => {
+    const got = await failure(answer({ error: { code: 7 } }), 'request failed with status 502');
+
+    expect(got.message).toBe('request failed with status 502');
   });
 });

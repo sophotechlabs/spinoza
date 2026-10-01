@@ -22,9 +22,12 @@ export function sameRef(a: ObjectRef | null, b: ObjectRef | null): boolean {
 
 export async function failure(response: Response, fallback: string): Promise<Error> {
   try {
-    const body = (await response.json()) as Partial<Failure>;
+    const body = (await response.json()) as Partial<Failure> & { error?: unknown };
     if (typeof body.message === 'string' && body.message !== '') {
       return new Error(body.message);
+    }
+    if (typeof body.error === 'string' && body.error !== '') {
+      return new Error(body.error);
     }
   } catch {
     return new Error(fallback);
