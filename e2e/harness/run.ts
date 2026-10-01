@@ -31,11 +31,17 @@ export function run(command: string, args: string[], options: RunOptions = {}): 
   };
 }
 
+export function printable(text: string): string {
+  return text.replace(/[\u{10000}-\u{10FFFF}\uFE0F\p{Cs}]/gu, '');
+}
+
 export function mustRun(command: string, args: string[], options: RunOptions = {}): string {
   const result = run(command, args, options);
   if (result.code !== 0) {
     throw new Error(
-      `${command} ${args.join(' ')} exited ${String(result.code)}\n${result.stderr || result.stdout}`,
+      printable(
+        `${command} ${args.join(' ')} exited ${String(result.code)}\n${result.stderr || result.stdout}`,
+      ),
     );
   }
   return result.stdout;
