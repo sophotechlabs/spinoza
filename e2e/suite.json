@@ -206,6 +206,7 @@
         "frontend/src/components/CommandPalette.tsx",
         "frontend/src/components/Notifications*.tsx",
         "frontend/src/components/Panel*.tsx",
+        "frontend/src/components/ReadableNamespaces.tsx",
         "frontend/src/components/SaveViewButton.tsx",
         "frontend/src/components/SavedViewsList.tsx",
         "frontend/src/components/SettingsDialog.tsx",

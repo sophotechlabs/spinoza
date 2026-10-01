@@ -3,6 +3,7 @@ package main
 import (
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 
 	"github.com/sophotechlabs/spinoza/internal/api"
@@ -264,5 +265,21 @@ func TestAHistoryFileThatCannotBeReadStillLeavesAStore(t *testing.T) {
 	}
 	if store.Reason() == "" {
 		t.Fatal("a broken history file was reported as recording")
+	}
+}
+
+func TestNamespacesComeBackFromTheirJSON(t *testing.T) {
+	held := parseNamespaces(`{"spinoza-eks-editor":["payments","storefront"]}`)
+
+	if !slices.Equal(held["spinoza-eks-editor"], []string{"payments", "storefront"}) {
+		t.Fatalf("read %v", held)
+	}
+}
+
+func TestAnythingThatIsNotNamespacesReadsAsNone(t *testing.T) {
+	for _, raw := range []string{"", "not json", "[]", "null", "42", `{"ctx":"payments"}`} {
+		if got := parseNamespaces(raw); len(got) != 0 {
+			t.Fatalf("%q read as %v", raw, got)
+		}
 	}
 }

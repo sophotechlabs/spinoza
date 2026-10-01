@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"log/slog"
 
 	"github.com/sophotechlabs/spinoza/internal/api"
@@ -55,8 +56,20 @@ func allowNodeShell(flagged bool, held *settingsstore.Store) func() bool {
 
 func readableNamespaces(held *settingsstore.Store) func() map[string][]string {
 	return func() map[string][]string {
-		return api.ParseNamespaces(held.All()[settingsstore.NamespacesKey])
+		return parseNamespaces(held.All()[settingsstore.NamespacesKey])
 	}
+}
+
+func parseNamespaces(raw string) map[string][]string {
+	if raw == "" {
+		return nil
+	}
+	var held map[string][]string
+	err := json.Unmarshal([]byte(raw), &held)
+	if err != nil {
+		return nil
+	}
+	return held
 }
 
 func customColumns(held *settingsstore.Store) func() map[string][]api.CustomColumn {
