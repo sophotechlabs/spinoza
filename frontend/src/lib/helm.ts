@@ -34,7 +34,7 @@ const BUSY = 429;
 
 export const RELEASE_READ_RETRIES = 3;
 
-export const RELEASE_READ_BACKOFF_MS = 400;
+const RELEASE_READ_BACKOFF_MS = 400;
 
 function pause(ms: number): Promise<void> {
   return new Promise((resolve) => {
