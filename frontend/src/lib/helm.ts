@@ -30,8 +30,32 @@ import { useClusterEpoch } from '../store/cluster';
 
 const HELM_POLL_MS = 15000;
 
+const BUSY = 429;
+
+export const RELEASE_READ_RETRIES = 3;
+
+export const RELEASE_READ_BACKOFF_MS = 400;
+
+function pause(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
+}
+
+async function readRelease(url: string): Promise<Response> {
+  let response = await request(url);
+  for (let attempt = 1; attempt <= RELEASE_READ_RETRIES; attempt += 1) {
+    if (response.status !== BUSY) {
+      return response;
+    }
+    await pause(RELEASE_READ_BACKOFF_MS * attempt);
+    response = await request(url);
+  }
+  return response;
+}
+
 export async function fetchHelmReleases(): Promise<HelmReleases> {
-  const response = await request('/api/helm');
+  const response = await readRelease('/api/helm');
   if (!response.ok) {
     throw await failure(response, `helm request failed with status ${response.status}`);
   }
@@ -145,7 +169,7 @@ export async function fetchHelmRelease(
   if (revision !== undefined) {
     params.set('revision', String(revision));
   }
-  const response = await request(`/api/helm/release?${params.toString()}`);
+  const response = await readRelease(`/api/helm/release?${params.toString()}`);
   if (!response.ok) {
     throw await failure(response, `helm release request failed with status ${response.status}`);
   }
@@ -158,7 +182,7 @@ export async function fetchHelmHistory(
   through: number,
 ): Promise<HelmHistoryPage> {
   const params = new URLSearchParams({ namespace, name, through: String(through) });
-  const response = await request(`/api/helm/history?${params.toString()}`);
+  const response = await readRelease(`/api/helm/history?${params.toString()}`);
   if (!response.ok) {
     throw await failure(response, `helm history request failed with status ${response.status}`);
   }

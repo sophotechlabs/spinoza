@@ -24,6 +24,7 @@ import {
   statusText,
   statusTone,
   useHelmReleases,
+  RELEASE_READ_RETRIES,
 } from '../../src/lib/helm';
 import { bumpHelmEpoch } from '../../src/store/helm';
 import { bumpClusterEpoch, useClusterStore } from '../../src/store/cluster';
@@ -75,6 +76,93 @@ describe('fetchHelmReleases', () => {
 
     expect(got.releases).toEqual([]);
     expect(got.error).toBeUndefined();
+  });
+
+  it('waits and asks again when the release reads are busy', async () => {
+    vi.useFakeTimers();
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 429,
+        json: () => Promise.resolve({ message: 'helm release reads are busy; try again' }),
+      })
+      .mockResolvedValueOnce({ ok: true, status: 200, json: () => Promise.resolve(payload) });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const pending = fetchHelmReleases();
+    await vi.advanceTimersByTimeAsync(1000);
+    const got = await pending;
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(got.releases).toHaveLength(1);
+    vi.useRealTimers();
+  });
+
+  it('says the reads are busy once it has asked enough times', async () => {
+    vi.useFakeTimers();
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 429,
+      json: () => Promise.resolve({ message: 'helm release reads are busy; try again' }),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const pending = fetchHelmReleases();
+    const failed = expect(pending).rejects.toThrow('helm release reads are busy; try again');
+    await vi.advanceTimersByTimeAsync(10000);
+    await failed;
+
+    expect(fetchMock).toHaveBeenCalledTimes(RELEASE_READ_RETRIES + 1);
+    vi.useRealTimers();
+  });
+
+  it('does not ask again when the refusal is not about being busy', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 403,
+      json: () => Promise.resolve({ message: 'secrets is forbidden' }),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(fetchHelmReleases()).rejects.toThrow('secrets is forbidden');
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('asks again for a busy release detail and history too', async () => {
+    vi.useFakeTimers();
+    const busy = {
+      ok: false,
+      status: 429,
+      json: () => Promise.resolve({ message: 'helm release reads are busy; try again' }),
+    };
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(busy)
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 404,
+        json: () => Promise.resolve({ message: 'release not found' }),
+      })
+      .mockResolvedValueOnce(busy)
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 404,
+        json: () => Promise.resolve({ message: 'history not found' }),
+      });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const detail = expect(fetchHelmRelease('demo', 'podinfo')).rejects.toThrow('release not found');
+    await vi.advanceTimersByTimeAsync(1000);
+    await detail;
+    const history = expect(fetchHelmHistory('demo', 'podinfo', 2)).rejects.toThrow(
+      'history not found',
+    );
+    await vi.advanceTimersByTimeAsync(1000);
+    await history;
+
+    expect(fetchMock).toHaveBeenCalledTimes(4);
+    vi.useRealTimers();
   });
 
   it('carries the server message when the request is refused', async () => {
