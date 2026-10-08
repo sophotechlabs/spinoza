@@ -117,6 +117,73 @@ describe('FrameworkPosture', () => {
     });
   });
 
+  it('names the framework of every row while every framework is shown', async () => {
+    stub(posture);
+
+    render(<FrameworkPosture />);
+
+    const control = await screen.findByRole('cell', { name: '5.2.2' });
+    const row = control.closest('tr');
+    expect(screen.getByRole('columnheader', { name: 'Framework' })).toBeInTheDocument();
+    expect(row?.querySelector('td')?.textContent).toBe('CIS Kubernetes Benchmark');
+  });
+
+  it('drops the framework column once one framework is picked', async () => {
+    stub(posture);
+
+    render(<FrameworkPosture />);
+    await screen.findByText('5.2.2');
+    await userEvent.selectOptions(screen.getByLabelText('Framework'), 'PSS baseline');
+
+    await waitFor(() => {
+      expect(screen.queryByRole('columnheader', { name: 'Framework' })).not.toBeInTheDocument();
+    });
+    expect(screen.getByRole('cell', { name: '5.2.2' })).toBeInTheDocument();
+  });
+
+  it('keeps the control, title and result of a row in their own columns', async () => {
+    stub(posture);
+
+    render(<FrameworkPosture />);
+
+    const control = await screen.findByRole('cell', { name: '5.2.2' });
+    const cells = Array.from(control.closest('tr')?.querySelectorAll('td') ?? []).map(
+      (cell) => cell.textContent,
+    );
+    expect(cells).toEqual([
+      'CIS Kubernetes Benchmark',
+      '5.2.2',
+      'Minimize the admission of privileged containers',
+      '3 findings on 2 objects',
+    ]);
+  });
+
+  it('says how many findings are muted beside the result', async () => {
+    stub({
+      frameworks: posture.frameworks,
+      controls: [{ ...posture.controls[0], muted: 2 }],
+    });
+
+    render(<FrameworkPosture />);
+
+    const muted = await screen.findByText('2 muted');
+    expect(muted.closest('td')?.textContent).toBe('3 findings on 2 objects2 muted');
+  });
+
+  it('explains an out of scope control under its result, not under its title', async () => {
+    stub(posture);
+
+    render(<FrameworkPosture />);
+
+    const reason = await screen.findByText(
+      'the kubelet reads this from its own configuration on the node',
+    );
+    expect(reason.closest('td')?.textContent).toContain(
+      'nothing that reads a live cluster can answer this',
+    );
+    expect(screen.getByRole('cell', { name: 'Kubelet' })).toBeInTheDocument();
+  });
+
   it('says so when a framework has nothing cataloged', async () => {
     stub({ frameworks: ['NSA/CISA'], controls: [], reason: 'no numbered controls are cataloged' });
 

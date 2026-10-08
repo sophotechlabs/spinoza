@@ -35,6 +35,41 @@ function verdict(control: FrameworkControl): string {
   return `${String(control.failing)} findings`;
 }
 
+function mutedText(control: FrameworkControl): string {
+  const muted = control.muted ?? 0;
+  if (muted === 0) {
+    return '';
+  }
+  return `${String(muted)} muted`;
+}
+
+function ControlRow({ control, every }: { control: FrameworkControl; every: boolean }) {
+  return (
+    <tr className="border-b border-edge align-baseline">
+      {every && (
+        <td title={control.framework} className="truncate px-3 py-1 text-fg-muted">
+          {control.framework}
+        </td>
+      )}
+      <td title={control.control} className="truncate px-3 py-1 font-mono text-fg-strong">
+        {control.control}
+      </td>
+      <td title={control.title} className="truncate px-3 py-1 text-fg-soft">
+        {control.title}
+      </td>
+      <td className="px-3 py-1">
+        <span className={scopeClass(control)}>{verdict(control)}</span>
+        {mutedText(control) !== '' && (
+          <span className="ml-2 text-fg-muted">{mutedText(control)}</span>
+        )}
+        {control.reason !== undefined && control.reason !== '' && (
+          <span className="block text-fg-subtle">{control.reason}</span>
+        )}
+      </td>
+    </tr>
+  );
+}
+
 export default function FrameworkPosture() {
   const [framework, setFramework] = useState('');
   const seconds = useChecksInterval();
@@ -58,6 +93,7 @@ export default function FrameworkPosture() {
 
   const covered = posture.controls.filter((one) => one.scope === 'covered');
   const failing = covered.filter((one) => one.failing > 0);
+  const every = framework === '';
 
   return (
     <section className="flex min-h-0 flex-col text-xs">
@@ -94,24 +130,37 @@ export default function FrameworkPosture() {
         {posture.controls.length === 0 && (
           <p className="p-3 text-fg-muted">No controls are cataloged for that framework.</p>
         )}
-        <ul>
-          {posture.controls.map((control) => (
-            <li
-              key={`${control.framework}/${control.control}`}
-              className="flex flex-wrap items-baseline gap-2 border-b border-edge px-3 py-1"
-            >
-              <span className="w-16 shrink-0 font-mono text-fg-strong">{control.control}</span>
-              <span className="min-w-0 flex-1 truncate text-fg-soft">{control.title}</span>
-              <span className={scopeClass(control)}>{verdict(control)}</span>
-              {(control.muted ?? 0) > 0 && (
-                <span className="text-fg-muted">{control.muted} muted</span>
-              )}
-              {control.reason !== undefined && control.reason !== '' && (
-                <span className="w-full text-fg-subtle">{control.reason}</span>
-              )}
-            </li>
-          ))}
-        </ul>
+        {posture.controls.length > 0 && (
+          <table className="w-full table-fixed">
+            <thead className="sticky top-0 bg-surface text-left text-fg-muted">
+              <tr className="border-b border-edge">
+                {every && (
+                  <th scope="col" className="w-48 px-3 py-1 font-normal">
+                    Framework
+                  </th>
+                )}
+                <th scope="col" className="w-56 px-3 py-1 font-normal">
+                  Control
+                </th>
+                <th scope="col" className="px-3 py-1 font-normal">
+                  Title
+                </th>
+                <th scope="col" className="w-80 px-3 py-1 font-normal">
+                  Result
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {posture.controls.map((control) => (
+                <ControlRow
+                  key={`${control.framework}/${control.control}`}
+                  control={control}
+                  every={every}
+                />
+              ))}
+            </tbody>
+          </table>
+        )}
       </div>
     </section>
   );
