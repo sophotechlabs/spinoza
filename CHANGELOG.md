@@ -1,5 +1,20 @@
 # Changelog
 
+## [2.2.2](https://github.com/sophotechlabs/spinoza/compare/v2.2.1...v2.2.2) (2026-10-08)
+
+
+### Bug Fixes
+
+* **checks:** lay the framework posture out as a table that holds every framework ([425ca74](https://github.com/sophotechlabs/spinoza/commit/425ca74359532bb067c917382123e15c20da177b))
+* **deps:** clear the frontend dev dependency advisories failing vulns ([774d94f](https://github.com/sophotechlabs/spinoza/commit/774d94f65db0e8977899b208156f2959b8ab8c75))
+
+
+### Miscellaneous
+
+* **ci:** nightly report for 2026-10-02 ([#59](https://github.com/sophotechlabs/spinoza/issues/59)) ([ce59910](https://github.com/sophotechlabs/spinoza/commit/ce599108b14f2a35788a6467cb2b4b8ae83f4361))
+* **ci:** nightly report for 2026-10-05 ([#63](https://github.com/sophotechlabs/spinoza/issues/63)) ([b4634af](https://github.com/sophotechlabs/spinoza/commit/b4634af870582661a6ac0babf47855b6b19d8c1b))
+* **ci:** nightly report for 2026-10-08 ([#64](https://github.com/sophotechlabs/spinoza/issues/64)) ([ce4b9fc](https://github.com/sophotechlabs/spinoza/commit/ce4b9fc90a9cb969e1248170ae4dd9568e5a059b))
+
 ## [2.2.1](https://github.com/sophotechlabs/spinoza/compare/v2.2.0...v2.2.1) (2026-10-01)
 
 
