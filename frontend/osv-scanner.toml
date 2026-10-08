@@ -1,0 +1,7 @@
+[[IgnoredVulns]]
+id = "GHSA-vfj7-8cjw-p6xm"
+reason = "braces has no fixed release. It reaches the frontend only through depcheck, a development tool that expands the repository's own patterns; nothing untrusted reaches it and it never ships in the binary."
+
+[[IgnoredVulns]]
+id = "GHSA-hp3w-g68c-fv3c"
+reason = "sprintf-js has no fixed release. It reaches the frontend only through depcheck, a development tool that formats its own messages; nothing untrusted reaches it and it never ships in the binary."
