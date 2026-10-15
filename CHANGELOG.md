@@ -1,5 +1,20 @@
 # Changelog
 
+## [2.2.3](https://github.com/sophotechlabs/spinoza/compare/v2.2.2...v2.2.3) (2026-10-15)
+
+
+### Bug Fixes
+
+* **frontend:** open the workspace once the cluster is known so views load once ([38bb7c3](https://github.com/sophotechlabs/spinoza/commit/38bb7c31f8c7002e787b3da9fa095e5c7c928e38))
+* **metrics:** read pod usage in the chosen namespace for accounts bound to one ([e6e29c7](https://github.com/sophotechlabs/spinoza/commit/e6e29c786e397563433a88955a40621fa97f0be0))
+* **resources:** name the namespaces that would work instead of advising one blindly ([ac05d8a](https://github.com/sophotechlabs/spinoza/commit/ac05d8a94808fe09c9dd54b05e4e5735ce57a7ab))
+
+
+### Miscellaneous
+
+* **ci:** nightly report for 2026-10-12 ([#65](https://github.com/sophotechlabs/spinoza/issues/65)) ([900025c](https://github.com/sophotechlabs/spinoza/commit/900025c6849bc8173cd0d5d3bc66146cbc257db9))
+* **ci:** nightly report for 2026-10-14 ([#67](https://github.com/sophotechlabs/spinoza/issues/67)) ([ea0faa0](https://github.com/sophotechlabs/spinoza/commit/ea0faa0d5f2365cbdc9da04867a0b5b925ed256f))
+
 ## [2.2.2](https://github.com/sophotechlabs/spinoza/compare/v2.2.1...v2.2.2) (2026-10-08)
 
 
