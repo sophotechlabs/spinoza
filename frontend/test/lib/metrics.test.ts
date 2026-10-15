@@ -61,6 +61,14 @@ describe('fetchMetrics', () => {
     expect(result).toEqual(sample);
   });
 
+  it('asks for one namespace when it is given one', async () => {
+    const fetchMock = stubOk(sample);
+    await fetchMetrics('team a');
+    expect(fetchMock).toHaveBeenCalledWith('/api/metrics?namespace=team+a', {
+      signal: anySignal(),
+    });
+  });
+
   it('throws when the response is not ok', async () => {
     vi.stubGlobal(
       'fetch',
@@ -84,6 +92,40 @@ describe('useMetrics', () => {
     const { result } = renderHook(() => useMetrics(true));
     await waitFor(() => {
       expect(result.current.data).toEqual(sample);
+    });
+  });
+
+  it('reads the namespace it is pointed at', async () => {
+    const fetchMock = stubOk(sample);
+    const { result } = renderHook(() => useMetrics(true, 'team'));
+    await waitFor(() => {
+      expect(result.current.data).toEqual(sample);
+    });
+    expect(fetchMock).toHaveBeenCalledWith('/api/metrics?namespace=team', {
+      signal: anySignal(),
+    });
+  });
+
+  it('drops the old namespace numbers while the next one loads', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(sample) })
+      .mockReturnValue(new Promise(() => undefined));
+    vi.stubGlobal('fetch', fetchMock);
+    const { result, rerender } = renderHook(({ namespace }) => useMetrics(true, namespace), {
+      initialProps: { namespace: 'team' },
+    });
+    await waitFor(() => {
+      expect(result.current.data).toEqual(sample);
+    });
+
+    rerender({ namespace: 'other' });
+
+    expect(result.current.data).toBeNull();
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenLastCalledWith('/api/metrics?namespace=other', {
+        signal: anySignal(),
+      });
     });
   });
 

@@ -249,6 +249,11 @@ func (n notStubbed) Metrics(_ context.Context) (r0 api.Metrics) {
 	return r0
 }
 
+func (n notStubbed) MetricsIn(_ context.Context, _ string) (r0 api.Metrics, r1 error) {
+	n.missing("MetricsIn")
+	return r0, r1
+}
+
 func (n notStubbed) Namespaces(_ context.Context) (r0 api.Namespaces) {
 	n.missing("Namespaces")
 	return r0

@@ -255,3 +255,16 @@ func TestMetricHistoryRefusesAnotherNamespace(t *testing.T) {
 		t.Fatalf("error = %v, want the namespace refused", err)
 	}
 }
+
+func TestMetricsInRefusesAnotherNamespace(t *testing.T) {
+	mgr := NewManager(t.Context(), Deps{
+		Clientset: decidingClientset(false, "not for you"),
+	})
+	ctx := auth.WithIdentity(t.Context(), auth.Identity{User: "alice"})
+
+	_, err := mgr.MetricsIn(ctx, "prod")
+
+	if !errors.Is(err, ErrOutOfScope) {
+		t.Fatalf("error = %v, want the namespace refused", err)
+	}
+}

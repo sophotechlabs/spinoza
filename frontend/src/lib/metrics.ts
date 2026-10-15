@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import type { Metrics } from './types';
 import { request } from './http';
 import { parseMetrics } from './parse';
@@ -9,8 +9,16 @@ import { failure } from './object';
 const METRICS_POLL_MS = 10000;
 export const METRICS_CUTOFF_MS = 60000;
 
-export async function fetchMetrics(): Promise<Metrics> {
-  const response = await request('/api/metrics');
+function metricsPath(namespace: string): string {
+  if (namespace === '') {
+    return '/api/metrics';
+  }
+  const params = new URLSearchParams({ namespace });
+  return `/api/metrics?${params.toString()}`;
+}
+
+export async function fetchMetrics(namespace = ''): Promise<Metrics> {
+  const response = await request(metricsPath(namespace));
   if (!response.ok) {
     throw await failure(response, `metrics request failed with status ${response.status}`);
   }
@@ -30,8 +38,8 @@ export function isUsable(data: Metrics): boolean {
   return Object.keys(data.nodes).length > 0;
 }
 
-export async function loadMetrics(): Promise<Metrics> {
-  const data = await fetchMetrics();
+export async function loadMetrics(namespace = ''): Promise<Metrics> {
+  const data = await fetchMetrics(namespace);
   const problem = data.error;
   if (problem === undefined) {
     return data;
@@ -66,11 +74,13 @@ function useExpiry(polled: Polled<Metrics>, cutoffMs: number): boolean {
   return expired;
 }
 
-export function useMetrics(enabled: boolean): Polled<Metrics> {
-  const polled = usePoll(loadMetrics, {
+export function useMetrics(enabled: boolean, namespace = ''): Polled<Metrics> {
+  const load = useCallback(() => loadMetrics(namespace), [namespace]);
+  const polled = usePoll(load, {
     intervalMs: METRICS_POLL_MS,
     enabled,
     fallback: 'metrics request failed',
+    resetKey: namespace,
   });
   const expired = useExpiry(polled, METRICS_CUTOFF_MS);
 

@@ -67,7 +67,7 @@ func Build(ctx context.Context, dyn dynamic.Interface, nodes Nodes) api.Metrics 
 		defer func() {
 			failures.RecordPanic("pods.metrics.k8s.io", "reading pod metrics", recover())
 		}()
-		pods = podUsage(ctx, dyn, failures, &podsMissing)
+		pods = podUsage(ctx, dyn, "", failures, &podsMissing)
 	})
 	safe.Go("reading node metrics", func() {
 		defer group.Done()
@@ -85,6 +85,20 @@ func Build(ctx context.Context, dyn dynamic.Interface, nodes Nodes) api.Metrics 
 	}
 }
 
+func BuildIn(ctx context.Context, dyn dynamic.Interface, namespace string) api.Metrics {
+	bounded, cancel := context.WithTimeout(ctx, buildTimeout)
+	defer cancel()
+	failures := listerr.New()
+	var missing atomic.Bool
+	pods := podUsage(bounded, dyn, namespace, failures, &missing)
+	return api.Metrics{
+		Pods:   pods,
+		Nodes:  map[string]api.ResourceUsage{},
+		Absent: missing.Load(),
+		Error:  failures.Message(),
+	}
+}
+
 func NotServed(err error) bool {
 	return apierrors.IsNotFound(err)
 }
@@ -92,11 +106,12 @@ func NotServed(err error) bool {
 func podUsage(
 	ctx context.Context,
 	dyn dynamic.Interface,
+	namespace string,
 	failures *listerr.Collector,
 	missing *atomic.Bool,
 ) map[string]api.ResourceUsage {
 	out := map[string]api.ResourceUsage{}
-	list, err := dyn.Resource(podMetricsGVR).List(ctx, metav1.ListOptions{})
+	list, err := dyn.Resource(podMetricsGVR).Namespace(namespace).List(ctx, metav1.ListOptions{})
 	if NotServed(err) {
 		missing.Store(true)
 		return out

@@ -105,6 +105,13 @@ func (m *Manager) Metrics(ctx context.Context) api.Metrics {
 	return value
 }
 
+func (m *Manager) MetricsIn(ctx context.Context, namespace string) (api.Metrics, error) {
+	if !m.filter(ctx).allows(namespace) {
+		return api.Metrics{}, fmt.Errorf("%w: %s", ErrOutOfScope, namespace)
+	}
+	return metrics.BuildIn(ctx, m.dyn, namespace), nil
+}
+
 func (m *Manager) buildMetrics(ctx context.Context) api.Metrics {
 	built := metrics.Build(ctx, m.dyn, m.nodeSource())
 	if built.Error == "" {

@@ -394,12 +394,16 @@ export default function ResourceTable({
     activeKind = active.kind;
   }
   const wantMetrics = METRIC_KINDS.has(activeKind);
+  let metricsNamespace = '';
+  if (activeKind === 'Pod') {
+    metricsNamespace = chosenNamespace;
+  }
   const {
     data: metrics,
     error: metricsError,
     stale: metricsStale,
     reload: reloadMetrics,
-  } = useMetrics(wantMetrics);
+  } = useMetrics(wantMetrics, metricsNamespace);
 
   const sortedIds = useMemo(() => new Set(sorting.map((entry) => entry.id)), [sorting]);
   const columns = useMemo<ColumnDef<Row, string>[]>(() => {

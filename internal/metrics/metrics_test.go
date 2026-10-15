@@ -285,3 +285,48 @@ func TestOnlyANotFoundAnswerMeansTheMetricsAPIIsNotServed(t *testing.T) {
 		t.Fatal("no error was read as a missing metrics api")
 	}
 }
+
+func TestBuildInReadsOnlyTheNamespaceItWasGiven(t *testing.T) {
+	dyn := seed(t)
+	create(t, dyn, podMetricsGVR, "dev", obj("metrics.k8s.io/v1beta1", "PodMetrics", "api", "dev", map[string]any{
+		"containers": []any{map[string]any{"name": "a", "usage": map[string]any{"cpu": "10m", "memory": "16Mi"}}},
+	}))
+	dyn.PrependReactor("list", "pods", func(action k8stesting.Action) (bool, runtime.Object, error) {
+		if action.GetNamespace() == "" {
+			return true, nil, apierrors.NewForbidden(podMetricsGVR.GroupResource(), "", errors.New("cluster scope"))
+		}
+		return false, nil, nil
+	})
+
+	built := BuildIn(context.Background(), dyn, "prod")
+
+	if built.Error != "" {
+		t.Fatalf("error = %q, want a namespaced read that needs no cluster-wide list", built.Error)
+	}
+	if len(built.Pods) != 1 {
+		t.Fatalf("pods = %v, want only the one in prod", built.Pods)
+	}
+	web := built.Pods["prod/web"]
+	if web.CPUMilli != 150 || web.MemoryMi != 192 {
+		t.Fatalf("pod web = %+v, want cpu 150 mem 192", web)
+	}
+	if len(built.Nodes) != 0 {
+		t.Fatalf("nodes = %v, want none read for one namespace", built.Nodes)
+	}
+}
+
+func TestBuildInSaysWhenMetricsAreNotServed(t *testing.T) {
+	dyn := fake.NewSimpleDynamicClientWithCustomListKinds(runtime.NewScheme(), listKinds())
+	dyn.PrependReactor("list", "pods", func(k8stesting.Action) (bool, runtime.Object, error) {
+		return true, nil, apierrors.NewNotFound(podMetricsGVR.GroupResource(), "")
+	})
+
+	built := BuildIn(context.Background(), dyn, "prod")
+
+	if !built.Absent {
+		t.Fatal("absent = false, want metrics-server reported missing")
+	}
+	if built.Error != "" {
+		t.Fatalf("error = %q, want a missing API told apart from a failure", built.Error)
+	}
+}

@@ -192,7 +192,17 @@ func shownOf(raw string) int {
 }
 
 func (s *Server) handleMetrics(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, s.managerFor(r).Metrics(r.Context()))
+	namespace := r.URL.Query().Get("namespace")
+	if namespace == "" {
+		writeJSON(w, s.managerFor(r).Metrics(r.Context()))
+		return
+	}
+	usage, err := s.managerFor(r).MetricsIn(r.Context(), namespace)
+	if err != nil {
+		writeAPIError(w, err)
+		return
+	}
+	writeJSON(w, usage)
 }
 
 func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request) {

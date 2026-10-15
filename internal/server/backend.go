@@ -76,6 +76,7 @@ type Feeds interface {
 type Views interface {
 	Deliveries
 	Reports
+	Usage
 	Traffic
 }
 
@@ -94,7 +95,11 @@ type Reports interface {
 	CheckFingerprint(ctx context.Context, keep checks.Filter) checks.Baseline
 	CheckExport(ctx context.Context, keep checks.Filter) api.CheckReport
 	Issues(ctx context.Context) api.IssueQueue
+}
+
+type Usage interface {
 	Metrics(ctx context.Context) api.Metrics
+	MetricsIn(ctx context.Context, namespace string) (api.Metrics, error)
 	MetricHistory(ctx context.Context, namespace, pod string, span time.Duration) (api.MetricHistory, error)
 }
 

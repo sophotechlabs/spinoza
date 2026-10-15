@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net"
 	"net/http"
@@ -15,6 +16,7 @@ import (
 
 	"github.com/coder/websocket"
 	"github.com/coder/websocket/wsjson"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -586,6 +588,54 @@ func TestMetricsEndpoint(t *testing.T) {
 	var m api.Metrics
 	if err := json.NewDecoder(resp.Body).Decode(&m); err != nil {
 		t.Fatalf("decode: %v", err)
+	}
+}
+
+func TestMetricsEndpointReadsOneNamespaceWhenAsked(t *testing.T) {
+	podMetrics := schema.GroupVersionResource{Group: "metrics.k8s.io", Version: "v1beta1", Resource: "pods"}
+	kinds := map[schema.GroupVersionResource]string{
+		podMetrics: "PodMetricsList",
+		{Group: "metrics.k8s.io", Version: "v1beta1", Resource: "nodes"}: "NodeMetricsList",
+		{Group: "", Version: "v1", Resource: "nodes"}:                    "NodeList",
+	}
+	web := &unstructured.Unstructured{Object: map[string]any{
+		"apiVersion": "metrics.k8s.io/v1beta1",
+		"kind":       "PodMetrics",
+		"metadata":   map[string]any{"name": "web", "namespace": "team"},
+		"containers": []any{map[string]any{"name": "a", "usage": map[string]any{"cpu": "250m", "memory": "64Mi"}}},
+	}}
+	dyn := fake.NewSimpleDynamicClientWithCustomListKinds(runtime.NewScheme(), kinds)
+	_, err := dyn.Resource(podMetrics).Namespace("team").Create(t.Context(), web, metav1.CreateOptions{})
+	if err != nil {
+		t.Fatalf("seed pod metrics: %v", err)
+	}
+	dyn.PrependReactor("list", "pods", func(action k8stesting.Action) (bool, runtime.Object, error) {
+		if action.GetNamespace() == "" {
+			return true, nil, apierrors.NewForbidden(podMetrics.GroupResource(), "", errors.New("cluster scope"))
+		}
+		return false, nil, nil
+	})
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	mgr := resources.NewManager(ctx, resources.Deps{Dynamic: dyn, Clientset: k8sfake.NewClientset()})
+	srv := New(fixed(mgr), testAssets(), testToken)
+	ts := httptest.NewServer(authed(srv.Handler()))
+	defer ts.Close()
+
+	resp, body := doRequest(t, http.MethodGet, ts.URL+"/api/metrics?namespace=team", nil)
+
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d: %s", resp.StatusCode, body)
+	}
+	var usage api.Metrics
+	if err := json.Unmarshal(body, &usage); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if usage.Error != "" {
+		t.Fatalf("error = %q, want the namespace read without a cluster-wide list", usage.Error)
+	}
+	if usage.Pods["team/web"].CPUMilli != 250 {
+		t.Fatalf("pods = %+v, want team/web at 250m", usage.Pods)
 	}
 }
 
