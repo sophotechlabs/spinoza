@@ -3342,3 +3342,49 @@ describe('App served to a team', () => {
     expect(asked.some((url) => url.startsWith('/api/update'))).toBe(false);
   });
 });
+
+describe('the first load', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('holds the workspace until it knows which cluster is open, so nothing is asked twice', async () => {
+    useClustersStore.getState().reset();
+    stubFetch(3);
+    const answer = globalThis.fetch;
+    let release: () => void = () => undefined;
+    const listed = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const asked: string[] = [];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string, init?: RequestInit) => {
+        asked.push(url);
+        if (url.startsWith('/api/clusters')) {
+          await listed;
+        }
+        return answer(url, init);
+      }),
+    );
+
+    render(<App />);
+
+    expect(screen.getByText('Loading the open clusters')).toBeInTheDocument();
+    expect(screen.queryByTestId('cluster-overview')).not.toBeInTheDocument();
+
+    await act(async () => {
+      release();
+      await listed;
+    });
+
+    expect(await screen.findByTestId('cluster-overview')).toBeInTheDocument();
+    await waitFor(() => {
+      expect(asked.some((url) => url.startsWith('/api/resources/counts'))).toBe(true);
+    });
+    const counts = asked.filter((url) => url.startsWith('/api/resources/counts'));
+    expect(counts).toEqual([
+      `/api/resources/counts?cluster=${encodeURIComponent(idFor('kind-dev'))}`,
+    ]);
+  });
+});

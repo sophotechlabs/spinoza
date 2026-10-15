@@ -5,6 +5,7 @@ import {
   contextAnnounced,
   contextGroups,
   fetchContexts,
+  fetchContextsShared,
   fetchFilePicker,
   pickKubeconfigFile,
   removeKubeconfig,
@@ -201,6 +202,37 @@ describe('fetchContexts', () => {
     stub({ message: 'kubeconfig is unreadable' }, false, 500);
 
     await expect(fetchContexts()).rejects.toThrow('kubeconfig is unreadable');
+  });
+});
+
+describe('fetchContextsShared', () => {
+  it('lets readers that start together share one request', async () => {
+    const fetchMock = stub({ kubeconfigs: [] });
+
+    const [first, second] = await Promise.all([fetchContextsShared(), fetchContextsShared()]);
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(second).toBe(first);
+  });
+
+  it('asks again once the shared request has answered', async () => {
+    const fetchMock = stub({ kubeconfigs: [] });
+
+    await fetchContextsShared();
+    await fetchContextsShared();
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not hand a reader the answer from before a cluster change', async () => {
+    const fetchMock = stub({ kubeconfigs: [] });
+
+    const before = fetchContextsShared();
+    bumpClusterEpoch();
+    const after = fetchContextsShared();
+    await Promise.all([before, after]);
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 });
 

@@ -1,5 +1,6 @@
 import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type {
+  ClusterList,
   FluxResource,
   GraphNode,
   HelmRelease,
@@ -12,7 +13,7 @@ import type {
 } from './lib/types';
 import { useResourceFeed } from './lib/feed';
 import { offline } from './lib/connection';
-import { fetchContexts } from './lib/contexts';
+import { fetchContextsShared } from './lib/contexts';
 import { activateCluster, fetchClusters, openCluster, stillToOpen } from './lib/clusters';
 import {
   activeOf,
@@ -124,9 +125,19 @@ async function adoptContext(name: string): Promise<string> {
   return contextOf(useClustersStore.getState().tabs, activeOf(list.clusters));
 }
 
-async function openRememberedTabs(): Promise<void> {
+async function listClusters(): Promise<ClusterList | null> {
   try {
-    const list = await fetchClusters();
+    return await fetchClusters();
+  } catch {
+    return null;
+  }
+}
+
+async function openRememberedTabs(list: ClusterList | null): Promise<void> {
+  if (list === null) {
+    return;
+  }
+  try {
     for (const one of stillToOpen(list)) {
       await openCluster(one.kubeconfig ?? '', one.context);
     }
@@ -171,6 +182,7 @@ export default function App() {
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [moved, setMoved] = useState(false);
   const served = useClusterMode();
+  const [listed, setListed] = useState(served || onCluster !== '');
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsSection, setSettingsSection] = useState<Section>('Appearance');
 
@@ -222,9 +234,8 @@ export default function App() {
     };
   }, [active, namespace, onCluster, subId, subscribe, unsubscribe]);
 
-  const showActiveTab = useCallback(() => {
+  const showTab = useCallback(() => {
     const state = useClustersStore.getState();
-    bumpClusterEpoch();
     const context = contextOf(state.tabs, state.active);
     const held = state.routes[state.active];
     if (held !== undefined) {
@@ -234,22 +245,28 @@ export default function App() {
     replace(blankRoute(context));
   }, [replace]);
 
+  const showActiveTab = useCallback(() => {
+    bumpClusterEpoch();
+    showTab();
+  }, [showTab]);
+
   useEffect(() => {
     if (served) {
-      showActiveTab();
+      showTab();
       return;
     }
-    void openRememberedTabs().then(() => {
-      if (linked.current !== '') {
-        return;
+    void listClusters().then((list) => {
+      setListed(true);
+      if (linked.current === '') {
+        showTab();
       }
-      showActiveTab();
+      void openRememberedTabs(list);
     });
-  }, [served, showActiveTab]);
+  }, [served, showTab]);
 
   useEffect(() => {
     let live = true;
-    fetchContexts()
+    fetchContextsShared()
       .then((list) => {
         if (live) {
           useContextsStore.getState().setList(list);
@@ -746,39 +763,46 @@ export default function App() {
         }}
       />
       <KubeconfigBanner />
-      <div className="flex min-h-0 flex-1">
-        <ErrorBoundary label="The sidebar">
-          <Sidebar
-            view={route.view}
-            activeResource={active}
-            onSelect={handleSelectResource}
-            onSelectView={handleSelectView}
-          />
-        </ErrorBoundary>
-        <main
-          id={MAIN_ID}
-          tabIndex={-1}
-          aria-busy={stale}
-          className={`flex min-h-0 min-w-0 flex-1 ${staleClass(stale)}`}
-        >
-          <PanelLayout
-            key={onCluster}
-            selection={selection}
-            release={route.release}
-            kind={active}
-            namespace={namespace}
-            subscribeLogs={subscribeLogs}
-            unsubscribeLogs={unsubscribeLogs}
-            onClose={clearSelection}
-            onDeleted={clearSelection}
-            onSelectResource={remember}
-            onOpenResource={openInTable}
-            onReleaseClose={closeRelease}
-          >
-            <ErrorBoundary label={route.view}>{mainArea}</ErrorBoundary>
-          </PanelLayout>
+      {!listed && (
+        <main id={MAIN_ID} tabIndex={-1} aria-busy className="flex min-h-0 flex-1">
+          <CapabilityState state="loading" what="the open clusters" />
         </main>
-      </div>
+      )}
+      {listed && (
+        <div className="flex min-h-0 flex-1">
+          <ErrorBoundary label="The sidebar">
+            <Sidebar
+              view={route.view}
+              activeResource={active}
+              onSelect={handleSelectResource}
+              onSelectView={handleSelectView}
+            />
+          </ErrorBoundary>
+          <main
+            id={MAIN_ID}
+            tabIndex={-1}
+            aria-busy={stale}
+            className={`flex min-h-0 min-w-0 flex-1 ${staleClass(stale)}`}
+          >
+            <PanelLayout
+              key={onCluster}
+              selection={selection}
+              release={route.release}
+              kind={active}
+              namespace={namespace}
+              subscribeLogs={subscribeLogs}
+              unsubscribeLogs={unsubscribeLogs}
+              onClose={clearSelection}
+              onDeleted={clearSelection}
+              onSelectResource={remember}
+              onOpenResource={openInTable}
+              onReleaseClose={closeRelease}
+            >
+              <ErrorBoundary label={route.view}>{mainArea}</ErrorBoundary>
+            </PanelLayout>
+          </main>
+        </div>
+      )}
       <Toasts />
       <TooltipHost />
       <ProtectionOffer />

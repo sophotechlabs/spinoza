@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ClusterList, ContextList } from '../lib/types';
-import { contextGroups, fetchContexts, sameContext } from '../lib/contexts';
+import { contextGroups, fetchContexts, fetchContextsShared, sameContext } from '../lib/contexts';
 import { activateCluster, closeCluster, openCluster, wasCancelled } from '../lib/clusters';
 import { forgetTab, tabFor } from '../lib/tabs';
 import { reasonOf } from '../lib/object';
@@ -131,7 +131,7 @@ export default function ContextPicker({ onSwitched, look = 'control' }: ContextP
     let timer: ReturnType<typeof setTimeout> | null = null;
     const generation = listRequest.current + 1;
     listRequest.current = generation;
-    fetchContexts()
+    fetchContextsShared()
       .then((found) => {
         if (!live || listRequest.current !== generation) {
           return;

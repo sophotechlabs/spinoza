@@ -123,6 +123,29 @@ export async function fetchContexts(): Promise<ContextList> {
   return normalize((await response.json()) as WireContexts);
 }
 
+interface SharedRead {
+  epoch: number;
+  reading: Promise<ContextList>;
+}
+
+let sharedRead: SharedRead | null = null;
+
+export function fetchContextsShared(): Promise<ContextList> {
+  const epoch = useClusterStore.getState().epoch;
+  if (sharedRead !== null && sharedRead.epoch === epoch) {
+    return sharedRead.reading;
+  }
+  const held = { epoch, reading: fetchContexts() };
+  sharedRead = held;
+  const forget = () => {
+    if (sharedRead === held) {
+      sharedRead = null;
+    }
+  };
+  held.reading.then(forget, forget);
+  return held.reading;
+}
+
 let contextAnnouncementRequest = 0;
 
 export async function contextAnnounced(name: string): Promise<void> {

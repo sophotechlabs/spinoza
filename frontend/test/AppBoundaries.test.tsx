@@ -44,11 +44,13 @@ vi.mock('../src/components/CommandPalette', () => ({
 }));
 
 import App from '../src/App';
+import { MK1, showing } from './helpers-clusters';
 
 beforeEach(() => {
   crashes.topBar = false;
   crashes.sidebar = false;
   crashes.palette = false;
+  showing(MK1);
   vi.spyOn(console, 'error').mockImplementation(() => undefined);
   vi.stubGlobal(
     'fetch',
