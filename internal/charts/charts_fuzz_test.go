@@ -11,6 +11,7 @@ func FuzzChartIndex(f *testing.F) {
 	f.Add([]byte("entries: {}\n"))
 	f.Add([]byte("entries:\n  app:\n    - version: not-semver\n"))
 	f.Add([]byte("not: [valid"))
+	f.Add([]byte("{{}: ,<<: {}}"))
 
 	f.Fuzz(func(t *testing.T, raw []byte) {
 		found, err := parseIndex(bytes.NewReader(raw))

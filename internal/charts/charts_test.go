@@ -412,6 +412,60 @@ func TestResolveIndexRejectsMalformedYAML(t *testing.T) {
 	}
 }
 
+const mergeBesideAMapKey = `
+entries:
+  podinfo:
+    - version: 6.14.0
+? {kind: map}
+: key
+<<: {}
+`
+
+const unhashableKeyError = "yaml: runtime error: hash of unhashable type map[string]interface {}"
+
+func TestASeededIndexWithAMergeBesideAMapKeyIsRefused(t *testing.T) {
+	now := time.Date(2026, 9, 1, 12, 0, 0, 0, time.UTC)
+	cache := newCache(t.Context(), nil, time.Hour, nil, nil)
+	cache.now = func() time.Time { return now }
+	repo := Repo{URL: "https://charts.example.com"}
+
+	err := cache.Seed(repo, strings.NewReader(mergeBesideAMapKey), now)
+
+	if err == nil || err.Error() != unhashableKeyError {
+		t.Fatalf("seed error = %v, want %q", err, unhashableKeyError)
+	}
+	if cache.Latest(repo, "podinfo") != "" {
+		t.Fatalf("podinfo = %q, want nothing cached from a refused index", cache.Latest(repo, "podinfo"))
+	}
+}
+
+func TestResolveRefusesAnIndexWithAMergeBesideAMapKey(t *testing.T) {
+	cache, ts := cacheFor(t, func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(mergeBesideAMapKey))
+	})
+
+	_, err := cache.Resolve(t.Context(), Repo{URL: ts.URL}, "podinfo")
+
+	want := "parse " + ts.URL + "/index.yaml: " + unhashableKeyError
+	if err == nil || err.Error() != want {
+		t.Fatalf("error = %v, want %q", err, want)
+	}
+}
+
+func TestWarmSurvivesAnIndexWithAMergeBesideAMapKey(t *testing.T) {
+	cache, ts := cacheFor(t, func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(mergeBesideAMapKey))
+	})
+	repo := Repo{URL: ts.URL}
+
+	cache.Warm(repo, "podinfo")
+	cache.Wait()
+
+	if cache.Latest(repo, "podinfo") != "" {
+		t.Fatalf("podinfo = %q, want nothing cached from a refused index", cache.Latest(repo, "podinfo"))
+	}
+}
+
 func TestResolveRefusesALocalRepositoryPassedDirectly(t *testing.T) {
 	cache := New(t.Context(), http.DefaultClient, DefaultTTL)
 

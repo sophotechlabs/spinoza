@@ -17,8 +17,8 @@ import (
 	"time"
 
 	"github.com/Masterminds/semver/v3"
+	"go.yaml.in/yaml/v3"
 	"golang.org/x/net/publicsuffix"
-	"gopkg.in/yaml.v3"
 )
 
 const (

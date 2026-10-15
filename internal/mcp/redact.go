@@ -5,7 +5,7 @@ import (
 	"strings"
 
 	"github.com/sophotechlabs/spinoza/internal/api"
-	"gopkg.in/yaml.v3"
+	"go.yaml.in/yaml/v3"
 )
 
 const hidden = "[redacted by spinoza]"
