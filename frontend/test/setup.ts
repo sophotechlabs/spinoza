@@ -19,6 +19,7 @@ import { useCatalogStore } from '../src/store/catalog';
 import { useTerminalsStore } from '../src/store/terminals';
 import { useIdentityStore } from '../src/store/identity';
 import { OWN_WINDOW } from '../src/lib/identity';
+import { forgetCapabilities } from '../src/lib/capabilities';
 import { hydrate, resetStored, withoutTrackingChanges } from '../src/lib/persist';
 
 configure({ asyncUtilTimeout: 5000 });
@@ -28,6 +29,7 @@ beforeEach(() => {
   delete window.__SPINOZA_SETTINGS__;
   resetStored();
   hydrate();
+  forgetCapabilities();
   window.history.replaceState(null, '', '/');
   withoutTrackingChanges(() => {
     usePanelsStore.getState().reset();
