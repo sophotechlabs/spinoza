@@ -3,6 +3,7 @@ package resources
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"sync"
 	"testing"
@@ -13,7 +14,11 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/dynamic/fake"
+	k8sfake "k8s.io/client-go/kubernetes/fake"
 	k8stesting "k8s.io/client-go/testing"
+
+	"github.com/sophotechlabs/spinoza/internal/access"
+	"github.com/sophotechlabs/spinoza/internal/api"
 )
 
 type listCounter struct {
@@ -215,5 +220,95 @@ func TestEventsThatWereLastSeenTogetherBreakTheTieByName(t *testing.T) {
 
 	if left[0].GetName() != "early" || right[0].GetName() != "early" {
 		t.Fatalf("windows = %s and %s, want the same event from either order", left[0].GetName(), right[0].GetName())
+	}
+}
+
+func adviceManager(t *testing.T, perms *access.Service, namespaces ...string) *Manager {
+	t.Helper()
+	dyn, _ := namespaceBoundClient(t, map[string]bool{})
+	objects := make([]runtime.Object, 0, len(namespaces))
+	for _, name := range namespaces {
+		objects = append(objects, meta("", "v1", "Namespace", "", name))
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	mgr := NewManager(ctx, Deps{
+		Dynamic:     dyn,
+		Metadata:    fakeMeta(t, objects...),
+		Perms:       perms,
+		Categories:  []api.Category{{Name: "Workloads"}},
+		Descriptors: testDescs(),
+		Limits:      Limits{IdleGrace: time.Millisecond},
+	})
+	mgr.syncTimeout = time.Second
+	return mgr
+}
+
+func TestAWholeClusterRefusalNamesTheNamespacesThatWouldWork(t *testing.T) {
+	mgr := adviceManager(t, boundTo("review", "staging"), "other", "review", "staging")
+
+	_, err := mgr.Subscribe(t.Context(), "apps", "v1", "deployments", "", 0, nil)
+
+	if !errors.Is(err, ErrNamespaceNeeded) {
+		t.Fatalf("error = %v, want ErrNamespaceNeeded", err)
+	}
+	if !strings.Contains(err.Error(), "Deployment, readable in review, staging: ") {
+		t.Fatalf("error = %q, want the namespaces that would work named", err.Error())
+	}
+	if !apierrors.IsForbidden(err) {
+		t.Fatalf("error = %q, want the cluster's own denial kept inside it", err.Error())
+	}
+}
+
+func TestAWholeClusterRefusalSaysWhenNoNamespaceWouldHelp(t *testing.T) {
+	mgr := adviceManager(t, boundTo(), "other", "review")
+
+	_, err := mgr.Subscribe(t.Context(), "apps", "v1", "deployments", "", 0, nil)
+
+	if !errors.Is(err, ErrKindUnreadable) || errors.Is(err, ErrNamespaceNeeded) {
+		t.Fatalf("error = %v, want ErrKindUnreadable rather than advice to pick a namespace", err)
+	}
+	want := "your account cannot read this kind in any namespace spinoza knows of: Deployment: "
+	if !strings.HasPrefix(err.Error(), want) {
+		t.Fatalf("error = %q, want it to start with %q", err.Error(), want)
+	}
+	if !apierrors.IsForbidden(err) {
+		t.Fatalf("error = %q, want the cluster's own denial kept inside it", err.Error())
+	}
+}
+
+func TestAWholeClusterRefusalKeepsTheAdviceWhenTheAnswerIsUnknown(t *testing.T) {
+	cs := k8sfake.NewClientset()
+	cs.PrependReactor("create", "selfsubjectaccessreviews", func(k8stesting.Action) (bool, runtime.Object, error) {
+		return true, nil, errors.New("authorization webhook timed out")
+	})
+	mgr := adviceManager(t, access.New(cs), "other", "review")
+
+	_, err := mgr.Subscribe(t.Context(), "apps", "v1", "deployments", "", 0, nil)
+
+	if !errors.Is(err, ErrNamespaceNeeded) {
+		t.Fatalf("error = %v, want the advice kept when no namespace could be ruled out", err)
+	}
+}
+
+func TestAWholeClusterRefusalChecksOnlyTheFirstNamespacesItKnows(t *testing.T) {
+	names := make([]string, 0, adviceLimit+1)
+	for at := range adviceLimit + 1 {
+		names = append(names, fmt.Sprintf("ns-%03d", at))
+	}
+	mgr := adviceManager(t, boundTo(), names...)
+
+	_, err := mgr.Subscribe(t.Context(), "apps", "v1", "deployments", "", 0, nil)
+
+	if !errors.Is(err, ErrNamespaceNeeded) {
+		t.Fatalf("error = %v, want the advice kept when some namespaces went unchecked", err)
+	}
+}
+
+func TestALongListOfReadableNamespacesIsShortened(t *testing.T) {
+	got := fewOf([]string{"a", "b", "c", "d", "e", "f", "g"})
+
+	if got != "a, b, c, d, e and 2 more" {
+		t.Fatalf("names = %q, want the first five and a count", got)
 	}
 }

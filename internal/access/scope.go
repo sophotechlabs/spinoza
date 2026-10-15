@@ -123,15 +123,25 @@ func (s *Service) OwnScope(ctx context.Context, candidates func() []string) api.
 }
 
 func (s *Service) readable(ctx context.Context, names []string) api.Scope {
+	return s.Where(ctx, names, within)
+}
+
+func (s *Service) Where(ctx context.Context, names []string, checksIn func(string) []Check) api.Scope {
+	if s == nil {
+		return api.Scope{Undecided: slices.Sorted(slices.Values(names))}
+	}
 	checks := make([]Check, 0, len(names)*2)
+	bounds := make([]int, 0, len(names)+1)
+	bounds = append(bounds, 0)
 	for _, name := range names {
-		checks = append(checks, within(name)...)
+		checks = append(checks, checksIn(name)...)
+		bounds = append(bounds, len(checks))
 	}
 	decisions := s.review(ctx, checks)
 	readable := make([]string, 0, len(names))
 	unsure := make([]string, 0, len(names))
 	for at, name := range names {
-		switch decide(decisions[at*2 : at*2+2]) {
+		switch decide(decisions[bounds[at]:bounds[at+1]]) {
 		case allowed:
 			readable = append(readable, name)
 		case unanswered:

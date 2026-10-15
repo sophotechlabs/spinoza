@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"strings"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
@@ -18,6 +19,8 @@ var ErrOutOfScope = errors.New("your account cannot read that namespace")
 var ErrClusterWide = errors.New("your account reads named namespaces only, and this kind belongs to no namespace")
 
 var ErrNamespaceNeeded = errors.New("your account cannot read this kind across every namespace; pick one namespace")
+
+var ErrKindUnreadable = errors.New("your account cannot read this kind in any namespace spinoza knows of")
 
 var ErrNoReadableNamespace = errors.New("your account reads no namespace spinoza knows of; add the ones it can read under Settings, Cluster")
 
@@ -136,6 +139,35 @@ func (m *Manager) admits(seen nsFilter, desc api.ResourceDescriptor, namespace s
 		return nil
 	}
 	return fmt.Errorf("%w: %s", ErrOutOfScope, namespace)
+}
+
+const adviceLimit = 64
+
+const adviceShown = 5
+
+func (m *Manager) namespaceAdvice(ctx context.Context, seen nsFilter, desc api.ResourceDescriptor, denied error) error {
+	names := slices.DeleteFunc(m.candidates(ctx), func(name string) bool {
+		return !seen.allows(name)
+	})
+	checked := names[:min(len(names), adviceLimit)]
+	found := m.perms.Where(ctx, checked, func(name string) []access.Check {
+		return readChecks(desc, name, true)
+	})
+	if len(found.Namespaces) > 0 {
+		return fmt.Errorf("%w: %s, readable in %s: %w", ErrNamespaceNeeded, desc.Kind, fewOf(found.Namespaces), denied)
+	}
+	settled := len(names) > 0 && len(checked) == len(names) && len(found.Undecided) == 0
+	if settled {
+		return fmt.Errorf("%w: %s: %w", ErrKindUnreadable, desc.Kind, denied)
+	}
+	return fmt.Errorf("%w: %s: %w", ErrNamespaceNeeded, desc.Kind, denied)
+}
+
+func fewOf(names []string) string {
+	if len(names) <= adviceShown {
+		return strings.Join(names, ", ")
+	}
+	return fmt.Sprintf("%s and %d more", strings.Join(names[:adviceShown], ", "), len(names)-adviceShown)
 }
 
 func readChecks(desc api.ResourceDescriptor, namespace string, watch bool) []access.Check {

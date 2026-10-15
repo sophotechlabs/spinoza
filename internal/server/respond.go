@@ -137,6 +137,8 @@ func applicationStatusFor(err error) (int, bool) {
 		return http.StatusForbidden, true
 	case errors.Is(err, resources.ErrNamespaceNeeded):
 		return http.StatusForbidden, true
+	case errors.Is(err, resources.ErrKindUnreadable):
+		return http.StatusForbidden, true
 	case errors.Is(err, access.ErrDenied):
 		return http.StatusForbidden, true
 	case errors.Is(err, access.ErrUnanswered):

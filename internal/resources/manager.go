@@ -863,7 +863,7 @@ func (m *Manager) Subscribe(
 	st, entry, err := m.attach(ctx, key, desc, effNs, limitFor(desc.Kind, limit), seen)
 	if err != nil && apierrors.IsForbidden(err) {
 		if effNs == "" && desc.Namespaced {
-			return nil, fmt.Errorf("%w: %s: %w", ErrNamespaceNeeded, desc.Kind, err)
+			return nil, m.namespaceAdvice(ctx, seen, desc, err)
 		}
 		if effNs != "" {
 			key = streamKey{gvr: gvr, namespace: effNs}
