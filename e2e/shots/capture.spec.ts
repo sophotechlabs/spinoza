@@ -75,14 +75,14 @@ test('every shot is taken in the same theme', async ({ page }) => {
 
 test('the flux overview', async ({ page }) => {
   kubectl(['apply', '-f', join(FIXTURES, 'flux.yaml')]);
-  kubectl(['-n', 'flux-system', 'get', 'gitrepository/podinfo']);
-  kubectl(['-n', 'flux-system', 'get', 'kustomization/podinfo']);
+  kubectl(['-n', 'flux-system', 'get', 'gitrepository/flux-system']);
+  kubectl(['-n', 'flux-system', 'get', 'kustomization/flux-system']);
   kubectlSoft([
     '-n',
     'flux-system',
     'wait',
     '--for=condition=Ready',
-    'gitrepository/podinfo',
+    'gitrepository/flux-system',
     '--timeout=180s',
   ]);
   kubectlSoft([
@@ -90,7 +90,7 @@ test('the flux overview', async ({ page }) => {
     'flux-system',
     'wait',
     '--for=condition=Ready',
-    'kustomization/podinfo',
+    'kustomization/flux-system',
     '--timeout=180s',
   ]);
   await openHome(page);
@@ -106,13 +106,19 @@ test('the flux overview', async ({ page }) => {
     timeout: 120_000,
   });
   await expect(page.locator('main')).toContainText('1/1 ready', { timeout: 120_000 });
+  await expect(page.locator('main')).toContainText(
+    'the cluster is in sync with what the repository asks for',
+    { timeout: 120_000 },
+  );
   await page.waitForTimeout(2_000);
   await shoot(page, 'flux-overview');
 });
 
 test('the gitops dependency graph', async ({ page }) => {
   await openView(page, 'gitops');
-  await expect(page.locator('main')).toContainText('podinfo', { timeout: 120_000 });
+  await expect(
+    page.locator('.react-flow__node').filter({ hasText: 'Kustomization' }),
+  ).toBeVisible({ timeout: 120_000 });
   await page.waitForTimeout(3_000);
   await shoot(page, 'gitops-graph');
 });
