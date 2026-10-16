@@ -1,5 +1,30 @@
 # Changelog
 
+## [2.2.4](https://github.com/sophotechlabs/spinoza/compare/v2.2.3...v2.2.4) (2026-10-16)
+
+
+### Bug Fixes
+
+* **charts:** refuse a chart index with a merge key beside a map key instead of crashing ([2dd4b75](https://github.com/sophotechlabs/spinoza/commit/2dd4b75211bc69251de5422018987a609595144b))
+* **deps:** bump golang.org/x/net to v0.60.0 ([8d791e2](https://github.com/sophotechlabs/spinoza/commit/8d791e2c75f6e40bd1a62fb6431a06de07dffad8))
+* **frontend:** share one capabilities read between the parts of a page ([5ff371b](https://github.com/sophotechlabs/spinoza/commit/5ff371ba4a888c3cacbbc46a5284ae0214e0e214))
+
+
+### CI
+
+* pull the argo cd redis image from mirror.gcr.io and pass the handoff gate on a go.mod-only diff ([3e6e20f](https://github.com/sophotechlabs/spinoza/commit/3e6e20ffc29d501050ba7acc1cd45523b38fe054))
+
+
+### Tests
+
+* **desktop:** keep the desktop tests out of the real config directory on macOS ([9312428](https://github.com/sophotechlabs/spinoza/commit/9312428e9f6deec0cdb3ec4e504d070c0120ecf2))
+* **integration:** taint a node without wiping the taints it already had ([2ee2c5f](https://github.com/sophotechlabs/spinoza/commit/2ee2c5f4dc19f5505dd3d9b1a21207c5dff194af))
+
+
+### Build
+
+* **go:** require Go 1.27.1 and drop embedded types from struct literals ([0608d39](https://github.com/sophotechlabs/spinoza/commit/0608d394e551a8c404884c258443786dc66ca96b))
+
 ## [2.2.3](https://github.com/sophotechlabs/spinoza/compare/v2.2.2...v2.2.3) (2026-10-15)
 
 
