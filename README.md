@@ -56,7 +56,7 @@ Needs a kubeconfig. Upgrades, rollbacks and debug containers call `helm` and `ku
 
 One informer-backed view per type, so CRDs need no per-type code. Snapshot, then deltas over a WebSocket keyed by uid. Field-aware filter completed from what the cluster reported, namespace scope, failing-object badges, bulk restart and delete.
 
-![Spinoza pods table with the inspect drawer open on coredns: ports, metadata, conditions, containers and owner references](docs/images/pods.png)
+![Spinoza pods table: every pod across all namespaces with its containers, status, restarts, node and live CPU](docs/images/pods.png)
 
 ## Clusters
 
@@ -64,7 +64,7 @@ Open as many as you like. Each is a tab with its own state, health and history, 
 however you want, grouped, and remembered or forgotten between runs. Anything destructive on a
 protected cluster asks for the name typed out.
 
-![Spinoza with two clusters open as tabs and the compare panel docked below, ready to pair an object against the other cluster](docs/images/compare.png)
+![Spinoza with two clusters open as tabs, a ConfigMap selected, and the compare panel docked below showing the lines that differ against the second cluster side by side](docs/images/compare.png)
 
 The fleet view answers one question across every open cluster at once: checks, issues, search, Helm
 releases and GitOps, without switching tab.
@@ -103,7 +103,7 @@ every open cluster at once. The timeline beside it records what the cluster did.
 Open the graph around one object and it draws what owns it, what it owns, what routes to it and what
 configures it. Folded by default; the whole cluster is one click away.
 
-![Spinoza topology graph rooted on one Deployment: the namespace that owns it, the ReplicaSet it owns and the ConfigMap that configures its pods](docs/images/topology.png)
+![Spinoza topology graph around one Deployment: the Ingress and Service that route to it, the ConfigMap that configures it, its ReplicaSet and pods folded into the node, and the Deployment's own panel open beside it](docs/images/topology.png)
 
 ## Compare across clusters
 
@@ -123,33 +123,33 @@ Every change Spinoza made, kept per cluster, with what changed and when.
 
 Flux and Argo CD side by side: cluster sync, controller health, per-kind lists, status tiles. Reconcile, suspend and resume Flux objects. Sync and refresh Argo Applications.
 
-![Spinoza Flux overview: all systems operational, cluster sync from a GitRepository, controller health, and counts for appliers, sources and image automation](docs/images/flux-overview.png)
+![Spinoza Flux overview: all systems operational, controller health and resource usage, and counts for appliers and sources](docs/images/flux-overview.png)
 
 The dependency graph is laid out by what manages what. Argo's is the app-of-apps, ApplicationSets above what they generate. A node opens in the drawer with its actions.
 
-![Spinoza GitOps dependency graph: sources, Kustomizations and HelmReleases with the edges that manage and depend on each other](docs/images/gitops-graph.png)
+![Spinoza GitOps dependency graph: a GitRepository linked to the Kustomization it is the source for](docs/images/gitops-graph.png)
 
 ## Helm without the binary
 
 Releases read from Helm's own storage, either driver. Chart and app version, what your repos offer, revision, status, values, notes, rendered manifest, history. OCI end to end. Upgrade behind a server-rendered manifest diff; rollback and uninstall from the same panel. A Flux-owned release links to its HelmRelease instead of offering an upgrade button.
 
-![Spinoza Helm releases with chart and app versions, revision and status, and the selected release docked below showing the resources it rendered](docs/images/helm-releases.png)
+![Spinoza Helm releases read from the cluster: chart and app versions, the newest chart available, revision, status and when each was last updated](docs/images/helm-releases.png)
 
 Selecting a release docks its detail as a panel. Drag it to any side, resize it, collapse it; the placement persists, and `release` and `releaseNs` in the URL carry it through a reload or a back button. Clicking a rendered resource opens that object in its own table with the row selected and the drawer open, while the release stays docked underneath.
 
-![Spinoza deployments table scoped to the cert-manager namespace with the deployment selected, its inspect drawer open on metadata and conditions, and the Helm release still docked below on its resource list](docs/images/helm-resources.png)
+![Spinoza Helm releases with one release selected and its detail docked below, listing the ConfigMap and Deployment the chart rendered, alongside upgrade and uninstall](docs/images/helm-resources.png)
 
 ## Inspect and edit
 
 Metadata, conditions, events and live YAML in Monaco. Schema-aware completion from the cluster's own OpenAPI. Apply sends the object back with the resourceVersion you read, so a draft built on a read the cluster has moved past is refused rather than written over it. Delete names the object you inspected by its UID, so a replacement that reuses the name is left alone. An edited draft survives a background reload, and the browser's Back button asks before it discards one.
 
-![Spinoza deployments table with the inspect drawer open on live YAML in Monaco, with apply, revert and delete](docs/images/inspect-yaml.png)
+![Spinoza ConfigMap table with the inspect drawer open on the object's live YAML in Monaco, with apply, revert and delete](docs/images/inspect-yaml.png)
 
 ## Port-forwarding
 
 Any pod or service on localhost, no kubectl. Forwards survive navigation, listed and stopped from one panel.
 
-![Spinoza pods table with the inspect drawer open on Grafana's ports: 3000 forwarded to a local port with open and stop controls, and a toast confirming the forward](docs/images/port-forward.png)
+![Spinoza pods table with the inspect drawer open on a running pod: its container port forwarded to a local port with open and stop controls, and the forward listed in the dock below](docs/images/port-forward.png)
 
 ## Rollout revisions
 
