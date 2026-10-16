@@ -60,10 +60,23 @@ function outcomeClass(outcome: string): string {
   return 'text-ok';
 }
 
+const OUTCOME_ORDER = ['failed', 'blocked', 'evict', 'evicted', 'skipped'];
+
+function outcomeRank(outcome: string): number {
+  const rank = OUTCOME_ORDER.indexOf(outcome);
+  if (rank === -1) {
+    return OUTCOME_ORDER.length;
+  }
+  return rank;
+}
+
 function PodList({ pods }: { pods: PodOutcome[] }) {
+  const ordered = [...pods].sort(
+    (left, right) => outcomeRank(left.outcome) - outcomeRank(right.outcome),
+  );
   return (
-    <ul className="mt-1.5 max-h-40 overflow-y-auto">
-      {pods.map((pod) => (
+    <ul aria-label="Pods on the node" className="mt-1.5">
+      {ordered.map((pod) => (
         <li key={`${pod.namespace}/${pod.name}`} className="flex gap-2 py-0.5">
           <span className={`w-14 shrink-0 ${outcomeClass(pod.outcome)}`}>{pod.outcome}</span>
           <span className="truncate text-fg-soft">{pod.name}</span>

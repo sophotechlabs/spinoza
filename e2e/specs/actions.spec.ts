@@ -290,6 +290,10 @@ test('a drain preview classifies every live pod without touching the node', asyn
         await expect(row).toContainText(outcome.reason);
       }
     }
+    const hidden = await plan
+      .getByRole('list', { name: 'Pods on the node' })
+      .evaluate((list) => list.scrollHeight - list.clientHeight);
+    expect(hidden).toBe(0);
     await expect(plan.getByRole('button', { name: 'Drain now', exact: true })).toBeVisible();
     expect(field('node', node, '.spec.unschedulable', false)).toBe(scheduled);
     expect(podsOnNode(node).map((pod) => pod.metadata.uid)).toEqual(

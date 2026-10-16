@@ -543,6 +543,48 @@ describe('node actions', () => {
     expect(screen.getByText('evict')).toBeInTheDocument();
   });
 
+  it('lists every pod in the plan with the ones that need attention first', async () => {
+    const user = userEvent.setup();
+    stub({
+      action: 'drain',
+      dryRun: true,
+      message: '2 pods to evict, 1 left in place, 1 blocked.',
+      pods: [
+        { namespace: 'a', name: 'one', outcome: 'evict' },
+        { namespace: 'a', name: 'two', outcome: 'skipped' },
+        { namespace: 'a', name: 'three', outcome: 'blocked' },
+        { namespace: 'a', name: 'four', outcome: 'evict' },
+        { namespace: 'a', name: 'five', outcome: 'failed' },
+        { namespace: 'a', name: 'six', outcome: 'evicted' },
+        { namespace: 'a', name: 'seven', outcome: 'unheard-of' },
+      ],
+    });
+    render(
+      <InspectObjectActions
+        target={node}
+        detail={detailFor({ kind: 'Node', node: { schedulable: true } })}
+        onDone={vi.fn()}
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Drain' }));
+    const list = await screen.findByRole('list', { name: 'Pods on the node' });
+    const result = within(list)
+      .getAllByRole('listitem')
+      .map((row) => row.textContent);
+    const expected = [
+      'failedfive',
+      'blockedthree',
+      'evictone',
+      'evictfour',
+      'evictedsix',
+      'skippedtwo',
+      'unheard-ofseven',
+    ];
+
+    expect(result).toEqual(expected);
+  });
+
   it('offers no scale or restart on a node', () => {
     stub();
     render(
