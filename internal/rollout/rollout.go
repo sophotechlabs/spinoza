@@ -201,14 +201,12 @@ func controllerRevisionHistory(ctx context.Context, src Source, ref api.ObjectRe
 
 func entryOf(item *unstructured.Unstructured, number int64, template map[string]any) entry {
 	return entry{
-		Revision: api.Revision{
-			Number:    number,
-			Name:      item.GetName(),
-			CreatedAt: createdAt(item),
-			Cause:     item.GetAnnotations()[causeAnnotation],
-			Images:    imagesOf(template),
-		},
-		template: template,
+		Number:    number,
+		Name:      item.GetName(),
+		CreatedAt: createdAt(item),
+		Cause:     item.GetAnnotations()[causeAnnotation],
+		Images:    imagesOf(template),
+		template:  template,
 	}
 }
 

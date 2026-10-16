@@ -47,7 +47,7 @@ func (s *stubRunner) lastArgs() []string {
 
 func runningPod() *corev1.Pod {
 	return &corev1.Pod{
-		ObjectMeta: metav1.ObjectMeta{Namespace: "monitoring", Name: "loki-0"},
+		Namespace: "monitoring", Name: "loki-0",
 		Spec: corev1.PodSpec{
 			Containers: []corev1.Container{{Name: "loki"}, {Name: "sidecar"}},
 		},
@@ -70,7 +70,7 @@ func newService(t *testing.T, pod *corev1.Pod, runner *stubRunner) *Service {
 			}
 			name := nextName(current)
 			current.Spec.EphemeralContainers = append(current.Spec.EphemeralContainers, corev1.EphemeralContainer{
-				EphemeralContainerCommon: corev1.EphemeralContainerCommon{Name: name},
+				Name: name,
 			})
 			current.Status.EphemeralContainerStatuses = append(current.Status.EphemeralContainerStatuses, corev1.ContainerStatus{
 				Name:  name,
@@ -138,7 +138,7 @@ func TestEnsurePassesTheExpectedKubectlArguments(t *testing.T) {
 func TestEnsureReusesARunningDebugContainer(t *testing.T) {
 	pod := runningPod()
 	pod.Spec.EphemeralContainers = []corev1.EphemeralContainer{
-		{EphemeralContainerCommon: corev1.EphemeralContainerCommon{Name: "spinoza-debug-1"}},
+		{Name: "spinoza-debug-1"},
 	}
 	pod.Status.EphemeralContainerStatuses = []corev1.ContainerStatus{
 		{Name: "spinoza-debug-1", State: corev1.ContainerState{Running: &corev1.ContainerStateRunning{}}},
@@ -164,7 +164,7 @@ func TestEnsureReusesARunningDebugContainer(t *testing.T) {
 func TestEnsureSkipsATerminatedDebugContainer(t *testing.T) {
 	pod := runningPod()
 	pod.Spec.EphemeralContainers = []corev1.EphemeralContainer{
-		{EphemeralContainerCommon: corev1.EphemeralContainerCommon{Name: "spinoza-debug-1"}},
+		{Name: "spinoza-debug-1"},
 	}
 	pod.Status.EphemeralContainerStatuses = []corev1.ContainerStatus{
 		{Name: "spinoza-debug-1", State: corev1.ContainerState{Terminated: &corev1.ContainerStateTerminated{Reason: "Completed"}}},
@@ -197,7 +197,7 @@ func TestRunningStatusWithoutItsContainerSpecIsIgnored(t *testing.T) {
 func TestEnsureIgnoresForeignEphemeralContainers(t *testing.T) {
 	pod := runningPod()
 	pod.Spec.EphemeralContainers = []corev1.EphemeralContainer{
-		{EphemeralContainerCommon: corev1.EphemeralContainerCommon{Name: "debugger-abcde"}},
+		{Name: "debugger-abcde"},
 	}
 	pod.Status.EphemeralContainerStatuses = []corev1.ContainerStatus{
 		{Name: "debugger-abcde", State: corev1.ContainerState{Running: &corev1.ContainerStateRunning{}}},
@@ -396,10 +396,10 @@ func TestSupportedProfiles(t *testing.T) {
 func TestNextNameCountsFromTheHighestExisting(t *testing.T) {
 	pod := runningPod()
 	pod.Spec.EphemeralContainers = []corev1.EphemeralContainer{
-		{EphemeralContainerCommon: corev1.EphemeralContainerCommon{Name: "spinoza-debug-1"}},
-		{EphemeralContainerCommon: corev1.EphemeralContainerCommon{Name: "debugger-zzz"}},
-		{EphemeralContainerCommon: corev1.EphemeralContainerCommon{Name: "spinoza-debug-7"}},
-		{EphemeralContainerCommon: corev1.EphemeralContainerCommon{Name: "spinoza-debug-notanumber"}},
+		{Name: "spinoza-debug-1"},
+		{Name: "debugger-zzz"},
+		{Name: "spinoza-debug-7"},
+		{Name: "spinoza-debug-notanumber"},
 	}
 	if got := nextName(pod); got != "spinoza-debug-8" {
 		t.Fatalf("nextName = %q", got)
@@ -657,7 +657,7 @@ func TestProfileOfLeavesAnUnknownShapeUnnamed(t *testing.T) {
 	}
 	for name, security := range cases {
 		spec := &corev1.EphemeralContainer{
-			EphemeralContainerCommon: corev1.EphemeralContainerCommon{SecurityContext: security},
+			SecurityContext: security,
 		}
 		if got := profileOf(spec); got != "" {
 			t.Fatalf("%s: profileOf = %q, want an empty string rather than a guess", name, got)
@@ -682,7 +682,7 @@ func TestProfileOfNamesTheShapesKubectlWrites(t *testing.T) {
 	}
 	for name, tc := range cases {
 		spec := &corev1.EphemeralContainer{
-			EphemeralContainerCommon: corev1.EphemeralContainerCommon{SecurityContext: tc.security},
+			SecurityContext: tc.security,
 		}
 		if got := profileOf(spec); got != tc.want {
 			t.Fatalf("%s: profileOf = %q, want %q", name, got, tc.want)
@@ -819,7 +819,7 @@ func TestAContainerThatIsNeitherRunningNorWaitingIsStillSettling(t *testing.T) {
 func TestAContainerSpecIsOnlyFoundByItsOwnName(t *testing.T) {
 	pod := runningPod()
 	pod.Spec.EphemeralContainers = []corev1.EphemeralContainer{{
-		EphemeralContainerCommon: corev1.EphemeralContainerCommon{Name: "spinoza-debug-1"},
+		Name: "spinoza-debug-1",
 	}}
 
 	if specFor(pod, "spinoza-debug-1") == nil {
@@ -836,16 +836,14 @@ func TestPrivilegeIsOnlyClaimedWhenItIsAskedFor(t *testing.T) {
 		t.Fatal("a container with no security context read as privileged")
 	}
 	empty := &corev1.EphemeralContainer{
-		EphemeralContainerCommon: corev1.EphemeralContainerCommon{SecurityContext: &corev1.SecurityContext{}},
+		SecurityContext: &corev1.SecurityContext{},
 	}
 	if privileged(empty) {
 		t.Fatal("a container that never set privileged read as privileged")
 	}
 	yes := true
 	asked := &corev1.EphemeralContainer{
-		EphemeralContainerCommon: corev1.EphemeralContainerCommon{
-			SecurityContext: &corev1.SecurityContext{Privileged: &yes},
-		},
+		SecurityContext: &corev1.SecurityContext{Privileged: &yes},
 	}
 	if !privileged(asked) {
 		t.Fatal("a privileged container did not read as privileged")

@@ -15,7 +15,6 @@ import (
 	authv1 "k8s.io/api/authorization/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -557,12 +556,10 @@ func TestRefreshingResourcesAlsoDropsTheSchemasItHeld(t *testing.T) {
 func TestMetricHistoryComesBackFromPrometheus(t *testing.T) {
 	ctx := t.Context()
 	cs := k8sfake.NewClientset(&corev1.Service{
-		ObjectMeta: metav1.ObjectMeta{
-			Namespace: "monitoring",
-			Name:      "prometheus-operated",
-			Labels:    map[string]string{"operated-prometheus": "true"},
-		},
-		Spec: corev1.ServiceSpec{Ports: []corev1.ServicePort{{Name: "http-web", Port: 9090}}},
+		Namespace: "monitoring",
+		Name:      "prometheus-operated",
+		Labels:    map[string]string{"operated-prometheus": "true"},
+		Spec:      corev1.ServiceSpec{Ports: []corev1.ServicePort{{Name: "http-web", Port: 9090}}},
 	})
 	mgr := NewManager(ctx, Deps{
 		Dynamic:     newClient(t),
@@ -623,12 +620,10 @@ func helmManager(t *testing.T, cs *k8sfake.Clientset, releases *helm.Service) (*
 
 func releaseConfigMap() *corev1.ConfigMap {
 	return &corev1.ConfigMap{
-		ObjectMeta: metav1.ObjectMeta{
-			Namespace: "prod",
-			Name:      "sh.helm.release.v1.podinfo.v1",
-			Labels:    map[string]string{"owner": "helm", "name": "podinfo", "version": "1"},
-		},
-		Data: map[string]string{"release": "body"},
+		Namespace: "prod",
+		Name:      "sh.helm.release.v1.podinfo.v1",
+		Labels:    map[string]string{"owner": "helm", "name": "podinfo", "version": "1"},
+		Data:      map[string]string{"release": "body"},
 	}
 }
 

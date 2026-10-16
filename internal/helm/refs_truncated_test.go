@@ -17,14 +17,12 @@ func pageOf(items int) func(k8stesting.Action) (bool, runtime.Object, error) {
 
 func pageWith(items int, more string) func(k8stesting.Action) (bool, runtime.Object, error) {
 	return func(k8stesting.Action) (bool, runtime.Object, error) {
-		list := &metav1.List{ListMeta: metav1.ListMeta{Continue: more}}
+		list := &metav1.List{Continue: more}
 		for i := range items {
 			list.Items = append(list.Items, runtime.RawExtension{Object: &metav1.PartialObjectMetadata{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      fmt.Sprintf("sh.helm.release.v1.web.v%d", i),
-					Namespace: "prod",
-					Labels:    map[string]string{"owner": "helm"},
-				},
+				Name:      fmt.Sprintf("sh.helm.release.v1.web.v%d", i),
+				Namespace: "prod",
+				Labels:    map[string]string{"owner": "helm"},
 			}})
 		}
 		return true, list, nil
@@ -153,12 +151,10 @@ func TestAListResponseNeverPushesTheResultPastItsCap(t *testing.T) {
 func TestAListThatFitsIsNotCalledTruncated(t *testing.T) {
 	client := metadatafake.NewSimpleMetadataClient(metaScheme(),
 		&metav1.PartialObjectMetadata{
-			TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "Secret"},
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      "sh.helm.release.v1.web.v1",
-				Namespace: "prod",
-				Labels:    map[string]string{"owner": "helm"},
-			},
+			APIVersion: "v1", Kind: "Secret",
+			Name:      "sh.helm.release.v1.web.v1",
+			Namespace: "prod",
+			Labels:    map[string]string{"owner": "helm"},
 		})
 
 	page, err := listRefs(t.Context(), client, DriverSecret, secretsGVR, "prod")
@@ -173,7 +169,7 @@ func TestAListThatFitsIsNotCalledTruncated(t *testing.T) {
 func TestARefWalkRejectsARepeatedContinueToken(t *testing.T) {
 	client := metadatafake.NewSimpleMetadataClient(metaScheme())
 	client.PrependReactor("list", "secrets", func(k8stesting.Action) (bool, runtime.Object, error) {
-		return true, &metav1.List{ListMeta: metav1.ListMeta{Continue: "same"}}, nil
+		return true, &metav1.List{Continue: "same"}, nil
 	})
 
 	_, err := listRefs(t.Context(), client, DriverSecret, secretsGVR, "prod")
@@ -186,8 +182,8 @@ func TestARefWalkRejectsARepeatedContinueToken(t *testing.T) {
 func TestTruncationTravelsUpToTheWholeRead(t *testing.T) {
 	client := metadatafake.NewSimpleMetadataClient(metaScheme(),
 		&metav1.PartialObjectMetadata{
-			TypeMeta:   metav1.TypeMeta{APIVersion: "v1", Kind: "Namespace"},
-			ObjectMeta: metav1.ObjectMeta{Name: "prod"},
+			APIVersion: "v1", Kind: "Namespace",
+			Name: "prod",
 		})
 	client.PrependReactor("list", "secrets", pageOf(maxObjects))
 

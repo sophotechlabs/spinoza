@@ -32,9 +32,9 @@ const nodeName = "worker-1"
 
 func basePod(name string) *corev1.Pod {
 	return &corev1.Pod{
-		ObjectMeta: metav1.ObjectMeta{Namespace: "shop", Name: name},
-		Spec:       corev1.PodSpec{NodeName: nodeName},
-		Status:     corev1.PodStatus{Phase: corev1.PodRunning},
+		Namespace: "shop", Name: name,
+		Spec:   corev1.PodSpec{NodeName: nodeName},
+		Status: corev1.PodStatus{Phase: corev1.PodRunning},
 	}
 }
 
@@ -70,8 +70,8 @@ func barePod(name string) *corev1.Pod {
 func emptyDirPod(name string) *corev1.Pod {
 	pod := replicaSetPod(name)
 	pod.Spec.Volumes = []corev1.Volume{
-		{Name: "config", VolumeSource: corev1.VolumeSource{ConfigMap: &corev1.ConfigMapVolumeSource{}}},
-		{Name: "cache", VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}}},
+		{Name: "config", ConfigMap: &corev1.ConfigMapVolumeSource{}},
+		{Name: "cache", EmptyDir: &corev1.EmptyDirVolumeSource{}},
 	}
 	return pod
 }

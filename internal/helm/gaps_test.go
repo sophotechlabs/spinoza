@@ -17,8 +17,8 @@ import (
 
 func namespaceMeta(name string) *metav1.PartialObjectMetadata {
 	return &metav1.PartialObjectMetadata{
-		TypeMeta:   metav1.TypeMeta{APIVersion: "v1", Kind: "Namespace"},
-		ObjectMeta: metav1.ObjectMeta{Name: name},
+		APIVersion: "v1", Kind: "Namespace",
+		Name: name,
 	}
 }
 
@@ -70,7 +70,7 @@ func TestTheReleaseCacheForgetsObjectsThatAreNoLongerListed(t *testing.T) {
 
 func TestAListFailureThatIsNotForbiddenStopsTheWalk(t *testing.T) {
 	cs := k8sfake.NewClientset(
-		&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "apps"}},
+		&corev1.Namespace{Name: "apps"},
 	)
 	meta := mirrorMeta(cs)
 	meta.PrependReactor("list", "secrets", func(action k8stesting.Action) (bool, runtime.Object, error) {
@@ -144,7 +144,7 @@ func TestTheNamespaceWalkFollowsItsContinueToken(t *testing.T) {
 func TestTheNamespaceWalkRejectsARepeatedContinueToken(t *testing.T) {
 	meta := mirrorMeta(k8sfake.NewClientset())
 	meta.PrependReactor("list", "namespaces", func(k8stesting.Action) (bool, runtime.Object, error) {
-		return true, &metav1.List{ListMeta: metav1.ListMeta{Continue: "same"}}, nil
+		return true, &metav1.List{Continue: "same"}, nil
 	})
 
 	_, err := namespaceRefs(t.Context(), meta)
@@ -156,8 +156,8 @@ func TestTheNamespaceWalkRejectsARepeatedContinueToken(t *testing.T) {
 
 func TestSecretsThatAreNotHelmStorageAreSkipped(t *testing.T) {
 	other := &corev1.Secret{
-		ObjectMeta: metav1.ObjectMeta{Namespace: "apps", Name: "unrelated", Labels: map[string]string{"owner": "helm"}},
-		Type:       corev1.SecretTypeOpaque,
+		Namespace: "apps", Name: "unrelated", Labels: map[string]string{"owner": "helm"},
+		Type: corev1.SecretTypeOpaque,
 	}
 	cs := k8sfake.NewClientset(other)
 
@@ -198,8 +198,8 @@ func TestARefusedConfigMapListIsReported(t *testing.T) {
 
 func TestAConfigMapWithoutAReleaseIsSkipped(t *testing.T) {
 	entry := &corev1.ConfigMap{
-		ObjectMeta: metav1.ObjectMeta{Namespace: "apps", Name: "settings", Labels: map[string]string{"owner": "helm"}},
-		Data:       map[string]string{"other": "value"},
+		Namespace: "apps", Name: "settings", Labels: map[string]string{"owner": "helm"},
+		Data: map[string]string{"other": "value"},
 	}
 	cs := k8sfake.NewClientset(entry)
 
@@ -214,8 +214,8 @@ func TestAConfigMapWithoutAReleaseIsSkipped(t *testing.T) {
 
 func TestAConfigMapBodyNeedsTheReleaseKey(t *testing.T) {
 	entry := &corev1.ConfigMap{
-		ObjectMeta: metav1.ObjectMeta{Namespace: "apps", Name: "settings"},
-		Data:       map[string]string{"other": "value"},
+		Namespace: "apps", Name: "settings",
+		Data: map[string]string{"other": "value"},
 	}
 	cs := k8sfake.NewClientset(entry)
 	ref := storedRef{driver: DriverConfigMap, namespace: "apps", object: "settings"}

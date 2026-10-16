@@ -404,12 +404,10 @@ func applyDeclaredDeployment(t *testing.T, loaded *kube.Bundle) {
 		`"namespace":"` + namespace + `"},"spec":{"replicas":1}}`
 	one := int32(3)
 	deployment := &appsv1.Deployment{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "declared",
-			Namespace: namespace,
-			Annotations: map[string]string{
-				"kubectl.kubernetes.io/last-applied-configuration": declared,
-			},
+		Name:      "declared",
+		Namespace: namespace,
+		Annotations: map[string]string{
+			"kubectl.kubernetes.io/last-applied-configuration": declared,
 		},
 		Spec: appsv1.DeploymentSpec{
 			Replicas: &one,

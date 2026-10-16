@@ -9,7 +9,6 @@ import (
 	"testing"
 
 	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	k8sfake "k8s.io/client-go/kubernetes/fake"
 
 	"github.com/sophotechlabs/spinoza/internal/api"
@@ -264,11 +263,11 @@ func TestImageIDReportsAMissingPod(t *testing.T) {
 
 func TestImageIDIsEmptyForDeclaredButUnstartedContainers(t *testing.T) {
 	declared := &corev1.Pod{
-		ObjectMeta: metav1.ObjectMeta{Namespace: "monitoring", Name: "pending"},
+		Namespace: "monitoring", Name: "pending",
 		Spec: corev1.PodSpec{
 			Containers:          []corev1.Container{{Name: "app"}},
 			InitContainers:      []corev1.Container{{Name: "chown"}},
-			EphemeralContainers: []corev1.EphemeralContainer{{EphemeralContainerCommon: corev1.EphemeralContainerCommon{Name: "debugger"}}},
+			EphemeralContainers: []corev1.EphemeralContainer{{Name: "debugger"}},
 		},
 	}
 	for _, name := range []string{"chown", "debugger"} {
@@ -283,7 +282,7 @@ func TestImageIDIsEmptyForDeclaredButUnstartedContainers(t *testing.T) {
 }
 
 func TestImageIDForAPodWithoutContainers(t *testing.T) {
-	empty := &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Namespace: "monitoring", Name: "blank"}}
+	empty := &corev1.Pod{Namespace: "monitoring", Name: "blank"}
 	_, err := imageIDFor(empty, "")
 	if err == nil {
 		t.Fatal("expected an error")
@@ -292,14 +291,14 @@ func TestImageIDForAPodWithoutContainers(t *testing.T) {
 
 func pod() *corev1.Pod {
 	return &corev1.Pod{
-		ObjectMeta: metav1.ObjectMeta{Namespace: "monitoring", Name: "loki-0"},
+		Namespace: "monitoring", Name: "loki-0",
 		Spec: corev1.PodSpec{
 			Containers: []corev1.Container{
 				{Name: "loki"},
 				{Name: "sidecar"},
 			},
 			InitContainers:      []corev1.Container{{Name: "chown"}},
-			EphemeralContainers: []corev1.EphemeralContainer{{EphemeralContainerCommon: corev1.EphemeralContainerCommon{Name: "debugger"}}},
+			EphemeralContainers: []corev1.EphemeralContainer{{Name: "debugger"}},
 		},
 		Status: corev1.PodStatus{
 			ContainerStatuses:          []corev1.ContainerStatus{{Name: "loki", ImageID: "docker.io/grafana/loki@sha256:1111"}},

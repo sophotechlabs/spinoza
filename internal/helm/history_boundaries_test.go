@@ -186,12 +186,10 @@ func TestHistoryRejectsAnOlderRevisionStoredTwice(t *testing.T) {
 	older.revision = 2
 	secret := detailSecret(older)
 	entry := &corev1.ConfigMap{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      secret.Name,
-			Namespace: secret.Namespace,
-			Labels:    secret.Labels,
-		},
-		Data: map[string]string{releaseKey: string(secret.Data[releaseKey])},
+		Name:      secret.Name,
+		Namespace: secret.Namespace,
+		Labels:    secret.Labels,
+		Data:      map[string]string{releaseKey: string(secret.Data[releaseKey])},
 	}
 	service := newService(k8sfake.NewClientset(detailSecret(newest), secret, entry), nil, nil)
 
@@ -208,13 +206,11 @@ func TestStoredRevisionMetadataReportsATruncatedDriverPage(t *testing.T) {
 		list := &metav1.List{}
 		for revision := range 4 {
 			list.Items = append(list.Items, runtime.RawExtension{Object: &metav1.PartialObjectMetadata{
-				TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "Secret"},
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "sh.helm.release.v1.podinfo.v" + strconv.Itoa(revision+1),
-					Namespace: "demo",
-					Labels: map[string]string{
-						"owner": "helm", nameLabel: "podinfo", versionLabel: strconv.Itoa(revision + 1),
-					},
+				APIVersion: "v1", Kind: "Secret",
+				Name:      "sh.helm.release.v1.podinfo.v" + strconv.Itoa(revision+1),
+				Namespace: "demo",
+				Labels: map[string]string{
+					"owner": "helm", nameLabel: "podinfo", versionLabel: strconv.Itoa(revision + 1),
 				},
 			}})
 		}
@@ -336,12 +332,10 @@ func TestActionsUseTypedStorageWhenMetadataIsUnavailable(t *testing.T) {
 	newest.revision = 2
 	secret := detailSecret(old)
 	entry := &corev1.ConfigMap{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "sh.helm.release.v1.podinfo.v2",
-			Namespace: "demo",
-			Labels: map[string]string{
-				"owner": "helm", "name": "podinfo", versionLabel: "2",
-			},
+		Name:      "sh.helm.release.v1.podinfo.v2",
+		Namespace: "demo",
+		Labels: map[string]string{
+			"owner": "helm", "name": "podinfo", versionLabel: "2",
 		},
 		Data: map[string]string{releaseKey: detailPayload(newest)},
 	}
@@ -447,12 +441,10 @@ func TestActionsRejectAmbiguousTypedStorageWithoutMetadata(t *testing.T) {
 	spec := sampleRelease()
 	secret := detailSecret(spec)
 	entry := &corev1.ConfigMap{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      secret.Name,
-			Namespace: secret.Namespace,
-			Labels:    secret.Labels,
-		},
-		Data: map[string]string{releaseKey: string(secret.Data[releaseKey])},
+		Name:      secret.Name,
+		Namespace: secret.Namespace,
+		Labels:    secret.Labels,
+		Data:      map[string]string{releaseKey: string(secret.Data[releaseKey])},
 	}
 	service := NewService(
 		k8sfake.NewClientset(secret, entry),

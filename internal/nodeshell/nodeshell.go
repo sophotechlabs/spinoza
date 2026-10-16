@@ -206,11 +206,9 @@ func (s *Service) waitRunning(ctx context.Context, name string) error {
 func (s *Service) pod(node string) *corev1.Pod {
 	privileged := true
 	return &corev1.Pod{
-		ObjectMeta: metav1.ObjectMeta{
-			GenerateName: "spinoza-node-shell-",
-			Namespace:    s.namespace,
-			Labels:       map[string]string{managedBy: owner, nodeLabel: node},
-		},
+		GenerateName: "spinoza-node-shell-",
+		Namespace:    s.namespace,
+		Labels:       map[string]string{managedBy: owner, nodeLabel: node},
 		Spec: corev1.PodSpec{
 			ActiveDeadlineSeconds: &livesFor,
 			NodeName:              node,

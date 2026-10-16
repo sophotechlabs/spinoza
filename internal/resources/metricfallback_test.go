@@ -23,12 +23,10 @@ import (
 
 func prometheusService() *corev1.Service {
 	return &corev1.Service{
-		ObjectMeta: metav1.ObjectMeta{
-			Namespace: "monitoring",
-			Name:      "prometheus-operated",
-			Labels:    map[string]string{"operated-prometheus": "true"},
-		},
-		Spec: corev1.ServiceSpec{Ports: []corev1.ServicePort{{Name: "http-web", Port: 9090}}},
+		Namespace: "monitoring",
+		Name:      "prometheus-operated",
+		Labels:    map[string]string{"operated-prometheus": "true"},
+		Spec:      corev1.ServiceSpec{Ports: []corev1.ServicePort{{Name: "http-web", Port: 9090}}},
 	}
 }
 

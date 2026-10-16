@@ -83,16 +83,14 @@ func decodeResult(t *testing.T, body []byte) api.ActionResult {
 func nodePod(name string) *corev1.Pod {
 	yes := true
 	return &corev1.Pod{
-		ObjectMeta: metav1.ObjectMeta{
-			Namespace: "shop",
-			Name:      name,
-			OwnerReferences: []metav1.OwnerReference{{
-				APIVersion: "apps/v1",
-				Kind:       "ReplicaSet",
-				Name:       "web",
-				Controller: &yes,
-			}},
-		},
+		Namespace: "shop",
+		Name:      name,
+		OwnerReferences: []metav1.OwnerReference{{
+			APIVersion: "apps/v1",
+			Kind:       "ReplicaSet",
+			Name:       "web",
+			Controller: &yes,
+		}},
 		Spec:   corev1.PodSpec{NodeName: "worker-1"},
 		Status: corev1.PodStatus{Phase: corev1.PodRunning},
 	}

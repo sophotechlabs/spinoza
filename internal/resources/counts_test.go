@@ -30,8 +30,8 @@ func countClient(t *testing.T, objs ...runtime.Object) *metadatafake.FakeMetadat
 
 func countObject(name string) *metav1.PartialObjectMetadata {
 	return &metav1.PartialObjectMetadata{
-		TypeMeta:   metav1.TypeMeta{APIVersion: "apps/v1", Kind: "Deployment"},
-		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: "default"},
+		APIVersion: "apps/v1", Kind: "Deployment",
+		Name: name, Namespace: "default",
 	}
 }
 
@@ -168,7 +168,7 @@ func TestCountFollowsPagesInsteadOfTreatingTheRemainingEstimateAsExact(t *testin
 		calls++
 		if calls == 1 {
 			return true, &metav1.List{
-				ListMeta: metav1.ListMeta{Continue: "next", RemainingItemCount: &estimate},
+				Continue: "next", RemainingItemCount: &estimate,
 				Items: []runtime.RawExtension{
 					{Object: countObject("one")},
 					{Object: countObject("two")},
@@ -197,7 +197,7 @@ func TestCountStopsWhenTheApiserverRepeatsAContinuationToken(t *testing.T) {
 	dyn := countClient(t)
 	dyn.PrependReactor("list", "deployments", func(k8stesting.Action) (bool, runtime.Object, error) {
 		return true, &metav1.List{
-			ListMeta: metav1.ListMeta{Continue: "same"},
+			Continue: "same",
 		}, nil
 	})
 
@@ -222,8 +222,8 @@ func podClient(t *testing.T) *metadatafake.FakeMetadataClient {
 
 func podObject(name string) *metav1.PartialObjectMetadata {
 	return &metav1.PartialObjectMetadata{
-		TypeMeta:   metav1.TypeMeta{APIVersion: "v1", Kind: "Pod"},
-		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: "default"},
+		APIVersion: "v1", Kind: "Pod",
+		Name: name, Namespace: "default",
 	}
 }
 

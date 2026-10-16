@@ -6,7 +6,6 @@ import (
 	"testing"
 
 	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	k8sfake "k8s.io/client-go/kubernetes/fake"
 	k8stesting "k8s.io/client-go/testing"
@@ -14,24 +13,20 @@ import (
 
 func releaseSecret(name, revision string) *corev1.Secret {
 	return &corev1.Secret{
-		ObjectMeta: metav1.ObjectMeta{
-			Namespace: "prod",
-			Name:      name,
-			Labels:    map[string]string{"owner": "helm", "name": "web", versionLabel: revision},
-		},
-		Type: storageType,
-		Data: map[string][]byte{releaseKey: []byte("body")},
+		Namespace: "prod",
+		Name:      name,
+		Labels:    map[string]string{"owner": "helm", "name": "web", versionLabel: revision},
+		Type:      storageType,
+		Data:      map[string][]byte{releaseKey: []byte("body")},
 	}
 }
 
 func releaseConfigMap(name, revision string) *corev1.ConfigMap {
 	return &corev1.ConfigMap{
-		ObjectMeta: metav1.ObjectMeta{
-			Namespace: "prod",
-			Name:      name,
-			Labels:    map[string]string{"owner": "helm", "name": "web", versionLabel: revision},
-		},
-		Data: map[string]string{releaseKey: "body"},
+		Namespace: "prod",
+		Name:      name,
+		Labels:    map[string]string{"owner": "helm", "name": "web", versionLabel: revision},
+		Data:      map[string]string{releaseKey: "body"},
 	}
 }
 
@@ -46,7 +41,7 @@ func pagesOf(cs *k8sfake.Clientset, resource string, pages [][]runtime.Object) {
 		}
 		switch resource {
 		case "secrets":
-			list := &corev1.SecretList{ListMeta: metav1.ListMeta{Continue: more}}
+			list := &corev1.SecretList{Continue: more}
 			for _, item := range page {
 				secret, ok := item.(*corev1.Secret)
 				if ok {
@@ -55,7 +50,7 @@ func pagesOf(cs *k8sfake.Clientset, resource string, pages [][]runtime.Object) {
 			}
 			return true, list, nil
 		default:
-			list := &corev1.ConfigMapList{ListMeta: metav1.ListMeta{Continue: more}}
+			list := &corev1.ConfigMapList{Continue: more}
 			for _, item := range page {
 				entry, ok := item.(*corev1.ConfigMap)
 				if ok {
@@ -108,7 +103,7 @@ func TestReleaseStorageRejectsARepeatedContinueToken(t *testing.T) {
 	}{
 		{
 			name: "secrets",
-			page: &corev1.SecretList{ListMeta: metav1.ListMeta{Continue: "same"}},
+			page: &corev1.SecretList{Continue: "same"},
 			read: func(cs *k8sfake.Clientset) error {
 				_, err := revisionSecrets(t.Context(), cs, "prod", "owner=helm", maxObjects)
 				return err
@@ -116,7 +111,7 @@ func TestReleaseStorageRejectsARepeatedContinueToken(t *testing.T) {
 		},
 		{
 			name: "configmaps",
-			page: &corev1.ConfigMapList{ListMeta: metav1.ListMeta{Continue: "same"}},
+			page: &corev1.ConfigMapList{Continue: "same"},
 			read: func(cs *k8sfake.Clientset) error {
 				_, err := revisionConfigMaps(t.Context(), cs, "prod", "owner=helm", maxObjects)
 				return err

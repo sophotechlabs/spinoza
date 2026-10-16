@@ -8,7 +8,6 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -23,14 +22,12 @@ import (
 func controllerDeployment(name, version string, ready int32) *appsv1.Deployment {
 	one := int32(1)
 	return &appsv1.Deployment{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      name,
-			Namespace: "flux-system",
-			Labels: map[string]string{
-				"app.kubernetes.io/part-of":   "flux",
-				"app.kubernetes.io/component": name,
-				"app.kubernetes.io/version":   version,
-			},
+		Name:      name,
+		Namespace: "flux-system",
+		Labels: map[string]string{
+			"app.kubernetes.io/part-of":   "flux",
+			"app.kubernetes.io/component": name,
+			"app.kubernetes.io/version":   version,
 		},
 		Spec:   appsv1.DeploymentSpec{Replicas: &one},
 		Status: appsv1.DeploymentStatus{ReadyReplicas: ready},
@@ -39,24 +36,20 @@ func controllerDeployment(name, version string, ready int32) *appsv1.Deployment 
 
 func operatorDeployment(version string) *appsv1.Deployment {
 	return &appsv1.Deployment{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "flux-operator",
-			Namespace: "flux-system",
-			Labels: map[string]string{
-				"app.kubernetes.io/name":    "flux-operator",
-				"app.kubernetes.io/version": version,
-			},
+		Name:      "flux-operator",
+		Namespace: "flux-system",
+		Labels: map[string]string{
+			"app.kubernetes.io/name":    "flux-operator",
+			"app.kubernetes.io/version": version,
 		},
 	}
 }
 
 func controllerPod(name, cpu, memory string) *corev1.Pod {
 	return &corev1.Pod{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      name,
-			Namespace: "flux-system",
-			Labels:    map[string]string{"app.kubernetes.io/part-of": "flux"},
-		},
+		Name:      name,
+		Namespace: "flux-system",
+		Labels:    map[string]string{"app.kubernetes.io/part-of": "flux"},
 		Spec: corev1.PodSpec{Containers: []corev1.Container{{
 			Name: "manager",
 			Resources: corev1.ResourceRequirements{

@@ -73,7 +73,7 @@ func openNamespace(loaded *kube.Bundle) error {
 		return err
 	}
 	_, err = loaded.Clientset.CoreV1().Namespaces().Create(ctx, &corev1.Namespace{
-		ObjectMeta: metav1.ObjectMeta{Name: namespace},
+		Name: namespace,
 	}, metav1.CreateOptions{})
 	if err != nil {
 		return err
@@ -169,7 +169,7 @@ func runningPod(t *testing.T, loaded *kube.Bundle, name string) *corev1.Pod {
 	t.Helper()
 	ctx := context.Background()
 	_, err := loaded.Clientset.CoreV1().Pods(namespace).Create(ctx, &corev1.Pod{
-		ObjectMeta: metav1.ObjectMeta{Name: name, Labels: map[string]string{"app": name}},
+		Name: name, Labels: map[string]string{"app": name},
 		Spec: corev1.PodSpec{
 			Containers: []corev1.Container{{
 				Name:    "web",

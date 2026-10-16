@@ -193,7 +193,7 @@ func (s *Service) evictAll(ctx context.Context, plans []podPlan) []api.PodOutcom
 
 func (s *Service) evictOne(ctx context.Context, pod *corev1.Pod) (string, string) {
 	eviction := &policyv1.Eviction{
-		ObjectMeta: metav1.ObjectMeta{Namespace: pod.Namespace, Name: pod.Name},
+		Namespace: pod.Namespace, Name: pod.Name,
 	}
 	for {
 		err := s.cs.CoreV1().Pods(pod.Namespace).EvictV1(ctx, eviction)

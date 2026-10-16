@@ -26,13 +26,11 @@ func helmStorageSecret(namespace, name string) *corev1.Secret {
 	payload := `{"name":"` + name + `","namespace":"` + namespace + `","version":1,` +
 		`"info":{"status":"deployed"},"chart":{"metadata":{"name":"podinfo","version":"6.9.2"}}}`
 	return &corev1.Secret{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "sh.helm.release.v1." + name + ".v1",
-			Namespace: namespace,
-			Labels:    map[string]string{"owner": "helm", "name": name, "version": "1", "status": "deployed"},
-		},
-		Type: "helm.sh/release.v1",
-		Data: map[string][]byte{"release": []byte(payload)},
+		Name:      "sh.helm.release.v1." + name + ".v1",
+		Namespace: namespace,
+		Labels:    map[string]string{"owner": "helm", "name": name, "version": "1", "status": "deployed"},
+		Type:      "helm.sh/release.v1",
+		Data:      map[string][]byte{"release": []byte(payload)},
 	}
 }
 
@@ -237,7 +235,7 @@ func helmMeta(t *testing.T, cs kubernetes.Interface) metadata.Interface {
 	if listErr == nil {
 		for i := range secrets.Items {
 			objs = append(objs, &metav1.PartialObjectMetadata{
-				TypeMeta:   metav1.TypeMeta{APIVersion: "v1", Kind: "Secret"},
+				APIVersion: "v1", Kind: "Secret",
 				ObjectMeta: secrets.Items[i].ObjectMeta,
 			})
 		}

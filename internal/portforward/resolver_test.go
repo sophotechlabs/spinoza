@@ -6,7 +6,6 @@ import (
 	"testing"
 
 	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	k8sfake "k8s.io/client-go/kubernetes/fake"
@@ -15,7 +14,7 @@ import (
 
 func service(port int32, target intstr.IntOrString, selector map[string]string) *corev1.Service {
 	return &corev1.Service{
-		ObjectMeta: metav1.ObjectMeta{Name: "prometheus", Namespace: "monitoring"},
+		Name: "prometheus", Namespace: "monitoring",
 		Spec: corev1.ServiceSpec{
 			Selector: selector,
 			Ports:    []corev1.ServicePort{{Name: "http", Port: port, TargetPort: target}},
@@ -25,7 +24,7 @@ func service(port int32, target intstr.IntOrString, selector map[string]string) 
 
 func readyPod(name string, labels map[string]string, ports []corev1.ContainerPort) *corev1.Pod {
 	return &corev1.Pod{
-		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: "monitoring", Labels: labels},
+		Name: name, Namespace: "monitoring", Labels: labels,
 		Spec: corev1.PodSpec{
 			Containers: []corev1.Container{{Name: "app", Ports: ports}},
 		},

@@ -120,7 +120,7 @@ func TestListAllSkipsObjectsItCannotTurnIntoRows(t *testing.T) {
 	if err := indexer.Add(newDeployment("prod", "web")); err != nil {
 		t.Fatalf("add deployment: %v", err)
 	}
-	if err := indexer.Add(&corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "typed", Namespace: "prod"}}); err != nil {
+	if err := indexer.Add(&corev1.Pod{Name: "typed", Namespace: "prod"}); err != nil {
 		t.Fatalf("add typed pod: %v", err)
 	}
 	lister := cache.NewGenericLister(indexer, schema.GroupResource{Group: "apps", Resource: "deployments"})

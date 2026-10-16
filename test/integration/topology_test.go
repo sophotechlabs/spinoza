@@ -24,7 +24,7 @@ func applyService(t *testing.T, name string) {
 	t.Helper()
 	loaded := bundle(t)
 	service := &corev1.Service{
-		ObjectMeta: metav1.ObjectMeta{Name: name},
+		Name: name,
 		Spec: corev1.ServiceSpec{
 			Selector: map[string]string{"app": name},
 			Ports:    []corev1.ServicePort{{Port: 80, TargetPort: intstr.FromInt32(80)}},

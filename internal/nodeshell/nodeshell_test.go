@@ -22,8 +22,8 @@ import (
 
 func running(name string) *corev1.Pod {
 	return &corev1.Pod{
-		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: DefaultNamespace},
-		Status:     corev1.PodStatus{Phase: corev1.PodRunning},
+		Name: name, Namespace: DefaultNamespace,
+		Status: corev1.PodStatus{Phase: corev1.PodRunning},
 	}
 }
 

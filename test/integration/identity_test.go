@@ -26,7 +26,7 @@ func TestANamespaceRoleAloneCanBrowseItsNamespace(t *testing.T) {
 	ctx := context.Background()
 	const reader = "spinoza-namespace-reader"
 	role := &rbacv1.Role{
-		ObjectMeta: metav1.ObjectMeta{Name: reader, Namespace: namespace},
+		Name: reader, Namespace: namespace,
 		Rules: []rbacv1.PolicyRule{{
 			APIGroups: []string{""},
 			Resources: []string{"pods", "configmaps"},
@@ -41,9 +41,9 @@ func TestANamespaceRoleAloneCanBrowseItsNamespace(t *testing.T) {
 		_ = loaded.Clientset.RbacV1().Roles(namespace).Delete(context.Background(), role.Name, metav1.DeleteOptions{})
 	})
 	binding := &rbacv1.RoleBinding{
-		ObjectMeta: metav1.ObjectMeta{Name: reader, Namespace: namespace},
-		Subjects:   []rbacv1.Subject{{Kind: rbacv1.UserKind, Name: reader, APIGroup: rbacv1.GroupName}},
-		RoleRef:    rbacv1.RoleRef{APIGroup: rbacv1.GroupName, Kind: "Role", Name: role.Name},
+		Name: reader, Namespace: namespace,
+		Subjects: []rbacv1.Subject{{Kind: rbacv1.UserKind, Name: reader, APIGroup: rbacv1.GroupName}},
+		RoleRef:  rbacv1.RoleRef{APIGroup: rbacv1.GroupName, Kind: "Role", Name: role.Name},
 	}
 	_, err = loaded.Clientset.RbacV1().RoleBindings(namespace).Create(ctx, binding, metav1.CreateOptions{})
 	if err != nil && !apierrors.IsAlreadyExists(err) {
@@ -58,7 +58,7 @@ func TestANamespaceRoleAloneCanBrowseItsNamespace(t *testing.T) {
 			_ = objects.Delete(context.Background(), name, metav1.DeleteOptions{})
 		})
 	}
-	_, err = objects.Create(ctx, &corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: "seen-before"}}, metav1.CreateOptions{})
+	_, err = objects.Create(ctx, &corev1.ConfigMap{Name: "seen-before"}, metav1.CreateOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -85,7 +85,7 @@ func TestANamespaceRoleAloneCanBrowseItsNamespace(t *testing.T) {
 		t.Fatalf("rows = %+v, want the configmap that was already there", sub.Rows)
 	}
 
-	_, err = objects.Create(ctx, &corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: "seen-after"}}, metav1.CreateOptions{})
+	_, err = objects.Create(ctx, &corev1.ConfigMap{Name: "seen-after"}, metav1.CreateOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}

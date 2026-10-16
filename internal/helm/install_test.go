@@ -8,7 +8,6 @@ import (
 	"testing"
 
 	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	k8sfake "k8s.io/client-go/kubernetes/fake"
 
@@ -39,7 +38,7 @@ func installer(t *testing.T, runner Runner, objs ...runtime.Object) *Service {
 }
 
 func namespaceObject(name string) *corev1.Namespace {
-	return &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: name}}
+	return &corev1.Namespace{Name: name}
 }
 
 func TestAnInstallNamesTheChartTheRepoAndTheVersion(t *testing.T) {

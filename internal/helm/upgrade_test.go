@@ -10,7 +10,6 @@ import (
 	"testing"
 
 	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	k8sfake "k8s.io/client-go/kubernetes/fake"
 
 	"github.com/sophotechlabs/spinoza/internal/api"
@@ -280,12 +279,10 @@ func TestUpgradeKeepsHelmsOwnMessage(t *testing.T) {
 func TestUpgradeTellsHelmWhichDriverHoldsTheRelease(t *testing.T) {
 	runner := &valuesReadingRunner{}
 	entry := &corev1.ConfigMap{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "sh.helm.release.v1.podinfo.v1",
-			Namespace: "demo",
-			Labels:    map[string]string{"owner": "helm", "name": "podinfo", "version": "1"},
-		},
-		Data: map[string]string{releaseKey: "rubbish"},
+		Name:      "sh.helm.release.v1.podinfo.v1",
+		Namespace: "demo",
+		Labels:    map[string]string{"owner": "helm", "name": "podinfo", "version": "1"},
+		Data:      map[string]string{releaseKey: "rubbish"},
 	}
 	client := k8sfake.NewClientset(entry)
 	service := NewService(

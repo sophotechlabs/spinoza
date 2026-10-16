@@ -76,8 +76,8 @@ func metaFor(objects []runtime.Object) []runtime.Object {
 			continue
 		}
 		out = append(out, &metav1.PartialObjectMetadata{
-			TypeMeta:   metav1.TypeMeta{APIVersion: "v1", Kind: "Pod"},
-			ObjectMeta: metav1.ObjectMeta{Namespace: item.GetNamespace(), Name: item.GetName()},
+			APIVersion: "v1", Kind: "Pod",
+			Namespace: item.GetNamespace(), Name: item.GetName(),
 		})
 	}
 	return out

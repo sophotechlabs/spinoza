@@ -325,11 +325,9 @@ func TestFallbackDialerRejectsABrokenConfig(t *testing.T) {
 		t.Fatalf("parse: %v", err)
 	}
 	config := &restclient.Config{
-		Host: "https://example.test",
-		TLSClientConfig: restclient.TLSClientConfig{
-			CertFile: "/nonexistent/cert.pem",
-			KeyFile:  "/nonexistent/key.pem",
-		},
+		Host:     "https://example.test",
+		CertFile: "/nonexistent/cert.pem",
+		KeyFile:  "/nonexistent/key.pem",
 	}
 
 	_, err = fallbackDialer(config, endpoint)

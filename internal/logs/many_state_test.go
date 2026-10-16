@@ -10,7 +10,6 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	k8sruntime "k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/kubernetes/fake"
@@ -171,11 +170,11 @@ func TestAttachSkipsAPodThatIsAlreadyClaimed(t *testing.T) {
 func TestPodsAreSortedBeforeTheAttachmentCapIsApplied(t *testing.T) {
 	objects := make([]k8sruntime.Object, 0, maxPods+5)
 	for id := maxPods + 4; id >= 0; id-- {
-		objects = append(objects, &corev1.Pod{ObjectMeta: metav1.ObjectMeta{
+		objects = append(objects, &corev1.Pod{
 			Name:      fmt.Sprintf("web-%02d", id),
 			Namespace: "prod",
 			Labels:    map[string]string{"app": "web"},
-		}})
+		})
 	}
 
 	pods, matched, err := podsMatching(context.Background(), fake.NewClientset(objects...), Request{

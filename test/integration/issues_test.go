@@ -23,7 +23,7 @@ const issueTimeout = 3 * time.Minute
 func deploymentOf(name, image string, command []string) *appsv1.Deployment {
 	replicas := int32(2)
 	return &appsv1.Deployment{
-		ObjectMeta: metav1.ObjectMeta{Name: name},
+		Name: name,
 		Spec: appsv1.DeploymentSpec{
 			Replicas: &replicas,
 			Selector: &metav1.LabelSelector{MatchLabels: map[string]string{"app": name}},
@@ -118,7 +118,7 @@ func TestAPodNoNodeCanTakeIsReported(t *testing.T) {
 	mgr := manager(t, loaded)
 	huge := resource.MustParse("1000")
 	_, err := loaded.Clientset.CoreV1().Pods(namespace).Create(context.Background(), &corev1.Pod{
-		ObjectMeta: metav1.ObjectMeta{Name: "smoke-unschedulable"},
+		Name: "smoke-unschedulable",
 		Spec: corev1.PodSpec{
 			Containers: []corev1.Container{{
 				Name:  "app",
@@ -151,7 +151,7 @@ func TestAJobThatGivesUpIsReported(t *testing.T) {
 	mgr := manager(t, loaded)
 	limit := int32(0)
 	_, err := loaded.Clientset.BatchV1().Jobs(namespace).Create(context.Background(), &batchv1.Job{
-		ObjectMeta: metav1.ObjectMeta{Name: "smoke-job"},
+		Name: "smoke-job",
 		Spec: batchv1.JobSpec{
 			BackoffLimit: &limit,
 			Template: corev1.PodTemplateSpec{

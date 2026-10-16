@@ -8,7 +8,6 @@ import (
 	"testing"
 
 	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	k8sfake "k8s.io/client-go/kubernetes/fake"
 	k8stesting "k8s.io/client-go/testing"
@@ -177,12 +176,10 @@ func TestHistoryRejectsARevisionStoredByTwoDrivers(t *testing.T) {
 	spec := sampleRelease()
 	secret := detailSecret(spec)
 	entry := &corev1.ConfigMap{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      secret.Name,
-			Namespace: secret.Namespace,
-			Labels:    secret.Labels,
-		},
-		Data: map[string]string{releaseKey: string(secret.Data[releaseKey])},
+		Name:      secret.Name,
+		Namespace: secret.Namespace,
+		Labels:    secret.Labels,
+		Data:      map[string]string{releaseKey: string(secret.Data[releaseKey])},
 	}
 	service := newService(k8sfake.NewClientset(secret, entry), nil, nil)
 

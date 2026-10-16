@@ -4,7 +4,6 @@ import (
 	"testing"
 
 	appsv1 "k8s.io/api/apps/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	k8sfake "k8s.io/client-go/kubernetes/fake"
 
 	"github.com/sophotechlabs/spinoza/internal/api"
@@ -12,25 +11,21 @@ import (
 
 func deployment(namespace, name, partOf string, ready, wanted int32) *appsv1.Deployment {
 	return &appsv1.Deployment{
-		ObjectMeta: metav1.ObjectMeta{
-			Namespace: namespace,
-			Name:      name,
-			Labels:    map[string]string{partOfLabel: partOf},
-		},
-		Spec:   appsv1.DeploymentSpec{Replicas: &wanted},
-		Status: appsv1.DeploymentStatus{ReadyReplicas: ready},
+		Namespace: namespace,
+		Name:      name,
+		Labels:    map[string]string{partOfLabel: partOf},
+		Spec:      appsv1.DeploymentSpec{Replicas: &wanted},
+		Status:    appsv1.DeploymentStatus{ReadyReplicas: ready},
 	}
 }
 
 func statefulSet(namespace, name, partOf string, ready, wanted int32) *appsv1.StatefulSet {
 	return &appsv1.StatefulSet{
-		ObjectMeta: metav1.ObjectMeta{
-			Namespace: namespace,
-			Name:      name,
-			Labels:    map[string]string{partOfLabel: partOf},
-		},
-		Spec:   appsv1.StatefulSetSpec{Replicas: &wanted},
-		Status: appsv1.StatefulSetStatus{ReadyReplicas: ready},
+		Namespace: namespace,
+		Name:      name,
+		Labels:    map[string]string{partOfLabel: partOf},
+		Spec:      appsv1.StatefulSetSpec{Replicas: &wanted},
+		Status:    appsv1.StatefulSetStatus{ReadyReplicas: ready},
 	}
 }
 

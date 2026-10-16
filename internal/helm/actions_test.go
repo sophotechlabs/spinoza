@@ -93,12 +93,10 @@ func TestUninstallRunsHelmWithThePinnedContext(t *testing.T) {
 func TestActionsTellHelmWhichDriverHoldsTheRelease(t *testing.T) {
 	runner := &stubRunner{}
 	entry := &corev1.ConfigMap{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "sh.helm.release.v1.podinfo.v1",
-			Namespace: "demo",
-			Labels:    map[string]string{"owner": "helm", "name": "podinfo", "version": "1"},
-		},
-		Data: map[string]string{releaseKey: "rubbish"},
+		Name:      "sh.helm.release.v1.podinfo.v1",
+		Namespace: "demo",
+		Labels:    map[string]string{"owner": "helm", "name": "podinfo", "version": "1"},
+		Data:      map[string]string{releaseKey: "rubbish"},
 	}
 	client := k8sfake.NewClientset(entry)
 	service := NewService(client, mirrorMeta(client), runner, nil, nil, api.ContextRef{Name: "kind-spinoza"})
@@ -121,12 +119,10 @@ func TestActionsUseTheDriverHoldingTheNewestRevision(t *testing.T) {
 	newest := sampleRelease()
 	newest.revision = 2
 	newConfigMap := &corev1.ConfigMap{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "sh.helm.release.v1.podinfo.v2",
-			Namespace: "demo",
-			Labels: map[string]string{
-				"owner": "helm", "name": "podinfo", "version": "2",
-			},
+		Name:      "sh.helm.release.v1.podinfo.v2",
+		Namespace: "demo",
+		Labels: map[string]string{
+			"owner": "helm", "name": "podinfo", "version": "2",
 		},
 		Data: map[string]string{releaseKey: detailPayload(newest)},
 	}
@@ -488,12 +484,10 @@ func TestAConfigMapListFailureIsReported(t *testing.T) {
 
 func TestAConfigMapWithNoReleaseKeyIsSkipped(t *testing.T) {
 	entry := &corev1.ConfigMap{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "not-a-release",
-			Namespace: "demo",
-			Labels:    map[string]string{"owner": "helm"},
-		},
-		Data: map[string]string{"other": "value"},
+		Name:      "not-a-release",
+		Namespace: "demo",
+		Labels:    map[string]string{"owner": "helm"},
+		Data:      map[string]string{"other": "value"},
 	}
 	service := NewService(k8sfake.NewClientset(entry), mirrorMeta(k8sfake.NewClientset(entry)), nil, nil, nil, api.ContextRef{Name: "kind-spinoza"})
 

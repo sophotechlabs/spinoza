@@ -35,7 +35,7 @@ func limitedClients(t *testing.T, loaded *kube.Bundle) (dynamic.Interface, kuber
 	t.Helper()
 	ctx := context.Background()
 	role := &rbacv1.ClusterRole{
-		ObjectMeta: metav1.ObjectMeta{Name: "spinoza-limited-pods"},
+		Name: "spinoza-limited-pods",
 		Rules: []rbacv1.PolicyRule{{
 			APIGroups: []string{""},
 			Resources: []string{"pods"},
@@ -50,7 +50,7 @@ func limitedClients(t *testing.T, loaded *kube.Bundle) (dynamic.Interface, kuber
 		_ = loaded.Clientset.RbacV1().ClusterRoles().Delete(context.Background(), role.Name, metav1.DeleteOptions{})
 	})
 	binding := &rbacv1.ClusterRoleBinding{
-		ObjectMeta: metav1.ObjectMeta{Name: "spinoza-limited-pods"},
+		Name: "spinoza-limited-pods",
 		Subjects: []rbacv1.Subject{{
 			Kind:     rbacv1.UserKind,
 			Name:     limitedUser,
@@ -205,7 +205,7 @@ func startFakeProm(t *testing.T, loaded *kube.Bundle) {
 		" && echo '{\"status\":\"success\"}' > /www/api/v1/status/buildinfo" +
 		" && httpd -f -p 9090 -h /www"
 	_, err := loaded.Clientset.CoreV1().Pods(namespace).Create(ctx, &corev1.Pod{
-		ObjectMeta: metav1.ObjectMeta{Name: "fake-prom", Labels: map[string]string{"app": "fake-prom"}},
+		Name: "fake-prom", Labels: map[string]string{"app": "fake-prom"},
 		Spec: corev1.PodSpec{
 			Containers: []corev1.Container{{
 				Name:    "web",
@@ -219,7 +219,7 @@ func startFakeProm(t *testing.T, loaded *kube.Bundle) {
 		t.Fatalf("create pod: %v", err)
 	}
 	_, err = loaded.Clientset.CoreV1().Services(namespace).Create(ctx, &corev1.Service{
-		ObjectMeta: metav1.ObjectMeta{Name: "fake-prom"},
+		Name: "fake-prom",
 		Spec: corev1.ServiceSpec{
 			Selector: map[string]string{"app": "fake-prom"},
 			Ports:    []corev1.ServicePort{{Port: 9090, TargetPort: intstr.FromInt32(9090)}},

@@ -590,9 +590,9 @@ func TestASourceWithoutANamespaceReadsAcrossTheCluster(t *testing.T) {
 
 func TestAfterARollbackOnlyOneRevisionIsCurrent(t *testing.T) {
 	same := []entry{
-		{Revision: api.Revision{Number: 3, Name: "web-c", Current: true}},
-		{Revision: api.Revision{Number: 2, Name: "web-b"}},
-		{Revision: api.Revision{Number: 1, Name: "web-a", Current: true}},
+		{Number: 3, Name: "web-c", Current: true},
+		{Number: 2, Name: "web-b"},
+		{Number: 1, Name: "web-a", Current: true},
 	}
 
 	got := ordered(same)
@@ -613,9 +613,9 @@ func TestAfterARollbackOnlyOneRevisionIsCurrent(t *testing.T) {
 
 func TestTheNewestRevisionIsTheOneRunning(t *testing.T) {
 	got := ordered([]entry{
-		{Revision: api.Revision{Number: 1, Name: "web-a"}},
-		{Revision: api.Revision{Number: 3, Name: "web-c"}},
-		{Revision: api.Revision{Number: 2, Name: "web-b"}},
+		{Number: 1, Name: "web-a"},
+		{Number: 3, Name: "web-c"},
+		{Number: 2, Name: "web-b"},
 	})
 
 	if len(got) != 3 {

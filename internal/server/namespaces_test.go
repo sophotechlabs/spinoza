@@ -17,11 +17,9 @@ import (
 
 func namespaceMeta(name string) *metav1.PartialObjectMetadata {
 	return &metav1.PartialObjectMetadata{
-		TypeMeta: metav1.TypeMeta{
-			APIVersion: schema.GroupVersion{Version: "v1"}.String(),
-			Kind:       "Namespace",
-		},
-		ObjectMeta: metav1.ObjectMeta{Name: name},
+		APIVersion: schema.GroupVersion{Version: "v1"}.String(),
+		Kind:       "Namespace",
+		Name:       name,
 	}
 }
 

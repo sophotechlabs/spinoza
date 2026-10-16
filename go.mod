@@ -1,6 +1,6 @@
 module github.com/sophotechlabs/spinoza
 
-go 1.26.5
+go 1.27.1
 
 require (
 	cel.dev/cel-go v0.32.0

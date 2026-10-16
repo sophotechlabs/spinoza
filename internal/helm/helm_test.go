@@ -44,7 +44,7 @@ func mirrorMeta(cs kubernetes.Interface) *metadatafake.FakeMetadataClient {
 	if err == nil {
 		for i := range secrets.Items {
 			objs = append(objs, &metav1.PartialObjectMetadata{
-				TypeMeta:   metav1.TypeMeta{APIVersion: "v1", Kind: "Secret"},
+				APIVersion: "v1", Kind: "Secret",
 				ObjectMeta: secrets.Items[i].ObjectMeta,
 			})
 		}
@@ -53,7 +53,7 @@ func mirrorMeta(cs kubernetes.Interface) *metadatafake.FakeMetadataClient {
 	if mapErr == nil {
 		for i := range maps.Items {
 			objs = append(objs, &metav1.PartialObjectMetadata{
-				TypeMeta:   metav1.TypeMeta{APIVersion: "v1", Kind: "ConfigMap"},
+				APIVersion: "v1", Kind: "ConfigMap",
 				ObjectMeta: maps.Items[i].ObjectMeta,
 			})
 		}
@@ -62,7 +62,7 @@ func mirrorMeta(cs kubernetes.Interface) *metadatafake.FakeMetadataClient {
 	if nsErr == nil {
 		for i := range spaces.Items {
 			objs = append(objs, &metav1.PartialObjectMetadata{
-				TypeMeta:   metav1.TypeMeta{APIVersion: "v1", Kind: "Namespace"},
+				APIVersion: "v1", Kind: "Namespace",
 				ObjectMeta: spaces.Items[i].ObjectMeta,
 			})
 		}
@@ -72,7 +72,7 @@ func mirrorMeta(cs kubernetes.Interface) *metadatafake.FakeMetadataClient {
 
 func metaOf(secret *corev1.Secret) *metav1.PartialObjectMetadata {
 	return &metav1.PartialObjectMetadata{
-		TypeMeta:   metav1.TypeMeta{APIVersion: "v1", Kind: "Secret"},
+		APIVersion: "v1", Kind: "Secret",
 		ObjectMeta: secret.ObjectMeta,
 	}
 }
@@ -144,16 +144,14 @@ func gzipped(body string) []byte {
 
 func storedSecret(spec release, data []byte) *corev1.Secret {
 	return &corev1.Secret{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:              fmt.Sprintf("sh.helm.release.v1.%s.v%d", spec.name, spec.revision),
-			Namespace:         spec.namespace,
-			CreationTimestamp: metav1.NewTime(time.Date(2026, 8, 1, 0, 0, 0, 0, time.UTC)),
-			Labels: map[string]string{
-				"owner":   "helm",
-				"name":    spec.name,
-				"version": strconv.FormatInt(spec.revision, 10),
-				"status":  spec.status,
-			},
+		Name:              fmt.Sprintf("sh.helm.release.v1.%s.v%d", spec.name, spec.revision),
+		Namespace:         spec.namespace,
+		CreationTimestamp: metav1.NewTime(time.Date(2026, 8, 1, 0, 0, 0, 0, time.UTC)),
+		Labels: map[string]string{
+			"owner":   "helm",
+			"name":    spec.name,
+			"version": strconv.FormatInt(spec.revision, 10),
+			"status":  spec.status,
 		},
 		Type: storageType,
 		Data: map[string][]byte{releaseKey: data},
@@ -313,12 +311,10 @@ func TestListSortsByNamespaceThenName(t *testing.T) {
 
 func TestListIgnoresSecretsThatAreNotHelmStorage(t *testing.T) {
 	other := &corev1.Secret{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "tls",
-			Namespace: "demo",
-			Labels:    map[string]string{"owner": "helm"},
-		},
-		Type: corev1.SecretTypeTLS,
+		Name:      "tls",
+		Namespace: "demo",
+		Labels:    map[string]string{"owner": "helm"},
+		Type:      corev1.SecretTypeTLS,
 	}
 	cs := k8sfake.NewClientset(helmSecret(sampleRelease()), other)
 
@@ -387,13 +383,11 @@ func TestListFallsBackToLabelsWhenAReleaseReaderPanics(t *testing.T) {
 
 func TestListSkipsASecretWithNothingToIdentifyIt(t *testing.T) {
 	nameless := &corev1.Secret{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "sh.helm.release.v1.mystery.v1",
-			Namespace: "demo",
-			Labels:    map[string]string{"owner": "helm"},
-		},
-		Type: storageType,
-		Data: map[string][]byte{releaseKey: []byte("broken")},
+		Name:      "sh.helm.release.v1.mystery.v1",
+		Namespace: "demo",
+		Labels:    map[string]string{"owner": "helm"},
+		Type:      storageType,
+		Data:      map[string][]byte{releaseKey: []byte("broken")},
 	}
 	cs := k8sfake.NewClientset(nameless)
 
@@ -439,19 +433,17 @@ func TestListFallsBackPerNamespaceWhenClusterWideSecretsAreForbidden(t *testing.
 	readable := sampleRelease()
 	hidden := release{name: "hidden", namespace: "locked", revision: 1, status: "deployed", chart: "hidden", version: "1.0.0", appVersion: "1.0.0"}
 	fromMaps := &corev1.ConfigMap{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "sh.helm.release.v1.tillered.v2",
-			Namespace: "locked",
-			Labels:    map[string]string{"owner": "helm", "name": "tillered", "version": "2", "status": "deployed"},
-		},
-		Data: map[string]string{releaseKey: payloadJSON(release{name: "tillered", namespace: "locked", revision: 2, status: "deployed", chart: "tillered", version: "0.1.0", appVersion: "0.1.0"})},
+		Name:      "sh.helm.release.v1.tillered.v2",
+		Namespace: "locked",
+		Labels:    map[string]string{"owner": "helm", "name": "tillered", "version": "2", "status": "deployed"},
+		Data:      map[string]string{releaseKey: payloadJSON(release{name: "tillered", namespace: "locked", revision: 2, status: "deployed", chart: "tillered", version: "0.1.0", appVersion: "0.1.0"})},
 	}
 	cs := k8sfake.NewClientset(
 		helmSecret(readable),
 		helmSecret(hidden),
 		fromMaps,
-		&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "demo"}},
-		&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "locked"}},
+		&corev1.Namespace{Name: "demo"},
+		&corev1.Namespace{Name: "locked"},
 	)
 	meta := mirrorMeta(cs)
 	meta.PrependReactor("list", "secrets", func(action k8stesting.Action) (bool, runtime.Object, error) {
@@ -554,7 +546,7 @@ func TestListFollowsThePagesTheApiserverHandsBack(t *testing.T) {
 		page++
 		if page == 1 {
 			return true, &metav1.List{
-				ListMeta: metav1.ListMeta{Continue: "next-page"},
+				Continue: "next-page",
 				Items:    []runtime.RawExtension{{Object: metaOf(helmSecret(first))}},
 			}, nil
 		}
@@ -589,7 +581,7 @@ func TestListSaysWhenItStoppedReadingPages(t *testing.T) {
 			items = append(items, runtime.RawExtension{Object: metaOf(helmSecret(spec))})
 		}
 		return true, &metav1.List{
-			ListMeta: metav1.ListMeta{Continue: "next-page"},
+			Continue: "next-page",
 			Items:    items,
 		}, nil
 	})
@@ -733,10 +725,8 @@ func TestReleaseListDecodeConcurrencyMatchesTheProcessBudget(t *testing.T) {
 
 func TestALabelWithANonNumericRevisionReadsAsZero(t *testing.T) {
 	secret := &corev1.Secret{
-		ObjectMeta: metav1.ObjectMeta{
-			Namespace: "demo",
-			Labels:    map[string]string{"name": "podinfo", "version": "latest"},
-		},
+		Namespace: "demo",
+		Labels:    map[string]string{"name": "podinfo", "version": "latest"},
 	}
 
 	got := storedOf(DriverSecret, &secret.ObjectMeta, nil)

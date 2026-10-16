@@ -101,7 +101,7 @@ func mcpDeployment(t *testing.T, loaded *kube.Bundle, name string) {
 	labels := map[string]string{"app": name}
 	one := int32(1)
 	deployment := &appsv1.Deployment{
-		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: namespace},
+		Name: name, Namespace: namespace,
 		Spec: appsv1.DeploymentSpec{
 			Replicas: &one,
 			Selector: &metav1.LabelSelector{MatchLabels: labels},
@@ -233,7 +233,7 @@ func TestAReadOnlyMCPServerRefusesAWriteAndChangesNothing(t *testing.T) {
 func TestSuspendingACronJobThroughMCPReachesTheApiserver(t *testing.T) {
 	loaded := bundle(t)
 	job := &batchv1.CronJob{
-		ObjectMeta: metav1.ObjectMeta{Name: mcpCronJob, Namespace: namespace},
+		Name: mcpCronJob, Namespace: namespace,
 		Spec: batchv1.CronJobSpec{
 			Schedule: "0 0 31 2 *",
 			JobTemplate: batchv1.JobTemplateSpec{Spec: batchv1.JobSpec{

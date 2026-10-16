@@ -25,10 +25,8 @@ func pods(count int) []runtime.RawExtension {
 	items := make([]runtime.RawExtension, 0, count)
 	for i := range count {
 		items = append(items, runtime.RawExtension{Object: &metav1.PartialObjectMetadata{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      fmt.Sprintf("pod-%d", i),
-				Namespace: "default",
-			},
+			Name:      fmt.Sprintf("pod-%d", i),
+			Namespace: "default",
 		}})
 	}
 	return items

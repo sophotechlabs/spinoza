@@ -22,7 +22,7 @@ func TestDeleteRefusesAReplacement(t *testing.T) {
 	t.Cleanup(func() {
 		_ = objects.Delete(context.Background(), "recreated", metav1.DeleteOptions{})
 	})
-	old, err := objects.Create(ctx, &corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: "recreated"}}, metav1.CreateOptions{})
+	old, err := objects.Create(ctx, &corev1.ConfigMap{Name: "recreated"}, metav1.CreateOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -38,7 +38,7 @@ func TestDeleteRefusesAReplacement(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	replacement, err := objects.Create(ctx, &corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: old.Name}}, metav1.CreateOptions{})
+	replacement, err := objects.Create(ctx, &corev1.ConfigMap{Name: old.Name}, metav1.CreateOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}

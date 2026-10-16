@@ -59,7 +59,7 @@ func serviceAccountToken(t *testing.T, loaded *kube.Bundle) string {
 	t.Helper()
 	ctx := t.Context()
 	_, err := loaded.Clientset.CoreV1().ServiceAccounts(namespace).Create(ctx, &corev1.ServiceAccount{
-		ObjectMeta: metav1.ObjectMeta{Name: "eks-shape"},
+		Name: "eks-shape",
 	}, metav1.CreateOptions{})
 	if err != nil && !apierrors.IsAlreadyExists(err) {
 		t.Fatalf("create service account: %v", err)

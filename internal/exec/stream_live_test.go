@@ -217,8 +217,8 @@ func TestStreamReportsABrokenConfig(t *testing.T) {
 		t.Fatalf("clientset: %v", err)
 	}
 	streamer := NewStreamer(cs, &restclient.Config{
-		Host:            srv.URL,
-		TLSClientConfig: restclient.TLSClientConfig{CAFile: "/nonexistent/ca.crt"},
+		Host:   srv.URL,
+		CAFile: "/nonexistent/ca.crt",
 	})
 
 	streamErr := streamer.Stream(context.Background(), Request{Namespace: "monitoring", Pod: "loki-0"}, Options{

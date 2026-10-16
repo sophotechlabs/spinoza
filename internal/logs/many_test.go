@@ -12,7 +12,6 @@ import (
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
 )
@@ -48,7 +47,7 @@ func (apiserver *cluster) serveList(w http.ResponseWriter, r *http.Request) {
 	list := corev1.PodList{}
 	for _, name := range names {
 		list.Items = append(list.Items, corev1.Pod{
-			ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: "prod"},
+			Name: name, Namespace: "prod",
 		})
 	}
 	w.Header().Set("Content-Type", "application/json")
@@ -556,7 +555,7 @@ func TestAPodWithSeveralContainersIsAskedAboutOneOfThem(t *testing.T) {
 			return
 		}
 		list := corev1.PodList{Items: []corev1.Pod{{
-			ObjectMeta: metav1.ObjectMeta{Name: "web-0", Namespace: "prod"},
+			Name: "web-0", Namespace: "prod",
 			Spec: corev1.PodSpec{Containers: []corev1.Container{
 				{Name: "app"},
 				{Name: "sidecar"},
@@ -592,12 +591,10 @@ func TestThePodsOwnDefaultContainerWins(t *testing.T) {
 			return
 		}
 		list := corev1.PodList{Items: []corev1.Pod{{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:        "web-0",
-				Namespace:   "prod",
-				Annotations: map[string]string{defaultContainer: "sidecar"},
-			},
-			Spec: corev1.PodSpec{Containers: []corev1.Container{{Name: "app"}, {Name: "sidecar"}}},
+			Name:        "web-0",
+			Namespace:   "prod",
+			Annotations: map[string]string{defaultContainer: "sidecar"},
+			Spec:        corev1.PodSpec{Containers: []corev1.Container{{Name: "app"}, {Name: "sidecar"}}},
 		}}}
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(list)
@@ -629,12 +626,10 @@ func TestAChosenContainerBeatsThePodsDefault(t *testing.T) {
 			return
 		}
 		list := corev1.PodList{Items: []corev1.Pod{{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:        "web-0",
-				Namespace:   "prod",
-				Annotations: map[string]string{defaultContainer: "sidecar"},
-			},
-			Spec: corev1.PodSpec{Containers: []corev1.Container{{Name: "app"}, {Name: "sidecar"}}},
+			Name:        "web-0",
+			Namespace:   "prod",
+			Annotations: map[string]string{defaultContainer: "sidecar"},
+			Spec:        corev1.PodSpec{Containers: []corev1.Container{{Name: "app"}, {Name: "sidecar"}}},
 		}}}
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(list)
@@ -908,7 +903,7 @@ func TestAPodRecreatedWithoutAListingGapIsReadAgain(t *testing.T) {
 		}
 		mu.Unlock()
 		list := corev1.PodList{Items: []corev1.Pod{{
-			ObjectMeta: metav1.ObjectMeta{Name: "web-0", Namespace: "prod", UID: types.UID(current)},
+			Name: "web-0", Namespace: "prod", UID: types.UID(current),
 		}}}
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(list)

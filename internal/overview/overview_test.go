@@ -784,7 +784,7 @@ func TestBuildSaysWhenThereAreMorePodsThanItWillCount(t *testing.T) {
 	meta.PrependReactor("list", "pods", func(k8stesting.Action) (bool, runtime.Object, error) {
 		out := &metav1.List{Items: []runtime.RawExtension{{
 			Object: &metav1.PartialObjectMetadata{
-				ObjectMeta: metav1.ObjectMeta{Name: "one", Namespace: "default"},
+				Name: "one", Namespace: "default",
 			},
 		}}}
 		out.Continue = strconv.FormatInt(token.Add(1), 10)

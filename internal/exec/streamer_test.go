@@ -26,10 +26,8 @@ func TestFallbackExecutorIsBuiltForBothProtocols(t *testing.T) {
 func TestFallbackExecutorReportsABrokenConfig(t *testing.T) {
 	endpoint, _ := url.Parse("https://api.example:6443/exec")
 	config := &restclient.Config{
-		Host: endpoint.Host,
-		TLSClientConfig: restclient.TLSClientConfig{
-			CAFile: "/nonexistent/ca.crt",
-		},
+		Host:   endpoint.Host,
+		CAFile: "/nonexistent/ca.crt",
 	}
 	_, err := fallbackExecutor(config, endpoint)
 	if err == nil {

@@ -41,11 +41,9 @@ func TestSearchReplacesNonpositiveLimitsWithSafeDefaults(t *testing.T) {
 
 func meta(group, version, kind, namespace, name string) *metav1.PartialObjectMetadata {
 	return &metav1.PartialObjectMetadata{
-		TypeMeta: metav1.TypeMeta{
-			APIVersion: schema.GroupVersion{Group: group, Version: version}.String(),
-			Kind:       kind,
-		},
-		ObjectMeta: metav1.ObjectMeta{Namespace: namespace, Name: name},
+		APIVersion: schema.GroupVersion{Group: group, Version: version}.String(),
+		Kind:       kind,
+		Namespace:  namespace, Name: name,
 	}
 }
 

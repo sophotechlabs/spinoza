@@ -6,7 +6,6 @@ import (
 	"testing"
 
 	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	k8sfake "k8s.io/client-go/kubernetes/fake"
 
 	"github.com/sophotechlabs/spinoza/internal/logs"
@@ -27,8 +26,8 @@ func (s stubBackend) Logs(_ context.Context, _ logs.Request) (*logs.Stream, erro
 func openedStream(t *testing.T) *logs.Stream {
 	t.Helper()
 	pod := &corev1.Pod{
-		ObjectMeta: metav1.ObjectMeta{Name: "api", Namespace: "web"},
-		Spec:       corev1.PodSpec{Containers: []corev1.Container{{Name: "app"}}},
+		Name: "api", Namespace: "web",
+		Spec: corev1.PodSpec{Containers: []corev1.Container{{Name: "app"}}},
 	}
 	stream, err := logs.Open(t.Context(), k8sfake.NewClientset(pod), logs.Request{
 		Namespace: "web",

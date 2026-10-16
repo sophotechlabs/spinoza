@@ -13,7 +13,6 @@ import (
 
 	"github.com/coder/websocket"
 	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -50,7 +49,7 @@ func (c *talkative) serveList(w http.ResponseWriter) {
 	list := corev1.PodList{}
 	for _, name := range names {
 		list.Items = append(list.Items, corev1.Pod{
-			ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: "prod"},
+			Name: name, Namespace: "prod",
 		})
 	}
 	w.Header().Set("Content-Type", "application/json")

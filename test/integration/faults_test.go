@@ -27,7 +27,7 @@ const (
 
 func faultsNamespaceExists(t *testing.T, loaded *kube.Bundle) {
 	t.Helper()
-	space := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: faultsNamespace}}
+	space := &corev1.Namespace{Name: faultsNamespace}
 	_, err := loaded.Clientset.CoreV1().Namespaces().Create(context.Background(), space, metav1.CreateOptions{})
 	if err != nil && !apierrors.IsAlreadyExists(err) {
 		t.Fatalf("create namespace: %v", err)
@@ -43,7 +43,7 @@ func unbindableClaim(t *testing.T, loaded *kube.Bundle) {
 	t.Helper()
 	nothing := "spinoza-no-such-class"
 	claim := &corev1.PersistentVolumeClaim{
-		ObjectMeta: metav1.ObjectMeta{Name: "never-binds", Namespace: faultsNamespace},
+		Name: "never-binds", Namespace: faultsNamespace,
 		Spec: corev1.PersistentVolumeClaimSpec{
 			StorageClassName: &nothing,
 			AccessModes:      []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOnce},
@@ -68,7 +68,7 @@ func unbindableClaim(t *testing.T, loaded *kube.Bundle) {
 func serviceSelectingNothing(t *testing.T, loaded *kube.Bundle) {
 	t.Helper()
 	service := &corev1.Service{
-		ObjectMeta: metav1.ObjectMeta{Name: "answers-nothing", Namespace: faultsNamespace},
+		Name: "answers-nothing", Namespace: faultsNamespace,
 		Spec: corev1.ServiceSpec{
 			Selector: map[string]string{"app": "nothing-has-this-label"},
 			Ports:    []corev1.ServicePort{{Port: 80}},
@@ -92,11 +92,9 @@ func podHeldByAFinalizer(t *testing.T, loaded *kube.Bundle) {
 	pods := loaded.Clientset.CoreV1().Pods(faultsNamespace)
 	grace := int64(1)
 	pod := &corev1.Pod{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:       "will-not-go",
-			Namespace:  faultsNamespace,
-			Finalizers: []string{"spinoza.tech/held-for-the-audit"},
-		},
+		Name:       "will-not-go",
+		Namespace:  faultsNamespace,
+		Finalizers: []string{"spinoza.tech/held-for-the-audit"},
 		Spec: corev1.PodSpec{
 			TerminationGracePeriodSeconds: &grace,
 			Containers: []corev1.Container{{

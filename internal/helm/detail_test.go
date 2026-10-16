@@ -10,7 +10,6 @@ import (
 	"testing"
 
 	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	k8sfake "k8s.io/client-go/kubernetes/fake"
 	k8stesting "k8s.io/client-go/testing"
@@ -319,12 +318,10 @@ func TestAManifestDocumentWithNoNameIsSkipped(t *testing.T) {
 func TestDetailReadsAReleaseStoredInAConfigMap(t *testing.T) {
 	spec := sampleRelease()
 	entry := &corev1.ConfigMap{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "sh.helm.release.v1.podinfo.v3",
-			Namespace: "demo",
-			Labels: map[string]string{
-				"owner": "helm", "name": "podinfo", "version": "3", "status": "deployed",
-			},
+		Name:      "sh.helm.release.v1.podinfo.v3",
+		Namespace: "demo",
+		Labels: map[string]string{
+			"owner": "helm", "name": "podinfo", "version": "3", "status": "deployed",
 		},
 		Data: map[string]string{releaseKey: base64.StdEncoding.EncodeToString(gzipped(detailPayload(spec)))},
 	}

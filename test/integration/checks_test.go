@@ -40,7 +40,7 @@ func failingDeployment(t *testing.T, loaded *kube.Bundle) {
 	var noGrace int64
 	keptRevisions := int32(50)
 	deployment := &appsv1.Deployment{
-		ObjectMeta: metav1.ObjectMeta{Name: auditWorkload},
+		Name: auditWorkload,
 		Spec: appsv1.DeploymentSpec{
 			RevisionHistoryLimit: &keptRevisions,
 			Selector:             &metav1.LabelSelector{MatchLabels: map[string]string{"app": auditWorkload}},
@@ -78,15 +78,11 @@ func failingDeployment(t *testing.T, loaded *kube.Bundle) {
 						}},
 					}},
 					Volumes: []corev1.Volume{{
-						Name: "runtime-sock",
-						VolumeSource: corev1.VolumeSource{
-							HostPath: &corev1.HostPathVolumeSource{Path: "/var/run/docker.sock"},
-						},
+						Name:     "runtime-sock",
+						HostPath: &corev1.HostPathVolumeSource{Path: "/var/run/docker.sock"},
 					}, {
-						Name: "host-etc",
-						VolumeSource: corev1.VolumeSource{
-							HostPath: &corev1.HostPathVolumeSource{Path: "/etc"},
-						},
+						Name:     "host-etc",
+						HostPath: &corev1.HostPathVolumeSource{Path: "/etc"},
 					}},
 				},
 			},
@@ -193,10 +189,8 @@ const packagedWorkload = "aaa-packaged-target"
 func packagedDeployment(t *testing.T, loaded *kube.Bundle) {
 	t.Helper()
 	deployment := &appsv1.Deployment{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:        packagedWorkload,
-			Annotations: map[string]string{"meta.helm.sh/release-name": "audit-chart"},
-		},
+		Name:        packagedWorkload,
+		Annotations: map[string]string{"meta.helm.sh/release-name": "audit-chart"},
 		Spec: appsv1.DeploymentSpec{
 			Selector: &metav1.LabelSelector{MatchLabels: map[string]string{"app": packagedWorkload}},
 			Template: corev1.PodTemplateSpec{
@@ -381,7 +375,7 @@ func overprovisionedDeployment(t *testing.T, loaded *kube.Bundle) {
 	t.Helper()
 	replicas := int32(1)
 	deployment := &appsv1.Deployment{
-		ObjectMeta: metav1.ObjectMeta{Name: usageWorkload},
+		Name: usageWorkload,
 		Spec: appsv1.DeploymentSpec{
 			Replicas: &replicas,
 			Selector: &metav1.LabelSelector{MatchLabels: map[string]string{"app": usageWorkload}},
@@ -398,10 +392,8 @@ func overprovisionedDeployment(t *testing.T, loaded *kube.Bundle) {
 						VolumeMounts: []corev1.VolumeMount{{Name: "scratch", MountPath: "/scratch"}},
 					}},
 					Volumes: []corev1.Volume{{
-						Name: "scratch",
-						VolumeSource: corev1.VolumeSource{
-							EmptyDir: &corev1.EmptyDirVolumeSource{Medium: corev1.StorageMediumMemory},
-						},
+						Name:     "scratch",
+						EmptyDir: &corev1.EmptyDirVolumeSource{Medium: corev1.StorageMediumMemory},
 					}},
 				},
 			},
