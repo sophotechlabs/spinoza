@@ -38,7 +38,24 @@ func useDesktopArgs(t *testing.T, args ...string) {
 	})
 }
 
+func useDesktopConfigDir(t *testing.T) string {
+	t.Helper()
+	root := t.TempDir()
+	t.Setenv("HOME", root)
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(root, "config"))
+	t.Setenv("AppData", filepath.Join(root, "config"))
+	dir, err := os.UserConfigDir()
+	if err != nil {
+		t.Fatalf("config dir: %v", err)
+	}
+	if !strings.HasPrefix(dir, root) {
+		t.Fatalf("config dir %q is outside the test's own %q", dir, root)
+	}
+	return dir
+}
+
 func TestRunDesktopReportsAnInvalidLogLevel(t *testing.T) {
+	useDesktopConfigDir(t)
 	useDesktopArgs(t, "-log-level", "verbose")
 
 	err := runDesktop()
@@ -51,7 +68,7 @@ func TestRunDesktopReportsAnInvalidLogLevel(t *testing.T) {
 func TestRunDesktopReportsAnUnreadableKubeconfig(t *testing.T) {
 	preserveDesktopLogger(t)
 	config := filepath.Join(t.TempDir(), "missing-kubeconfig")
-	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	useDesktopConfigDir(t)
 	useDesktopArgs(t, "-kubeconfig", config, "-context", "missing")
 
 	err := runDesktop()
@@ -69,7 +86,7 @@ func TestRunDesktopReportsWhenItsTokenCannotBeWritten(t *testing.T) {
 	configDir := t.TempDir()
 	config := filepath.Join(configDir, "missing-kubeconfig")
 	token := filepath.Join(configDir, "missing", "access-token")
-	t.Setenv("XDG_CONFIG_HOME", configDir)
+	useDesktopConfigDir(t)
 	useDesktopArgs(t, "-kubeconfig", config, "-token-file", token)
 
 	err := runDesktop()
@@ -97,8 +114,7 @@ func TestBlankPageIsACompleteHTMLResponse(t *testing.T) {
 }
 
 func TestLogFileCreatesThePrivateDesktopLog(t *testing.T) {
-	config := t.TempDir()
-	t.Setenv("XDG_CONFIG_HOME", config)
+	config := useDesktopConfigDir(t)
 
 	held, openErr := logFile()
 	if openErr != nil {
@@ -133,11 +149,13 @@ func TestLogFileCreatesThePrivateDesktopLog(t *testing.T) {
 }
 
 func TestLogFileReportsWhenItsDirectoryCannotBeCreated(t *testing.T) {
-	config := filepath.Join(t.TempDir(), "not-a-directory")
+	config := useDesktopConfigDir(t)
+	if err := os.MkdirAll(filepath.Dir(config), 0o755); err != nil {
+		t.Fatalf("seed config parent: %v", err)
+	}
 	if err := os.WriteFile(config, []byte("occupied"), 0o600); err != nil {
 		t.Fatalf("seed config path: %v", err)
 	}
-	t.Setenv("XDG_CONFIG_HOME", config)
 
 	_, err := logFile()
 
@@ -147,12 +165,11 @@ func TestLogFileReportsWhenItsDirectoryCannotBeCreated(t *testing.T) {
 }
 
 func TestLogFileReportsWhenTheLogPathIsADirectory(t *testing.T) {
-	config := t.TempDir()
+	config := useDesktopConfigDir(t)
 	path := filepath.Join(config, "spinoza", "desktop.log")
 	if err := os.MkdirAll(path, 0o755); err != nil {
 		t.Fatalf("seed log directory: %v", err)
 	}
-	t.Setenv("XDG_CONFIG_HOME", config)
 
 	_, err := logFile()
 
@@ -163,7 +180,7 @@ func TestLogFileReportsWhenTheLogPathIsADirectory(t *testing.T) {
 
 func TestStartLoggingKeepsAFileWhenOneCanBeCreated(t *testing.T) {
 	preserveDesktopLogger(t)
-	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	useDesktopConfigDir(t)
 
 	kept := startLogging(slog.LevelInfo, logText)
 
