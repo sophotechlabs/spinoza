@@ -72,7 +72,8 @@ releases and GitOps, without switching tab.
 ## Checks
 
 128 checks over security, reliability and efficiency, decided against the live cluster rather than a
-parsed manifest, and labelled PSS baseline, PSS restricted or NSA/CISA where a framework covers them.
+parsed manifest, and labelled PSS baseline, PSS restricted, NSA/CISA or CIS Kubernetes Benchmark where
+a framework covers them.
 They read workloads, RBAC, networking, storage and your own custom resources, and warn about APIs a
 coming release removes and certificates about to expire.
 
@@ -123,7 +124,7 @@ Every change Spinoza made, kept per cluster, with what changed and when.
 
 Flux and Argo CD side by side: cluster sync, controller health, per-kind lists, status tiles. Reconcile, suspend and resume Flux objects. Sync and refresh Argo Applications.
 
-![Spinoza Flux overview: all systems operational, controller health and resource usage, and counts for appliers and sources](docs/images/flux-overview.png)
+![Spinoza Flux overview: all systems operational, cluster sync from a GitRepository, controller health and resource usage, and counts for appliers and sources](docs/images/flux-overview.png)
 
 The dependency graph is laid out by what manages what. Argo's is the app-of-apps, ApplicationSets above what they generate. A node opens in the drawer with its actions.
 
