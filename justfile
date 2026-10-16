@@ -350,7 +350,7 @@ cluster-gitops:
     helm --kube-context {{ test_context }} repo update
     helm --kube-context {{ test_context }} upgrade --install flux fluxcd-community/flux2 \
         --namespace flux-system --create-namespace --wait --timeout 10m
-    argocd_values=(--set dex.enabled=false --set notifications.enabled=false --set applicationSet.enabled=true)
+    argocd_values=(--set dex.enabled=false --set notifications.enabled=false --set applicationSet.enabled=true --set redis.image.repository=mirror.gcr.io/library/redis)
     argocd_images=$(helm template argocd argo/argo-cd --version {{ argocd_chart }} --namespace argocd "${argocd_values[@]}" | yq -N '.. | select(tag == "!!map") | select(has("image")) | .image' | sort -u)
     just kind-sideload $argocd_images
     helm --kube-context {{ test_context }} upgrade --install argocd argo/argo-cd --version {{ argocd_chart }} \
@@ -1367,7 +1367,7 @@ handoff-gate: stub-assets
     if printf '%s\n' "$changed" | grep -qE '(\.go|^go\.mod|^go\.sum)$'; then
         just ci-go-lint
         go build ./...
-        packages=$(printf '%s\n' "$changed" | grep -E '\.go$' | xargs -n1 dirname | sort -u)
+        packages=$(printf '%s\n' "$changed" | sed -n 's|/[^/]*\.go$||p; s|^[^/]*\.go$|.|p' | sort -u)
         existing=()
         for package in $packages; do
             case "$package" in
@@ -1393,7 +1393,7 @@ handoff-gate: stub-assets
             npm --prefix frontend ci
         fi
         just lint-fe
-        cd frontend && npm test && cd ..
+        npm --prefix frontend test
     fi
     if printf '%s\n' "$changed" | grep -q '^e2e/'; then
         just lint-e2e
