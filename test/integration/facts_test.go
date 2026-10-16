@@ -10,10 +10,11 @@ import (
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/equality"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/util/retry"
 
 	"github.com/sophotechlabs/spinoza/internal/api"
 	"github.com/sophotechlabs/spinoza/internal/checks"
@@ -31,10 +32,8 @@ const (
 func factsNamespaceExists(t *testing.T, loaded *kube.Bundle) {
 	t.Helper()
 	space := &corev1.Namespace{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:   factsNamespace,
-			Labels: map[string]string{"pod-security.kubernetes.io/enforce": "baseline"},
-		},
+		Name:   factsNamespace,
+		Labels: map[string]string{"pod-security.kubernetes.io/enforce": "baseline"},
 	}
 	_, err := loaded.Clientset.CoreV1().Namespaces().Create(context.Background(), space, metav1.CreateOptions{})
 	if err != nil && !apierrors.IsAlreadyExists(err) {
@@ -58,7 +57,7 @@ func factsWorkload(t *testing.T, loaded *kube.Bundle, name string, count int32, 
 	}
 	shape(&pod)
 	deployment := &appsv1.Deployment{
-		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: factsNamespace},
+		Name: name, Namespace: factsNamespace,
 		Spec: appsv1.DeploymentSpec{
 			Replicas: &count,
 			Selector: &metav1.LabelSelector{MatchLabels: map[string]string{"app": name}},
@@ -88,26 +87,65 @@ func taintOneNode(t *testing.T, loaded *kube.Bundle) string {
 		t.Fatalf("list nodes: %v", err)
 	}
 	name := nodes.Items[0].Name
-	patch := []byte(`{"spec":{"taints":[{"key":"spinoza-audit","value":"yes","effect":"NoSchedule"}]}}`)
-	_, err = loaded.Clientset.CoreV1().Nodes().Patch(
-		context.Background(), name, types.StrategicMergePatchType, patch, metav1.PatchOptions{},
-	)
+	theirs := withoutTaint(nodes.Items[0].Spec.Taints, auditTaint.Key)
+	_, err = updateTaints(loaded, name, func(taints []corev1.Taint) []corev1.Taint {
+		return append(withoutTaint(taints, auditTaint.Key), auditTaint)
+	})
 	if err != nil {
 		t.Fatalf("taint %s: %v", name, err)
 	}
 	t.Cleanup(func() {
-		untaint := []byte(`{"spec":{"taints":null}}`)
-		_, _ = loaded.Clientset.CoreV1().Nodes().Patch(
-			context.Background(), name, types.StrategicMergePatchType, untaint, metav1.PatchOptions{},
-		)
+		untainted, untaintErr := updateTaints(loaded, name, func(taints []corev1.Taint) []corev1.Taint {
+			return withoutTaint(taints, auditTaint.Key)
+		})
+		if untaintErr != nil {
+			t.Errorf("untaint %s: %v", name, untaintErr)
+			return
+		}
+		if !equality.Semantic.DeepEqual(untainted.Spec.Taints, theirs) {
+			t.Errorf("%s left with taints %v, it had %v before the test", name, untainted.Spec.Taints, theirs)
+		}
 	})
 	return name
+}
+
+var auditTaint = corev1.Taint{Key: "spinoza-audit", Value: "yes", Effect: corev1.TaintEffectNoSchedule}
+
+func updateTaints(
+	loaded *kube.Bundle,
+	name string,
+	change func([]corev1.Taint) []corev1.Taint,
+) (*corev1.Node, error) {
+	nodes := loaded.Clientset.CoreV1().Nodes()
+	var updated *corev1.Node
+	err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		node, getErr := nodes.Get(context.Background(), name, metav1.GetOptions{})
+		if getErr != nil {
+			return getErr
+		}
+		node.Spec.Taints = change(node.Spec.Taints)
+		saved, updateErr := nodes.Update(context.Background(), node, metav1.UpdateOptions{})
+		updated = saved
+		return updateErr
+	})
+	return updated, err
+}
+
+func withoutTaint(taints []corev1.Taint, key string) []corev1.Taint {
+	kept := make([]corev1.Taint, 0, len(taints))
+	for _, taint := range taints {
+		if taint.Key == key {
+			continue
+		}
+		kept = append(kept, taint)
+	}
+	return kept
 }
 
 func limitRangeExists(t *testing.T, loaded *kube.Bundle) {
 	t.Helper()
 	limits := &corev1.LimitRange{
-		ObjectMeta: metav1.ObjectMeta{Name: "floor", Namespace: factsNamespace},
+		Name: "floor", Namespace: factsNamespace,
 		Spec: corev1.LimitRangeSpec{Limits: []corev1.LimitRangeItem{{
 			Type: corev1.LimitTypeContainer,
 			Min:  corev1.ResourceList{corev1.ResourceMemory: resource.MustParse("128Mi")},
@@ -124,7 +162,7 @@ func limitRangeExists(t *testing.T, loaded *kube.Bundle) {
 func spentQuotaExists(t *testing.T, loaded *kube.Bundle) {
 	t.Helper()
 	quota := &corev1.ResourceQuota{
-		ObjectMeta: metav1.ObjectMeta{Name: spentQuota, Namespace: factsNamespace},
+		Name: spentQuota, Namespace: factsNamespace,
 		Spec: corev1.ResourceQuotaSpec{Hard: corev1.ResourceList{
 			quotaCounted: resource.MustParse("1"),
 		}},
