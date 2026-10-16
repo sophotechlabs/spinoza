@@ -47,7 +47,7 @@ test.afterAll(() => {
 });
 
 async function settle(page: Page): Promise<void> {
-  await page.waitForLoadState('networkidle').catch(() => undefined);
+  await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => undefined);
   await page.waitForTimeout(1_500);
 }
 
@@ -180,10 +180,13 @@ test('forwarding a port', async ({ page }) => {
   await page.getByRole('tab', { name: 'Overview' }).click();
   await page.getByRole('button', { name: 'Forward', exact: true }).click();
   await page.getByRole('tab', { name: 'Forwards', exact: true }).click();
-  await expect(page.getByRole('tabpanel', { name: 'Forwards' })).toContainText('healthy-', {
+  const forwards = page.getByRole('tabpanel', { name: 'Forwards' });
+  await expect(forwards).toContainText('healthy-', {
     timeout: 60_000,
   });
   await shoot(page, 'port-forward');
+  await forwards.getByRole('button', { name: 'Stop', exact: true }).click();
+  await expect(forwards).toContainText('No active forwards', { timeout: 30_000 });
 });
 
 test('what a release put in the cluster', async ({ page }) => {
