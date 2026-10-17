@@ -1,58 +1,58 @@
 {
-  "sha": "900025c6849bc8173cd0d5d3bc66146cbc257db9",
-  "runUrl": "https://github.com/sophotechlabs/spinoza/actions/runs/38531810842",
+  "sha": "d0cd2415da7fc6effdb8c31bd0c38b51864b37c1",
+  "runUrl": "https://github.com/sophotechlabs/spinoza/actions/runs/39012570716",
   "trigger": "schedule",
-  "finishedAt": "2026-10-14T08:45:49.931Z",
+  "finishedAt": "2026-10-17T07:51:32.987Z",
   "jobs": {
     "total": 95,
-    "failed": 1,
-    "minutes": 822.8
+    "failed": 0,
+    "minutes": 749.2
   },
   "groups": [
     {
       "name": "cluster-mode-release",
       "conclusion": "success",
-      "minutes": 3.7
+      "minutes": 3.3
     },
     {
       "name": "e2e / checks-issues-worklist / chromium",
       "conclusion": "success",
-      "minutes": 8.6
+      "minutes": 7.3
     },
     {
       "name": "e2e / checks-issues-worklist / firefox",
       "conclusion": "success",
-      "minutes": 9.2
+      "minutes": 7.7
     },
     {
       "name": "e2e / checks-issues-worklist / webkit",
       "conclusion": "success",
-      "minutes": 9.2
+      "minutes": 8
     },
     {
       "name": "e2e / cluster mode / chromium",
       "conclusion": "success",
-      "minutes": 6.7
+      "minutes": 6
     },
     {
       "name": "e2e / cluster mode / firefox",
       "conclusion": "success",
-      "minutes": 5.8
+      "minutes": 6.8
     },
     {
       "name": "e2e / cluster mode / webkit",
       "conclusion": "success",
-      "minutes": 7.2
+      "minutes": 6.9
     },
     {
       "name": "e2e / cluster-mode-auth",
       "conclusion": "success",
-      "minutes": 10.5
+      "minutes": 9.5
     },
     {
       "name": "e2e / distribution-desktop-install",
       "conclusion": "success",
-      "minutes": 0.2
+      "minutes": 0.1
     },
     {
       "name": "e2e / e2e-coverage",
@@ -62,267 +62,267 @@
     {
       "name": "e2e / foundation-security / chromium",
       "conclusion": "success",
-      "minutes": 5
+      "minutes": 3.3
     },
     {
       "name": "e2e / foundation-security / firefox",
       "conclusion": "success",
-      "minutes": 5.2
+      "minutes": 3.3
     },
     {
       "name": "e2e / foundation-security / webkit",
       "conclusion": "success",
-      "minutes": 5.3
+      "minutes": 3.8
     },
     {
       "name": "e2e / gitops / chromium",
       "conclusion": "success",
-      "minutes": 11.3
+      "minutes": 10.5
     },
     {
       "name": "e2e / gitops / firefox",
       "conclusion": "success",
-      "minutes": 10.7
+      "minutes": 9.1
     },
     {
       "name": "e2e / gitops / webkit",
       "conclusion": "success",
-      "minutes": 12.5
+      "minutes": 10.3
     },
     {
       "name": "e2e / helm / chromium",
       "conclusion": "success",
-      "minutes": 5.6
+      "minutes": 4.2
     },
     {
       "name": "e2e / helm / firefox",
       "conclusion": "success",
-      "minutes": 4.8
+      "minutes": 4.2
     },
     {
       "name": "e2e / helm / webkit",
       "conclusion": "success",
-      "minutes": 5.1
+      "minutes": 4.6
     },
     {
       "name": "e2e / inspect-compare-rbac-topology / chromium",
       "conclusion": "success",
-      "minutes": 10.1
+      "minutes": 8.4
     },
     {
       "name": "e2e / inspect-compare-rbac-topology / firefox",
       "conclusion": "success",
-      "minutes": 9.6
+      "minutes": 8.9
     },
     {
       "name": "e2e / inspect-compare-rbac-topology / webkit",
       "conclusion": "success",
-      "minutes": 10.8
+      "minutes": 9.7
     },
     {
       "name": "e2e / mcp-cli",
       "conclusion": "success",
-      "minutes": 3.3
+      "minutes": 3.2
     },
     {
       "name": "e2e / multicluster-fleet / chromium",
       "conclusion": "success",
-      "minutes": 12.3
+      "minutes": 8.8
     },
     {
       "name": "e2e / multicluster-fleet / firefox",
       "conclusion": "success",
-      "minutes": 9.8
+      "minutes": 10
     },
     {
       "name": "e2e / multicluster-fleet / webkit",
       "conclusion": "success",
-      "minutes": 11.2
+      "minutes": 9.5
     },
     {
       "name": "e2e / mutations-protection-history / chromium",
       "conclusion": "success",
-      "minutes": 5.5
+      "minutes": 4
     },
     {
       "name": "e2e / mutations-protection-history / firefox",
       "conclusion": "success",
-      "minutes": 6.4
+      "minutes": 4.1
     },
     {
       "name": "e2e / mutations-protection-history / webkit",
       "conclusion": "success",
-      "minutes": 6.7
+      "minutes": 5.1
     },
     {
       "name": "e2e / navigation-interaction / chromium",
       "conclusion": "success",
-      "minutes": 12.3
+      "minutes": 10.2
     },
     {
       "name": "e2e / navigation-interaction / firefox",
       "conclusion": "success",
-      "minutes": 11.6
+      "minutes": 11
     },
     {
       "name": "e2e / navigation-interaction / webkit",
       "conclusion": "success",
-      "minutes": 13
+      "minutes": 10
     },
     {
       "name": "e2e / observability-traffic / chromium",
       "conclusion": "success",
-      "minutes": 5.1
+      "minutes": 3.4
     },
     {
       "name": "e2e / observability-traffic / firefox",
       "conclusion": "success",
-      "minutes": 5.5
+      "minutes": 3.7
     },
     {
       "name": "e2e / observability-traffic / webkit",
       "conclusion": "success",
-      "minutes": 5.5
+      "minutes": 3.6
     },
     {
       "name": "e2e / outage / chromium",
       "conclusion": "success",
-      "minutes": 4.9
+      "minutes": 3.4
     },
     {
       "name": "e2e / outage / firefox",
       "conclusion": "success",
-      "minutes": 4.7
+      "minutes": 3.5
     },
     {
       "name": "e2e / outage / webkit",
       "conclusion": "success",
-      "minutes": 4.3
+      "minutes": 4
     },
     {
       "name": "e2e / resilience-capacity-soak / chromium",
       "conclusion": "success",
-      "minutes": 9
+      "minutes": 7.8
     },
     {
       "name": "e2e / resilience-capacity-soak / firefox",
       "conclusion": "success",
-      "minutes": 9.5
+      "minutes": 7.8
     },
     {
       "name": "e2e / resilience-capacity-soak / webkit",
       "conclusion": "success",
-      "minutes": 9.9
+      "minutes": 8.4
     },
     {
       "name": "e2e / resources-live-tables / chromium",
       "conclusion": "success",
-      "minutes": 10
+      "minutes": 9.1
     },
     {
       "name": "e2e / resources-live-tables / firefox",
       "conclusion": "success",
-      "minutes": 10.4
+      "minutes": 8.7
     },
     {
       "name": "e2e / resources-live-tables / webkit",
       "conclusion": "success",
-      "minutes": 10.7
+      "minutes": 9.2
     },
     {
       "name": "e2e / select",
       "conclusion": "success",
-      "minutes": 0.2
+      "minutes": 0.1
     },
     {
       "name": "e2e / streams-terminals-forwards / chromium",
       "conclusion": "success",
-      "minutes": 6.2
+      "minutes": 5
     },
     {
       "name": "e2e / streams-terminals-forwards / firefox",
       "conclusion": "success",
-      "minutes": 5.7
+      "minutes": 5.1
     },
     {
       "name": "e2e / streams-terminals-forwards / webkit",
       "conclusion": "success",
-      "minutes": 6.9
+      "minutes": 5.9
     },
     {
       "name": "e2e / suite-contract",
       "conclusion": "success",
-      "minutes": 0.3
+      "minutes": 0.4
     },
     {
       "name": "e2e / visual-accessibility / chromium",
-      "conclusion": "failure",
-      "minutes": 3.5
+      "conclusion": "success",
+      "minutes": 14
     },
     {
       "name": "e2e / visual-accessibility / firefox",
       "conclusion": "success",
-      "minutes": 15.5
+      "minutes": 14.7
     },
     {
       "name": "e2e / visual-accessibility / webkit",
       "conclusion": "success",
-      "minutes": 15.9
+      "minutes": 14.9
     },
     {
       "name": "fuzz / fuzz (., FuzzServingCheckPublicURL)",
       "conclusion": "success",
-      "minutes": 12.6
+      "minutes": 11.4
     },
     {
       "name": "fuzz / fuzz (./internal/access, FuzzDecisionAggregation)",
       "conclusion": "success",
-      "minutes": 11.2
+      "minutes": 10.3
     },
     {
       "name": "fuzz / fuzz (./internal/auth, FuzzRoleAuthorization)",
       "conclusion": "success",
-      "minutes": 10.7
+      "minutes": 10.3
     },
     {
       "name": "fuzz / fuzz (./internal/charts, FuzzChartIndex)",
       "conclusion": "success",
-      "minutes": 10.5
+      "minutes": 10.3
     },
     {
       "name": "fuzz / fuzz (./internal/charts, FuzzFetchableRepositoryURL)",
       "conclusion": "success",
-      "minutes": 10.6
+      "minutes": 10.3
     },
     {
       "name": "fuzz / fuzz (./internal/checks, FuzzParseRules)",
       "conclusion": "success",
-      "minutes": 11.3
+      "minutes": 10.6
     },
     {
       "name": "fuzz / fuzz (./internal/issues, FuzzCursor)",
       "conclusion": "success",
-      "minutes": 10.8
+      "minutes": 10.3
     },
     {
       "name": "fuzz / fuzz (./internal/mcp, FuzzProtocol)",
       "conclusion": "success",
-      "minutes": 11.6
+      "minutes": 10.5
     },
     {
       "name": "fuzz / fuzz (./internal/mcp, FuzzStdioFraming)",
       "conclusion": "success",
-      "minutes": 11.3
+      "minutes": 10.6
     },
     {
       "name": "fuzz / fuzz (./internal/store, FuzzHistoryLimit)",
       "conclusion": "success",
-      "minutes": 10.9
+      "minutes": 10.8
     },
     {
       "name": "fuzz / fuzz (./internal/store, FuzzTimelineCellsRoundTrip)",
       "conclusion": "success",
-      "minutes": 10.9
+      "minutes": 10.6
     },
     {
       "name": "install / alpine, busybox wget",
@@ -337,7 +337,7 @@
     {
       "name": "install / debian, curl on glibc",
       "conclusion": "success",
-      "minutes": 0.3
+      "minutes": 0.4
     },
     {
       "name": "install / debian, no downloader",
@@ -347,12 +347,12 @@
     {
       "name": "install / macos, binary and app",
       "conclusion": "success",
-      "minutes": 0.2
+      "minutes": 0.3
     },
     {
       "name": "install / windows amd64, binary and PATH",
       "conclusion": "success",
-      "minutes": 0.8
+      "minutes": 0.6
     },
     {
       "name": "install / windows arm64, binary and PATH",
@@ -362,92 +362,92 @@
     {
       "name": "mutation / mutation (checks-a-e)",
       "conclusion": "success",
-      "minutes": 15.4
+      "minutes": 14.1
     },
     {
       "name": "mutation / mutation (checks-f-j)",
       "conclusion": "success",
-      "minutes": 17.1
+      "minutes": 15.2
     },
     {
       "name": "mutation / mutation (checks-k-o)",
       "conclusion": "success",
-      "minutes": 10.6
+      "minutes": 9.5
     },
     {
       "name": "mutation / mutation (checks-p-r)",
       "conclusion": "success",
-      "minutes": 13
+      "minutes": 12.5
     },
     {
       "name": "mutation / mutation (checks-s-t)",
       "conclusion": "success",
-      "minutes": 7.3
+      "minutes": 9.4
     },
     {
       "name": "mutation / mutation (checks-u-z)",
       "conclusion": "success",
-      "minutes": 5.4
+      "minutes": 3.6
     },
     {
       "name": "mutation / mutation (cmd)",
       "conclusion": "success",
-      "minutes": 2.5
+      "minutes": 0.8
     },
     {
       "name": "mutation / mutation (internal-a-d)",
       "conclusion": "success",
-      "minutes": 15.1
+      "minutes": 15.9
     },
     {
       "name": "mutation / mutation (internal-e-l)",
       "conclusion": "success",
-      "minutes": 35.1
+      "minutes": 26.7
     },
     {
       "name": "mutation / mutation (internal-m-r)",
       "conclusion": "success",
-      "minutes": 12.8
+      "minutes": 15.3
     },
     {
       "name": "mutation / mutation (internal-s-z)",
       "conclusion": "success",
-      "minutes": 7.7
+      "minutes": 8.1
     },
     {
       "name": "mutation / mutation (resources-a-f)",
       "conclusion": "success",
-      "minutes": 7
+      "minutes": 3.6
     },
     {
       "name": "mutation / mutation (resources-g-l)",
       "conclusion": "success",
-      "minutes": 2.7
+      "minutes": 1.2
     },
     {
       "name": "mutation / mutation (resources-m-r)",
       "conclusion": "success",
-      "minutes": 14.7
+      "minutes": 13
     },
     {
       "name": "mutation / mutation (resources-s-z)",
       "conclusion": "success",
-      "minutes": 5.5
+      "minutes": 4.7
     },
     {
       "name": "mutation / mutation (root-default)",
       "conclusion": "success",
-      "minutes": 7.2
+      "minutes": 5.2
     },
     {
       "name": "mutation / mutation (root-desktop)",
       "conclusion": "success",
-      "minutes": 7.2
+      "minutes": 5.3
     },
     {
       "name": "mutation / mutation (server-a-c)",
       "conclusion": "success",
-      "minutes": 23.7
+      "minutes": 23.1
     },
     {
       "name": "mutation / mutation (server-d-e)",
@@ -457,22 +457,22 @@
     {
       "name": "mutation / mutation (server-f)",
       "conclusion": "success",
-      "minutes": 16
+      "minutes": 14.5
     },
     {
       "name": "mutation / mutation (server-g-l)",
       "conclusion": "success",
-      "minutes": 28.5
+      "minutes": 26.7
     },
     {
       "name": "mutation / mutation (server-m-r)",
       "conclusion": "success",
-      "minutes": 11
+      "minutes": 10.8
     },
     {
       "name": "mutation / mutation (server-s-z)",
       "conclusion": "success",
-      "minutes": 26
+      "minutes": 32.6
     },
     {
       "name": "mutation / mutation-total",
@@ -482,25 +482,15 @@
     {
       "name": "repeat",
       "conclusion": "success",
-      "minutes": 5.6
+      "minutes": 6.5
     }
   ],
-  "failures": [
-    "e2e / visual-accessibility / chromium"
-  ],
-  "flaky": [
-    {
-      "title": "a readable workload still keeps mutation controls disabled for a limited user",
-      "file": "specs/access.spec.ts",
-      "line": 78,
-      "project": "firefox",
-      "attempts": 2
-    }
-  ],
-  "e2eCoverage": 65.2,
+  "failures": [],
+  "flaky": [],
+  "e2eCoverage": 64.9,
   "mutation": {
     "shards": 73,
-    "killed": 7809,
+    "killed": 7824,
     "lived": 0,
     "uncovered": 341,
     "score": 100
@@ -508,33 +498,33 @@
   "systemCoverage": [
     {
       "suite": "cluster-mode-auth",
-      "covered": 5276,
-      "total": 22027,
-      "percent": 24
+      "covered": 5250,
+      "total": 22065,
+      "percent": 23.8
     },
     {
       "suite": "cluster-mode-chromium",
-      "covered": 4114,
-      "total": 22027,
+      "covered": 4119,
+      "total": 22065,
       "percent": 18.7
     },
     {
       "suite": "cluster-mode-firefox",
-      "covered": 4115,
-      "total": 22027,
+      "covered": 4117,
+      "total": 22065,
       "percent": 18.7
     },
     {
       "suite": "cluster-mode-webkit",
-      "covered": 4118,
-      "total": 22027,
+      "covered": 4116,
+      "total": 22065,
       "percent": 18.7
     },
     {
       "suite": "mcp-cli",
       "covered": 833,
-      "total": 22188,
-      "percent": 3.8
+      "total": 22226,
+      "percent": 3.7
     }
   ]
 }
