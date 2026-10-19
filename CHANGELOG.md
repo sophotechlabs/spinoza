@@ -1,5 +1,29 @@
 # Changelog
 
+## [2.2.5](https://github.com/sophotechlabs/spinoza/compare/v2.2.4...v2.2.5) (2026-10-19)
+
+
+### Bug Fixes
+
+* **actions:** show every pod in the drain plan, the ones that need attention first ([87ff963](https://github.com/sophotechlabs/spinoza/commit/87ff963db3aea0984a294fcb3ec17e369a171aeb))
+
+
+### Miscellaneous
+
+* **ci:** nightly report for 2026-10-18 ([#68](https://github.com/sophotechlabs/spinoza/issues/68)) ([21ee44e](https://github.com/sophotechlabs/spinoza/commit/21ee44ed3c281d0ff2e55cb31dbb9d6c102c4e19))
+
+
+### Documentation
+
+* recapture the flux and drain screenshots and name the CIS labels ([d0cd241](https://github.com/sophotechlabs/spinoza/commit/d0cd2415da7fc6effdb8c31bd0c38b51864b37c1))
+* recapture the README screenshots on 2.2.3 ([add7ef7](https://github.com/sophotechlabs/spinoza/commit/add7ef7378a82b584b8448c8fb8ceed71b01a10a))
+
+
+### Tests
+
+* **e2e:** bound the shots settle wait and stop the forward after its shot ([333c6d8](https://github.com/sophotechlabs/spinoza/commit/333c6d82c330af3401966211b0c85133adca5acf))
+* **e2e:** name the shots flux sync flux-system so the overview finds it ([d8fec9c](https://github.com/sophotechlabs/spinoza/commit/d8fec9cdc3d5aa738502cb58bded87b39d0b744c))
+
 ## [2.2.4](https://github.com/sophotechlabs/spinoza/compare/v2.2.3...v2.2.4) (2026-10-16)
 
 
