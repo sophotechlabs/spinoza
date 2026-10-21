@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.2.6](https://github.com/sophotechlabs/spinoza/compare/v2.2.5...v2.2.6) (2026-10-21)
+
+
+### Miscellaneous
+
+* **ci:** nightly report for 2026-10-20 ([#71](https://github.com/sophotechlabs/spinoza/issues/71)) ([da05424](https://github.com/sophotechlabs/spinoza/commit/da05424b93c38353858d051e98f8d653c8bab4d0))
+
 ## [2.2.5](https://github.com/sophotechlabs/spinoza/compare/v2.2.4...v2.2.5) (2026-10-19)
 
 
