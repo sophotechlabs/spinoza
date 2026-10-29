@@ -1223,7 +1223,7 @@ vulns: vulnerability-exceptions
 vulnerability-exceptions: stub-assets
     #!/usr/bin/env bash
     set -euo pipefail
-    for tags in '' desktop integration clustermode; do
+    for tags in '' desktop desktop,production desktop,production,webkit2_41 integration clustermode; do
         args=()
         if [ -n "$tags" ]; then
             args=(-tags "$tags")
@@ -1233,8 +1233,12 @@ vulnerability-exceptions: stub-assets
             echo "vulnerability-exceptions: the $tags build imports deprecated openpgp code" >&2
             exit 1
         fi
+        if grep -q '^github.com/labstack/echo/v4\($\|/\)' <<< "$deps"; then
+            echo "vulnerability-exceptions: the $tags build links echo, which only the wails dev server may use" >&2
+            exit 1
+        fi
     done
-    echo "vulnerability-exceptions: no build imports deprecated openpgp code"
+    echo "vulnerability-exceptions: no build imports deprecated openpgp code or links echo"
 
 workflows: scoped-tools workflow-triggers ci-tiers
     yamllint .forgejo .github

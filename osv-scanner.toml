@@ -1,3 +1,11 @@
 [[IgnoredVulns]]
 id = "GO-2026-5932"
 reason = "The deprecated openpgp packages have no fixed release. Spinoza does not import them; the vulnerability-exceptions gate checks each supported build tag before scanners run."
+
+[[IgnoredVulns]]
+id = "GHSA-246p-cpwv-v3jq"
+reason = "echo v4 has no fixed release for its rate limiter trusting X-Forwarded-For. Echo reaches Spinoza only through the wails dev server that wails dev links; release builds carry the production tag, and the vulnerability-exceptions gate fails if any shipped build links echo."
+
+[[IgnoredVulns]]
+id = "GHSA-99jh-6h7p-pp36"
+reason = "echo v4 has no fixed release for its reverse proxy forwarding X-Real-IP. Echo reaches Spinoza only through the wails dev server that wails dev links; release builds carry the production tag, and the vulnerability-exceptions gate fails if any shipped build links echo."
