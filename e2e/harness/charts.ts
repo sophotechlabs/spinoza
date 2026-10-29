@@ -1,6 +1,6 @@
 import { copyFileSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { CHART_DIR, CHART_PORT, CHART_REPO, E2E_DIR, TMP_DIR } from './paths';
+import { CHART_DIR, CHART_PORT, CHART_REPO, E2E_DIR, LOG_DIR, TMP_DIR } from './paths';
 import { background, mustRun, waitFor } from './run';
 import { freePort } from './spinoza';
 
@@ -72,6 +72,7 @@ export function writeRepositoryCache(): void {
 export async function serveCharts(): Promise<number> {
   freePort(String(CHART_PORT));
   const pid = background('node', ['-e', SERVER], {
+    log: join(LOG_DIR, 'charts.log'),
     env: { CHART_DIR, CHART_PORT: String(CHART_PORT) },
   });
   await waitFor('the chart repo to answer', 60, 250, async () => {

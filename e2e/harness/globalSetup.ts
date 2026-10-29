@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import {
   ADDR,
   BASE_URL,
+  LOG_DIR,
   NOWHERE_KUBECONFIG,
   STATE_FILE,
   STORAGE_STATE,
@@ -80,6 +81,7 @@ export default async function globalSetup(): Promise<void> {
   ]) {
     rmSync(join(TMP_DIR, name), { recursive: true, force: true });
   }
+  rmSync(LOG_DIR, { recursive: true, force: true });
   for (const port of [
     ADDR,
     sideAddr(1),

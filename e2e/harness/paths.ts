@@ -12,6 +12,7 @@ export const KUBECONFIG = join(TMP_DIR, 'kubeconfig');
 export const TOKEN_FILE = join(TMP_DIR, 'token');
 export const STATE_FILE = join(TMP_DIR, 'state.json');
 export const STORAGE_STATE = join(TMP_DIR, 'storage.json');
+export const LOG_DIR = join(TMP_DIR, 'logs');
 
 const DEFAULT_CLUSTER = 'spinoza';
 const DEFAULT_PORT = 34215;
