@@ -178,7 +178,7 @@ jobs:
           path: |
             e2e/playwright-report
             e2e/test-results
-            e2e/.tmp/*.log
+            e2e/.tmp/logs
             e2e/.tmp/diagnostics
           if-no-files-found: ignore
           retention-days: 14

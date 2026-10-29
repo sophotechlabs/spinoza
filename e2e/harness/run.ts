@@ -1,5 +1,6 @@
 import { spawn, spawnSync } from 'node:child_process';
-import { openSync } from 'node:fs';
+import { closeSync, mkdirSync, openSync } from 'node:fs';
+import { dirname } from 'node:path';
 
 export interface RunResult {
   code: number;
@@ -47,15 +48,20 @@ export function mustRun(command: string, args: string[], options: RunOptions = {
   return result.stdout;
 }
 
-export function background(command: string, args: string[], options: RunOptions = {}): number {
-  const log = process.env.SPINOZA_E2E_LOGFILE;
-  const sink = log === undefined ? 'ignore' : openSync(log, 'a');
+export interface BackgroundOptions extends RunOptions {
+  log: string;
+}
+
+export function background(command: string, args: string[], options: BackgroundOptions): number {
+  mkdirSync(dirname(options.log), { recursive: true });
+  const sink = openSync(options.log, 'a');
   const child = spawn(command, args, {
     detached: true,
-    stdio: log === undefined ? 'ignore' : ['ignore', sink, sink],
+    stdio: ['ignore', sink, sink],
     cwd: options.cwd,
     env: { ...process.env, ...options.env },
   });
+  closeSync(sink);
   child.unref();
   if (child.pid === undefined) {
     throw new Error(`${command} did not start`);

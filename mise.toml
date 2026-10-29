@@ -2,14 +2,14 @@
 lockfile = true
 
 [tools]
-go = "1.27.1"
+go = "1.27.3"
 node = "24.19.0"
 just = "1.58.0"
 actionlint = "1.7.12"
 editorconfig-checker = "3.11.2"
 git-cliff = "2.13.1"
 gitleaks = "8.30.1"
-golangci-lint = "2.13.2"
+golangci-lint = "2.14.0"
 grype = "0.117.0"
 helm = "4.2.2"
 kind = "0.32.0"

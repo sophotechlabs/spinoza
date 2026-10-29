@@ -1,6 +1,15 @@
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { ADDR, BINARY, COVER_DIR, KUBECONFIG, REPO_DIR, TMP_DIR, TOKEN_FILE } from './paths';
+import {
+  ADDR,
+  BINARY,
+  COVER_DIR,
+  KUBECONFIG,
+  LOG_DIR,
+  REPO_DIR,
+  TMP_DIR,
+  TOKEN_FILE,
+} from './paths';
 import { background, mustRun, run, waitFor } from './run';
 import { arrangeWorkspace } from './workspace';
 
@@ -98,6 +107,7 @@ export async function launch(options: Launch): Promise<Instance> {
       ...options.extra,
     ],
     {
+      log: join(LOG_DIR, `${options.name}.log`),
       env: {
         GOCOVERDIR: counters,
         HELM_REPOSITORY_CACHE: join(options.home, '.cache', 'helm', 'repository'),

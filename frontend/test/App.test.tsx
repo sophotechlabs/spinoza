@@ -3216,6 +3216,44 @@ describe('the clusters that were open last time', () => {
 
     expect(await screen.findByRole('banner')).toBeInTheDocument();
   });
+
+  it('carries on when one of them cannot be opened again', async () => {
+    const opened: string[] = [];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockImplementation((url: string, init?: { method?: string }) => {
+        if (url.startsWith('/api/clusters') && init?.method === 'POST') {
+          opened.push(url);
+          return Promise.resolve({
+            ok: false,
+            status: 502,
+            json: () => Promise.resolve({ message: 'context "p-mk1" does not exist' }),
+          });
+        }
+        if (url.startsWith('/api/clusters')) {
+          return Promise.resolve({
+            ok: true,
+            json: () =>
+              Promise.resolve({
+                clusters: [],
+                remembered: [{ id: idFor('p-mk1'), context: 'p-mk1', kubeconfig: '/work.yaml' }],
+              }),
+          });
+        }
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ categories }) });
+      }),
+    );
+
+    render(<App />);
+
+    await waitFor(() => {
+      expect(opened).toHaveLength(1);
+    });
+    expect(opened[0]).toContain('name=p-mk1');
+    expect(await screen.findByRole('banner')).toBeInTheDocument();
+    expect(screen.queryByText('Loading the open clusters')).not.toBeInTheDocument();
+    expect(useClustersStore.getState().tabs.map((tab) => tab.context)).toEqual([]);
+  });
 });
 
 describe('a cluster this window did not switch to', () => {
