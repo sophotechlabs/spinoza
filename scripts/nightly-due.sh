@@ -13,9 +13,21 @@ if [ "$event" = workflow_dispatch ] || [ "$event" = repository_dispatch ]; then
     exit 0
 fi
 
-last=$(gh run list --workflow nightly.yaml --status success --limit 1 --json updatedAt --jq '.[0].updatedAt // ""')
+lookback=30
+runs=$(gh run list --workflow nightly.yaml --status success --limit "$lookback" --json databaseId,updatedAt --jq '.[] | "\(.databaseId) \(.updatedAt)"')
+last=""
+while read -r id updated; do
+    if [ -z "$id" ]; then
+        continue
+    fi
+    ran=$(gh run view "$id" --json jobs --jq '[.jobs[] | select(.name != "guard" and .conclusion == "success")] | length')
+    if [ "$ran" -gt 0 ]; then
+        last=$updated
+        break
+    fi
+done <<< "$runs"
 if [ -z "$last" ]; then
-    echo "nightly: no successful run to age out" >&2
+    echo "nightly: none of the last ${lookback} successful runs got past the guard" >&2
     echo true
     exit 0
 fi
