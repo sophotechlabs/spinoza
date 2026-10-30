@@ -1,5 +1,34 @@
 # Changelog
 
+## [2.2.6](https://github.com/sophotechlabs/spinoza/compare/v2.2.5...v2.2.6) (2026-10-30)
+
+
+### Bug Fixes
+
+* **ci:** count only nightlies that ran past the guard ([d0b5f2b](https://github.com/sophotechlabs/spinoza/commit/d0b5f2b121520bc0fecaa6024a57e2f70ac0fe7d))
+* **deps:** bump echo, go-jose and x/net past the October advisories ([6f4b840](https://github.com/sophotechlabs/spinoza/commit/6f4b8400cfbb9fce9c81df8de6a54355fee71965))
+* **deps:** bump vite, vitest, undici and zod past their advisories ([f26d080](https://github.com/sophotechlabs/spinoza/commit/f26d080f76e8f4ae9f1a3fca9b32385d1ca0a30f))
+
+
+### Miscellaneous
+
+* **ci:** nightly report for 2026-10-20 ([#71](https://github.com/sophotechlabs/spinoza/issues/71)) ([da05424](https://github.com/sophotechlabs/spinoza/commit/da05424b93c38353858d051e98f8d653c8bab4d0))
+* **ci:** nightly report for 2026-10-28 ([#73](https://github.com/sophotechlabs/spinoza/issues/73)) ([b94416f](https://github.com/sophotechlabs/spinoza/commit/b94416f9b5cb86fb816618b73f06643223cff2be))
+* **ci:** nightly report for 2026-10-29 ([#74](https://github.com/sophotechlabs/spinoza/issues/74)) ([af270c5](https://github.com/sophotechlabs/spinoza/commit/af270c5dd72d5a500eeb87fe27f75232047b5009))
+* **ci:** nightly report for 2026-10-30 ([#75](https://github.com/sophotechlabs/spinoza/issues/75)) ([a1b97af](https://github.com/sophotechlabs/spinoza/commit/a1b97afa49ef825d15eff5821defd435652e91b2))
+* **security:** exclude the unfixed echo advisories ([3c1552a](https://github.com/sophotechlabs/spinoza/commit/3c1552a429613e4331ce6b52ab6c156a86621cc6))
+
+
+### Tests
+
+* **e2e:** keep each server's log and upload it with the diagnostics ([9674846](https://github.com/sophotechlabs/spinoza/commit/967484638a6f0acff33af82584ad69e3cadde5c4))
+* **frontend:** cover a remembered cluster that cannot be reopened ([0c49d03](https://github.com/sophotechlabs/spinoza/commit/0c49d0309739371bb0a2f5568bb3495bc1a1c986))
+
+
+### Build
+
+* **go:** build on Go 1.27.3 and golangci-lint 2.14.0 ([4a2de6f](https://github.com/sophotechlabs/spinoza/commit/4a2de6f69b01db434c212e961771e26305a2b523))
+
 ## [2.2.5](https://github.com/sophotechlabs/spinoza/compare/v2.2.4...v2.2.5) (2026-10-19)
 
 
