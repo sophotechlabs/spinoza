@@ -9,7 +9,7 @@ require (
 	github.com/coreos/go-oidc/v3 v3.20.0
 	github.com/creack/pty v1.1.24
 	github.com/gofrs/flock v0.13.0
-	github.com/wailsapp/wails/v2 v2.13.0
+	github.com/wailsapp/wails/v2 v2.14.0
 	go.uber.org/goleak v1.3.0
 	go.yaml.in/yaml/v3 v3.0.4
 	golang.org/x/net v0.62.0

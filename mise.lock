@@ -233,7 +233,7 @@ version = "2.19.0"
 backend = "go:github.com/vladopajic/go-test-coverage/v2"
 
 [[tools."go:github.com/wailsapp/wails/v2/cmd/wails"]]
-version = "2.13.0"
+version = "2.14.0"
 backend = "go:github.com/wailsapp/wails/v2/cmd/wails"
 
 [[tools."go:golang.org/x/tools/cmd/deadcode"]]
