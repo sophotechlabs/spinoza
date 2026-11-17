@@ -1,5 +1,18 @@
 # Changelog
 
+## [2.2.7](https://github.com/sophotechlabs/spinoza/compare/v2.2.6...v2.2.7) (2026-11-17)
+
+
+### Bug Fixes
+
+* **ci:** page the nightly report job list past 100 jobs ([9bc9194](https://github.com/sophotechlabs/spinoza/commit/9bc919429e7e78fa637355718ff91b73735e8177))
+* **ci:** restore the Go cache before mise installs Go tools ([6a3f44c](https://github.com/sophotechlabs/spinoza/commit/6a3f44c7f5ffc414705c77e22fa78c4a4a3e478f))
+
+
+### Miscellaneous
+
+* **ci:** nightly report for 2026-11-17 ([#76](https://github.com/sophotechlabs/spinoza/issues/76)) ([45734be](https://github.com/sophotechlabs/spinoza/commit/45734be761ca5eca822d38e52bbb4e391d1d598f))
+
 ## [2.2.6](https://github.com/sophotechlabs/spinoza/compare/v2.2.5...v2.2.6) (2026-10-30)
 
 
